@@ -5,7 +5,10 @@ import (
 )
 
 func main() {
-
+	err := listen()
+	if err != nil {
+		panic(err)
+	}
 }
 
 func listen() error {
