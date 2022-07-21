@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/mdlayher/vsock"
+	"golang.org/x/sys/unix"
 )
 
 func main() {
@@ -12,12 +13,12 @@ func main() {
 }
 
 func listen() error {
-	listener, err := vsock.Listen(8080, &vsock.Config{})
+	listener, err := vsock.ListenContextID(unix.VMADDR_CID_ANY, 8080, nil)
 	if err != nil {
 		return err
 	}
 
-	println("listening")
+	defer listener.Close()
 
 	for {
 		conn, err := listener.Accept()
