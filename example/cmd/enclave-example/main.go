@@ -20,6 +20,8 @@ func listen() error {
 
 	defer listener.Close()
 
+	println("Listening!")
+
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
