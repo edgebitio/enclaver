@@ -2,18 +2,38 @@ package main
 
 import (
 	"github.com/mdlayher/vsock"
-	"time"
 )
 
 func main() {
-	cid, err := vsock.ContextID()
+
+}
+
+func listen() error {
+	listener, err := vsock.Listen(8080, &vsock.Config{})
 	if err != nil {
-		panic(err)
+		return err
 	}
 
-	println("Found CID: ", cid)
+	println("listening")
+
 	for {
-		println("Hello, world!")
-		time.Sleep(10 * time.Second)
+		conn, err := listener.Accept()
+		if err != nil {
+			return err
+		}
+
+		println("accepted")
+
+		go func() {
+			for {
+				buf := make([]byte, 1024)
+				_, err := conn.Read(buf)
+				if err != nil {
+					println("error reading from socket", err)
+				}
+
+				println("received message:", string(buf))
+			}
+		}()
 	}
 }
