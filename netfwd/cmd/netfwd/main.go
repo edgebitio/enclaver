@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"io"
 	"net"
@@ -11,9 +12,17 @@ import (
 )
 
 func main() {
-	err := runProxy(3128)
+	rootCmd := &cobra.Command{
+		Use:   "enclaver-proxy",
+		Short: "Proxy traffic for an enclaver application",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runProxy(3128)
+		},
+	}
+
+	err := rootCmd.Execute()
 	if err != nil {
-		panic(err)
+		fmt.Println("error: " + err.Error())
 	}
 }
 
