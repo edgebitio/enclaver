@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/go-edgebit/enclaver/proxy"
+	"github.com/go-edgebit/enclaver/proxy/ifconfig"
 	"github.com/go-edgebit/enclaver/proxy/vsock"
 	"net"
 	"net/http"
@@ -28,6 +29,11 @@ func main() {
 
 // TODO: improve error handling, logging and context propagation
 func runInternalProxy(ctx context.Context) error {
+	err := ifconfig.ConfigureEnclaveInterface()
+	if err != nil {
+		return err
+	}
+
 	listener, err := net.Listen("tcp", ":3128")
 	if err != nil {
 		return err
