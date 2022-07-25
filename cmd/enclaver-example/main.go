@@ -56,7 +56,7 @@ func runInternalProxy(ctx context.Context) error {
 					panic(err)
 				}
 
-				err = proxy.Pump(clientConn, serverConn, ctx)
+				err = proxy.Pump(ctx, clientConn, serverConn)
 			}()
 		}
 	}()

@@ -68,17 +68,14 @@ func (p *httpProxyHandler) hijackAndProxy(ctx context.Context, w http.ResponseWr
 		return
 	}
 
-	srcConn, srcRW, err := hijacker.Hijack()
+	srcConn, _, err := hijacker.Hijack()
 	if err != nil {
 		p.logger.Error("error hijacking connection", zap.Error(err))
 		http.Error(w, "Internal Error", http.StatusInternalServerError)
 		return
 	}
 
-	defer srcConn.Close()
-	defer srcRW.Flush()
-
-	err = Pump(destConn, srcRW, ctx)
+	err = Pump(ctx, destConn, srcConn)
 	if err != nil {
 		p.logger.Error("error proxying connection", zap.Error(err))
 	}
