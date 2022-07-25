@@ -1,57 +1,37 @@
-package main
+package proxy
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"github.com/mdlayher/vsock"
-	"github.com/spf13/cobra"
 	"go.uber.org/zap"
-	"golang.org/x/sys/unix"
-	"io"
 	"net"
 	"net/http"
 )
 
-func main() {
-	rootCmd := &cobra.Command{
-		Use:   "enclaver-proxy",
-		Short: "Proxy traffic for an enclaver application",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runProxy(3128)
-		},
-	}
-
-	err := rootCmd.Execute()
-	if err != nil {
-		fmt.Println("error: " + err.Error())
-	}
+type HTTPProxy struct {
+	logger *zap.Logger
 }
 
-func runProxy(listenPort int) error {
-	logger, err := zap.NewProduction()
-	if err != nil {
-		return err
-	}
-
-	p := &proxy{
+func MakeHTTPProxy(logger *zap.Logger) *HTTPProxy {
+	return &HTTPProxy{
 		logger: logger,
 	}
-
-	listener, err := vsock.ListenContextID(unix.VMADDR_CID_ANY, uint32(listenPort), nil)
-	if err != nil {
-		return err
-	}
-
-	return http.Serve(listener, p)
 }
 
-type proxy struct {
+func (p *HTTPProxy) Serve(listener net.Listener) error {
+	p.logger.Info("starting proxy", zap.String("address", listener.Addr().String()))
+
+	return http.Serve(listener, &httpProxyHandler{
+		logger: p.logger,
+	})
+}
+
+type httpProxyHandler struct {
 	logger *zap.Logger
 	dialer net.Dialer
 }
 
-func (p *proxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+func (p *httpProxyHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
 	p.logger.Info("received request",
@@ -67,7 +47,7 @@ func (p *proxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (p *proxy) hijackAndProxy(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+func (p *httpProxyHandler) hijackAndProxy(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	p.logger.Debug("connecting to upstream", zap.String("address", req.URL.Host))
 	destConn, err := p.dialer.DialContext(ctx, "tcp", req.URL.Host)
 	if err != nil {
@@ -98,23 +78,8 @@ func (p *proxy) hijackAndProxy(ctx context.Context, w http.ResponseWriter, req *
 	defer srcConn.Close()
 	defer srcRW.Flush()
 
-	errc := make(chan error)
-
-	go func() {
-		_, err := io.Copy(destConn, srcRW)
-		errc <- err
-	}()
-
-	go func() {
-		_, err := io.Copy(srcRW, destConn)
-		errc <- err
-	}()
-
-	// TODO: cleanup error handling / logging
-	for i := 0; i < 2; i++ {
-		err := <-errc
-		if err != nil && !errors.Is(err, io.EOF) {
-			p.logger.Error("error proxying connection", zap.Error(err))
-		}
+	err = Pump(destConn, srcRW, ctx)
+	if err != nil {
+		p.logger.Error("error proxying connection", zap.Error(err))
 	}
 }

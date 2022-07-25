@@ -1,10 +1,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"github.com/mdlayher/vsock"
-	"golang.org/x/sys/unix"
-	"io"
+	"github.com/go-edgebit/enclaver/proxy"
+	"github.com/go-edgebit/enclaver/proxy/vsock"
 	"net"
 	"net/http"
 	"os"
@@ -13,7 +13,10 @@ import (
 func main() {
 	os.Setenv("HTTP_PROXY", "http://localhost:3128")
 	os.Setenv("HTTPS_PROXY", "http://localhost:3128")
-	runInternalProxy()
+	err := runInternalProxy(context.Background())
+	if err != nil {
+		panic(err)
+	}
 
 	resp, err := http.Get("https://google.com")
 	if err != nil {
@@ -21,17 +24,10 @@ func main() {
 	}
 
 	fmt.Printf("Got status: %d\n", resp.StatusCode)
-
-	/*
-		err = listen()
-		if err != nil {
-			panic(err)
-		}
-	*/
 }
 
-// TODO: any error handling or logging at all
-func runInternalProxy() error {
+// TODO: improve error handling, logging and context propagation
+func runInternalProxy(ctx context.Context) error {
 	listener, err := net.Listen("tcp", ":3128")
 	if err != nil {
 		return err
@@ -49,24 +45,12 @@ func runInternalProxy() error {
 			println("accepted proxy conn...")
 
 			go func() {
-				serverConn, err := vsock.Dial(3, 3128, nil)
+				serverConn, err := vsock.DialParent(3128)
 				if err != nil {
 					panic(err)
 				}
 
-				errc := make(chan error)
-
-				go func() {
-					_, err := io.Copy(serverConn, clientConn)
-					errc <- err
-				}()
-
-				go func() {
-					_, err := io.Copy(clientConn, serverConn)
-					errc <- err
-				}()
-
-				<-errc
+				err = proxy.Pump(clientConn, serverConn, ctx)
 			}()
 		}
 	}()
@@ -74,7 +58,8 @@ func runInternalProxy() error {
 	return nil
 }
 
-func listen() error {
+/*
+func listenVsock() error {
 	listener, err := vsock.ListenContextID(unix.VMADDR_CID_ANY, 8080, nil)
 	if err != nil {
 		return err
@@ -105,3 +90,4 @@ func listen() error {
 		}()
 	}
 }
+*/
