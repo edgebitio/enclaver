@@ -17,6 +17,11 @@ func DialParent(port uint32) (net.Conn, error) {
 	return net.Dial("tcp", fmt.Sprintf("localhost:%d", port+tcpVSockSimulationPortOffset))
 }
 
+func DialEnclave(contextID uint32, port uint32) (net.Conn, error) {
+	// TODO: What to do here?
+	return net.Dial("tcp", fmt.Sprintf("localhost:%d", port))
+}
+
 func Listen(port uint32) (net.Listener, error) {
 	return net.Listen("tcp", fmt.Sprintf("localhost:%d", port+tcpVSockSimulationPortOffset))
 }

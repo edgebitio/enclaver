@@ -14,6 +14,11 @@ func DialParent(port uint32) (net.Conn, error) {
 	return vsock.Dial(parentContextID, port, nil)
 }
 
+func DialEnclave(contextID uint32, port uint32) (net.Conn, error) {
+	// TODO: What to do here?
+	return vsock.Dial(contextID, port, nil)
+}
+
 func Listen(port uint32) (net.Listener, error) {
 	return vsock.Listen(port, nil)
 }
