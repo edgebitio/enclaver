@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/go-edgebit/enclaver/proxy"
 	"github.com/go-edgebit/enclaver/proxy/vsock"
@@ -25,6 +26,12 @@ func main() {
 
 func runProxy(listenPort int) error {
 	logger, err := zap.NewProduction()
+	if err != nil {
+		return err
+	}
+
+	pf := proxy.MakeParentForwarder(logger, "localhost", 12)
+	err = pf.ForwardPort(context.Background(), 8080, 8080)
 	if err != nil {
 		return err
 	}

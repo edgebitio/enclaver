@@ -8,31 +8,22 @@ import (
 	"net"
 )
 
-type portForward struct {
-	sourcePort uint32
-	vsockPort  uint32
-}
-
 type ParentForwarder struct {
-	logger              *zap.Logger
-	listenHost          string
-	vsockDestinationCID uint32
-	forwards            []portForward
+	logger     *zap.Logger
+	listenHost string
+	dstCID     uint32
 }
 
-func (forwarder *ParentForwarder) StartForward(ctx context.Context) error {
-	for _, pf := range forwarder.forwards {
-		err := forwarder.forwardPort(ctx, pf)
-		if err != nil {
-			return err
-		}
+func MakeParentForwarder(logger *zap.Logger, listenHost string, dstCID uint32) *ParentForwarder {
+	return &ParentForwarder{
+		logger:     logger,
+		listenHost: listenHost,
+		dstCID:     dstCID,
 	}
-
-	return nil
 }
 
-func (forwarder *ParentForwarder) forwardPort(ctx context.Context, pf portForward) error {
-	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", forwarder.listenHost, pf.sourcePort))
+func (forwarder *ParentForwarder) ForwardPort(ctx context.Context, srcPort, dstPort uint32) error {
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", forwarder.listenHost, srcPort))
 	if err != nil {
 		return err
 	}
@@ -42,7 +33,7 @@ func (forwarder *ParentForwarder) forwardPort(ctx context.Context, pf portForwar
 	sfp := &StreamForwardProxy{
 		logger: forwarder.logger,
 		dial: func() (net.Conn, error) {
-			return vsock.DialEnclave(forwarder.vsockDestinationCID, pf.vsockPort)
+			return vsock.DialEnclave(forwarder.dstCID, dstPort)
 		},
 	}
 
