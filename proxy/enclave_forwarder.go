@@ -36,30 +36,12 @@ func StartEnclaveForwarder(ctx context.Context) error {
 
 	logger.Info("enclave forwarder listening", zap.String("address", listener.Addr().String()))
 
-	go func() {
-		defer listener.Close()
+	sfp := &StreamForwardProxy{
+		logger: logger,
+		dial: func() (net.Conn, error) {
+			return vsock.DialParent(enclaveProxyVSockPort)
+		},
+	}
 
-		for {
-			clientConn, err := listener.Accept()
-			if err != nil {
-				panic(err)
-			}
-
-			logger.Info("accepted connection", zap.String("address", clientConn.RemoteAddr().String()))
-
-			go func() {
-				serverConn, err := vsock.DialParent(enclaveProxyVSockPort)
-				if err != nil {
-					panic(err)
-				}
-
-				err = Pump(ctx, clientConn, serverConn)
-				if err != nil {
-					logger.Warn("error pumping", zap.Error(err))
-				}
-			}()
-		}
-	}()
-
-	return nil
+	return sfp.Serve(ctx, listener)
 }
