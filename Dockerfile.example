@@ -3,6 +3,6 @@ FROM golang:1.18-alpine
 WORKDIR /usr/src/enclave_example
 
 COPY . .
-RUN go build -v -o /usr/local/bin/enclave-example ./cmd/enclave-example
+RUN go build -v -o /usr/local/bin/enclaver-example ./cmd/enclaver-example
 
-CMD ["/usr/local/bin/enclave-example"]
+CMD ["/usr/local/bin/enclaver-example"]
