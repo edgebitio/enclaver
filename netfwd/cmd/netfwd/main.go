@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/mdlayher/vsock"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
+	"golang.org/x/sys/unix"
 	"io"
 	"net"
 	"net/http"
@@ -36,7 +38,12 @@ func runProxy(listenPort int) error {
 		logger: logger,
 	}
 
-	return http.ListenAndServe(fmt.Sprintf(":%d", listenPort), p)
+	listener, err := vsock.ListenContextID(unix.VMADDR_CID_ANY, uint32(listenPort), nil)
+	if err != nil {
+		return err
+	}
+
+	return http.Serve(listener, p)
 }
 
 type proxy struct {
