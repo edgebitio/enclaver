@@ -8,16 +8,16 @@ import (
 )
 
 func closeWrite(conn net.Conn) {
-	if conn, ok := conn.(*net.TCPConn); ok {
-		conn.CloseWrite()
+	if tcpConn, ok := conn.(*net.TCPConn); ok {
+		tcpConn.CloseWrite()
 	} else {
 		conn.Close()
 	}
 }
 
 func closeRead(conn net.Conn) {
-	if conn, ok := conn.(*net.TCPConn); ok {
-		conn.CloseRead()
+	if tcpConn, ok := conn.(*net.TCPConn); ok {
+		tcpConn.CloseRead()
 	} else {
 		conn.Close()
 	}
