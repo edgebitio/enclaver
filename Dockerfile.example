@@ -4,5 +4,6 @@ WORKDIR /usr/src/enclave_example
 
 COPY . .
 RUN go build -v -o /usr/local/bin/enclaver-example ./cmd/enclaver-example
+RUN rm -rf /usr/src/enclave_example
 
 CMD ["/usr/local/bin/enclaver-example"]
