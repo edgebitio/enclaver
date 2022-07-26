@@ -13,10 +13,16 @@ func main() {
 		panic(err)
 	}
 
-	resp, err := http.Get("https://google.com")
-	if err != nil {
-		panic(err)
-	}
+	http.ListenAndServe(":8080", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		println("received a request, fetching google.com...")
+		resp, err := http.Get("https://google.com")
+		if err != nil {
+			panic(err)
+		}
 
-	fmt.Printf("Got status: %d\n", resp.StatusCode)
+		fmt.Printf("Got status: %d\n", resp.StatusCode)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(fmt.Sprintf("Got %d from Google", resp.Status)))
+	}))
+
 }
