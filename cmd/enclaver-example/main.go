@@ -8,6 +8,8 @@ import (
 )
 
 func main() {
+	// For now, this call needs to happen early in the startup phase of an enclave app, before any HTTP
+	// requests are performed.
 	err := proxy.StartEnclaveForwarder(context.Background())
 	if err != nil {
 		panic(err)
@@ -22,7 +24,7 @@ func main() {
 
 		fmt.Printf("Got status: %d\n", resp.StatusCode)
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(fmt.Sprintf("Got %d from Google", resp.Status)))
+		w.Write([]byte(fmt.Sprintf("Got %s from Google", resp.Status)))
 	}))
 
 }
