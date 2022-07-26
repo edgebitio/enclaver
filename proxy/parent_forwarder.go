@@ -28,7 +28,7 @@ func (forwarder *ParentForwarder) ForwardPort(ctx context.Context, srcPort, dstP
 		return err
 	}
 
-	forwarder.logger.Info("enclave forwarder listening", zap.String("address", listener.Addr().String()))
+	forwarder.logger.Info("inbound parent forwarder listening", zap.String("address", listener.Addr().String()))
 
 	sfp := &StreamForwardProxy{
 		logger: forwarder.logger,
@@ -37,5 +37,7 @@ func (forwarder *ParentForwarder) ForwardPort(ctx context.Context, srcPort, dstP
 		},
 	}
 
-	return sfp.Serve(ctx, listener)
+	go sfp.Serve(ctx, listener)
+
+	return nil
 }
