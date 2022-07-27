@@ -1,37 +1,24 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/go-edgebit/enclaver/proxy"
-	"github.com/hf/nsm"
-	"github.com/hf/nsm/request"
+	runtime2 "github.com/go-edgebit/enclaver/runtime"
 	"net/http"
 )
 
 func main() {
-	// For now, this call needs to happen early in the startup phase of an enclave app, before any HTTP
-	// requests are performed.
-	err := proxy.StartEnclaveForwarder(context.Background())
+	runtime, err := runtime2.GetOrInitialize()
 	if err != nil {
 		panic(err)
 	}
 
-	sess, err := nsm.OpenDefaultSession()
+	doc, err := runtime.Attest([]byte("nonce"), []byte("userdata"), nil)
 	if err != nil {
 		panic(err)
 	}
 
-	res, err := sess.Send(&request.Attestation{
-		Nonce:    []byte("nonce"),
-		UserData: []byte("yo"),
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	spew.Dump(res)
+	spew.Dump(doc)
 
 	http.ListenAndServe(":8080", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		println("received a request, fetching google.com...")
