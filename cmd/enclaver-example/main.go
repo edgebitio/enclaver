@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/go-edgebit/enclaver/proxy"
+	"github.com/hf/nsm"
+	"github.com/hf/nsm/request"
 	"net/http"
 )
 
@@ -14,6 +17,21 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	sess, err := nsm.OpenDefaultSession()
+	if err != nil {
+		panic(err)
+	}
+
+	res, err := sess.Send(&request.Attestation{
+		Nonce:    []byte("nonce"),
+		UserData: []byte("yo"),
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	spew.Dump(res)
 
 	http.ListenAndServe(":8080", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		println("received a request, fetching google.com...")
@@ -26,5 +44,4 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(fmt.Sprintf("Got %s from Google\n", resp.Status)))
 	}))
-
 }
