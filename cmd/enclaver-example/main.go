@@ -3,12 +3,12 @@ package main
 import (
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
-	runtime2 "github.com/go-edgebit/enclaver/runtime"
+	"github.com/go-edgebit/enclaver/runtime"
 	"net/http"
 )
 
 func main() {
-	runtime, err := runtime2.GetOrInitialize()
+	runtime, err := runtime.GetOrInitialize()
 	if err != nil {
 		panic(err)
 	}
