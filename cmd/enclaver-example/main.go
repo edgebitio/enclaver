@@ -23,7 +23,7 @@ func main() {
 
 	spew.Dump(doc)
 
-	config, err := config.LoadDefaultConfig(context.Background())
+	config, err := config.LoadDefaultConfig(context.Background(), config.WithRegion("us-west-2"))
 	if err != nil {
 		panic(err)
 	}
