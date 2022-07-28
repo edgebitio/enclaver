@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"go.uber.org/zap"
+	"io"
 	"net"
 	"net/http"
 )
@@ -43,7 +44,27 @@ func (p *httpProxyHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	case http.MethodConnect:
 		p.hijackAndProxy(ctx, w, req)
 	default:
-		http.Error(w, "Only CONNECT is supported by this proxy", http.StatusMethodNotAllowed)
+		resp, err := http.DefaultTransport.RoundTrip(req)
+		if err != nil {
+			p.logger.Error("error proxying request", zap.Error(err))
+			http.Error(w, "Internal Error", http.StatusServiceUnavailable)
+			return
+		} else {
+			p.logger.Info("proxying response", zap.String("status", resp.Status))
+		}
+
+		for key, values := range resp.Header {
+			w.Header()[key] = values
+		}
+
+		w.WriteHeader(resp.StatusCode)
+
+		_, err = io.Copy(w, resp.Body)
+		if err != nil {
+			p.logger.Error("error proxying request", zap.Error(err))
+		}
+
+		resp.Body.Close()
 	}
 }
 
