@@ -3,6 +3,8 @@ module github.com/go-edgebit/enclaver
 go 1.18
 
 require (
+	github.com/aws/aws-sdk-go-v2/config v1.15.14
+	github.com/aws/aws-sdk-go-v2/service/kms v1.18.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/hf/nsm v0.0.0-20211106132757-1ae65a6a69ae
 	github.com/mdlayher/vsock v1.1.1
@@ -13,7 +15,6 @@ require (
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.16.7 // indirect
-	github.com/aws/aws-sdk-go-v2/config v1.15.14 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.12.9 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.12.8 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.14 // indirect

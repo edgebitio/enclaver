@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/go-edgebit/enclaver/runtime"
 	"net/http"
@@ -27,7 +28,13 @@ func main() {
 		panic(err)
 	}
 
-	spew.Dump(config)
+	kmsClient := kms.NewFromConfig(config)
+	res, err := kmsClient.CreateKey(context.Background(), &kms.CreateKeyInput{})
+	if err != nil {
+		panic(err)
+	}
+
+	spew.Dump(res)
 
 	http.ListenAndServe(":8080", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		println("received a request, fetching google.com...")
