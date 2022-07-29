@@ -70,7 +70,11 @@ func main() {
 	println(string(dataKeyRes.CiphertextForRecipient))
 
 	asn1CipherText := make([]byte, base64.StdEncoding.DecodedLen(len(dataKeyRes.CiphertextForRecipient)))
-	base64.StdEncoding.Decode(asn1CipherText, dataKeyRes.CiphertextForRecipient)
+	decodedLen, err := base64.StdEncoding.Decode(asn1CipherText, dataKeyRes.CiphertextForRecipient)
+	if err != nil {
+		panic(err)
+	}
+	asn1CipherText = asn1CipherText[:decodedLen]
 
 	msg, err := pkcs7.ParsePKCS7(asn1CipherText)
 	if err != nil {
