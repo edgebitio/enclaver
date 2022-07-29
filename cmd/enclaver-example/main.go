@@ -31,7 +31,7 @@ func main() {
 		panic(err)
 	}
 
-	encodedPublicKey, err := x509.MarshalPKIXPublicKey(privateKey.PublicKey)
+	encodedPublicKey, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
 	if err != nil {
 		panic(err)
 	}
