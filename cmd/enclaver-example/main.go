@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -66,8 +67,12 @@ func main() {
 	}
 
 	println("Got non-nil CiphertextForRecipient")
+	println(string(dataKeyRes.CiphertextForRecipient))
 
-	msg, err := pkcs7.ParsePKCS7(dataKeyRes.CiphertextForRecipient)
+	asn1CipherText := make([]byte, base64.StdEncoding.DecodedLen(len(dataKeyRes.CiphertextForRecipient)))
+	base64.StdEncoding.Decode(asn1CipherText, dataKeyRes.CiphertextForRecipient)
+
+	msg, err := pkcs7.ParsePKCS7(asn1CipherText)
 	if err != nil {
 		panic(err)
 	}
