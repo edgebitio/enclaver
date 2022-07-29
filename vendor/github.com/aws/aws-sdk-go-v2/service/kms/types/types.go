@@ -412,6 +412,25 @@ type MultiRegionKey struct {
 	noSmithyDocumentSerde
 }
 
+type RecipientInfoType struct {
+
+	// A document with measurements that describe the state of the Nitro enclave. This
+	// document also includes the enclave's public key. AWS KMS will encrypt any
+	// plaintext in the response under this public key so that it can be decrypted
+	// later only by the corresponding private key in the enclave.
+	//
+	// This member is required.
+	AttestationDocument []byte
+
+	// The encryption algorithm that AWS KMS should use with the public key. The only
+	// valid value is RSAES_OAEP_SHA_256.
+	//
+	// This member is required.
+	KeyEncryptionAlgorithm EncryptionAlgorithmSpec
+
+	noSmithyDocumentSerde
+}
+
 // A key-value pair. A tag consists of a tag key and a tag value. Tag keys and tag
 // values are both required, but tag values can be empty (null) strings. For
 // information about the rules that apply to tag keys and tag values, see

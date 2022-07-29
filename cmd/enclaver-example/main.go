@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/go-edgebit/aws-sdk-go-v2/service/kms"
-	"github.com/go-edgebit/aws-sdk-go-v2/service/kms/types"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/go-edgebit/enclaver/runtime"
 	"net/http"
 )
@@ -51,6 +51,10 @@ func main() {
 	dataKeyRes, err := kmsClient.GenerateDataKey(context.Background(), &kms.GenerateDataKeyInput{
 		KeyId:   kmsKeyId,
 		KeySpec: types.DataKeySpecAes256,
+		Recipient: &types.RecipientInfoType{
+			AttestationDocument:    attestationDoc,
+			KeyEncryptionAlgorithm: types.EncryptionAlgorithmSpecRsaesOaepSha256,
+		},
 	})
 	if err != nil {
 		panic(err)
