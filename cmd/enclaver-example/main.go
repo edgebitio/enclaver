@@ -10,6 +10,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/kms/types"
+	"github.com/cloudflare/cfssl/crypto/pkcs7"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/go-edgebit/enclaver/runtime"
 	"net/http"
 )
@@ -64,6 +66,15 @@ func main() {
 	}
 
 	println("Got non-nil CiphertextForRecipient")
+
+	msg, err := pkcs7.ParsePKCS7(dataKeyRes.CiphertextForRecipient)
+	if err != nil {
+		panic(err)
+	}
+
+	println("Is PKCS7 Encrypted Data?")
+	println(msg.ContentInfo == pkcs7.ObjIDEncryptedData)
+	spew.Dump(msg.Content)
 
 	plaintext, err := privateKey.Decrypt(rand.Reader, dataKeyRes.CiphertextForRecipient, nil)
 	if err != nil {
