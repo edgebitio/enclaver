@@ -167,6 +167,11 @@ type GenerateDataKeyInput struct {
 	// GenerateDataKey request.
 	NumberOfBytes *int32
 
+	// A request parameter that contains the signed attestation document from an
+	// enclave and an encryption algorithm. The only valid encryption algorithm is
+	// RSAES_OAEP_SHA_256.
+	Recipient *types.RecipientInfoType
+
 	noSmithyDocumentSerde
 }
 
@@ -175,6 +180,13 @@ type GenerateDataKeyOutput struct {
 	// The encrypted copy of the data key. When you use the HTTP API or the Amazon Web
 	// Services CLI, the value is Base64-encoded. Otherwise, it is not Base64-encoded.
 	CiphertextBlob []byte
+
+	// This response field contains a ciphertext encrypted with the public key from the
+	// attestation document in the request. This field is populated only when the
+	// request includes a Recipient parameter with a valid attestation document and
+	// encryption algorithm. When this field is populated, the Plaintext field in the
+	// response is null.
+	CiphertextForRecipient []byte
 
 	// The Amazon Resource Name (key ARN
 	// (https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#key-id-key-ARN))

@@ -10044,6 +10044,19 @@ func awsAwsjson11_deserializeOpDocumentDecryptOutput(v **DecryptOutput, value in
 
 	for key, value := range shape {
 		switch key {
+		case "CiphertextForRecipient":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected CiphertextType to be []byte, got %T instead", value)
+				}
+				dv, err := base64.StdEncoding.DecodeString(jtv)
+				if err != nil {
+					return fmt.Errorf("failed to base64 decode CiphertextType, %w", err)
+				}
+				sv.CiphertextForRecipient = dv
+			}
+
 		case "EncryptionAlgorithm":
 			if value != nil {
 				jtv, ok := value.(string)
@@ -10331,6 +10344,19 @@ func awsAwsjson11_deserializeOpDocumentGenerateDataKeyOutput(v **GenerateDataKey
 					return fmt.Errorf("failed to base64 decode CiphertextType, %w", err)
 				}
 				sv.CiphertextBlob = dv
+			}
+
+		case "CiphertextForRecipient":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected CiphertextType to be []byte, got %T instead", value)
+				}
+				dv, err := base64.StdEncoding.DecodeString(jtv)
+				if err != nil {
+					return fmt.Errorf("failed to base64 decode CiphertextType, %w", err)
+				}
+				sv.CiphertextForRecipient = dv
 			}
 
 		case "KeyId":
@@ -10664,6 +10690,19 @@ func awsAwsjson11_deserializeOpDocumentGenerateRandomOutput(v **GenerateRandomOu
 
 	for key, value := range shape {
 		switch key {
+		case "CiphertextForRecipient":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected CiphertextType to be []byte, got %T instead", value)
+				}
+				dv, err := base64.StdEncoding.DecodeString(jtv)
+				if err != nil {
+					return fmt.Errorf("failed to base64 decode CiphertextType, %w", err)
+				}
+				sv.CiphertextForRecipient = dv
+			}
+
 		case "Plaintext":
 			if value != nil {
 				jtv, ok := value.(string)

@@ -450,6 +450,26 @@ func (m *validateOpGenerateMac) HandleInitialize(ctx context.Context, in middlew
 	return next.HandleInitialize(ctx, in)
 }
 
+type validateOpGenerateRandom struct {
+}
+
+func (*validateOpGenerateRandom) ID() string {
+	return "OperationInputValidation"
+}
+
+func (m *validateOpGenerateRandom) HandleInitialize(ctx context.Context, in middleware.InitializeInput, next middleware.InitializeHandler) (
+	out middleware.InitializeOutput, metadata middleware.Metadata, err error,
+) {
+	input, ok := in.Parameters.(*GenerateRandomInput)
+	if !ok {
+		return out, metadata, fmt.Errorf("unknown input parameters type %T", in.Parameters)
+	}
+	if err := validateOpGenerateRandomInput(input); err != nil {
+		return out, metadata, err
+	}
+	return next.HandleInitialize(ctx, in)
+}
+
 type validateOpGetKeyPolicy struct {
 }
 
@@ -998,6 +1018,10 @@ func addOpGenerateMacValidationMiddleware(stack *middleware.Stack) error {
 	return stack.Initialize.Add(&validateOpGenerateMac{}, middleware.After)
 }
 
+func addOpGenerateRandomValidationMiddleware(stack *middleware.Stack) error {
+	return stack.Initialize.Add(&validateOpGenerateRandom{}, middleware.After)
+}
+
 func addOpGetKeyPolicyValidationMiddleware(stack *middleware.Stack) error {
 	return stack.Initialize.Add(&validateOpGetKeyPolicy{}, middleware.After)
 }
@@ -1088,6 +1112,24 @@ func addOpVerifyValidationMiddleware(stack *middleware.Stack) error {
 
 func addOpVerifyMacValidationMiddleware(stack *middleware.Stack) error {
 	return stack.Initialize.Add(&validateOpVerifyMac{}, middleware.After)
+}
+
+func validateRecipientInfoType(v *types.RecipientInfoType) error {
+	if v == nil {
+		return nil
+	}
+	invalidParams := smithy.InvalidParamsError{Context: "RecipientInfoType"}
+	if v.AttestationDocument == nil {
+		invalidParams.Add(smithy.NewErrParamRequired("AttestationDocument"))
+	}
+	if len(v.KeyEncryptionAlgorithm) == 0 {
+		invalidParams.Add(smithy.NewErrParamRequired("KeyEncryptionAlgorithm"))
+	}
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	} else {
+		return nil
+	}
 }
 
 func validateTag(v *types.Tag) error {
@@ -1233,6 +1275,11 @@ func validateOpDecryptInput(v *DecryptInput) error {
 	invalidParams := smithy.InvalidParamsError{Context: "DecryptInput"}
 	if v.CiphertextBlob == nil {
 		invalidParams.Add(smithy.NewErrParamRequired("CiphertextBlob"))
+	}
+	if v.Recipient != nil {
+		if err := validateRecipientInfoType(v.Recipient); err != nil {
+			invalidParams.AddNested("Recipient", err.(smithy.InvalidParamsError))
+		}
 	}
 	if invalidParams.Len() > 0 {
 		return invalidParams
@@ -1402,6 +1449,11 @@ func validateOpGenerateDataKeyInput(v *GenerateDataKeyInput) error {
 	if v.KeyId == nil {
 		invalidParams.Add(smithy.NewErrParamRequired("KeyId"))
 	}
+	if v.Recipient != nil {
+		if err := validateRecipientInfoType(v.Recipient); err != nil {
+			invalidParams.AddNested("Recipient", err.(smithy.InvalidParamsError))
+		}
+	}
 	if invalidParams.Len() > 0 {
 		return invalidParams
 	} else {
@@ -1473,6 +1525,23 @@ func validateOpGenerateMacInput(v *GenerateMacInput) error {
 	}
 	if len(v.MacAlgorithm) == 0 {
 		invalidParams.Add(smithy.NewErrParamRequired("MacAlgorithm"))
+	}
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	} else {
+		return nil
+	}
+}
+
+func validateOpGenerateRandomInput(v *GenerateRandomInput) error {
+	if v == nil {
+		return nil
+	}
+	invalidParams := smithy.InvalidParamsError{Context: "GenerateRandomInput"}
+	if v.Recipient != nil {
+		if err := validateRecipientInfoType(v.Recipient); err != nil {
+			invalidParams.AddNested("Recipient", err.(smithy.InvalidParamsError))
+		}
 	}
 	if invalidParams.Len() > 0 {
 		return invalidParams

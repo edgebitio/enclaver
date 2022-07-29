@@ -6,6 +6,7 @@ import (
 	"context"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	"github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/aws/smithy-go/middleware"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
@@ -56,10 +57,22 @@ type GenerateRandomInput struct {
 	// The length of the random byte string. This parameter is required.
 	NumberOfBytes *int32
 
+	// A request parameter that contains the signed attestation document from an
+	// enclave and an encryption algorithm. The only valid encryption algorithm is
+	// RSAES_OAEP_SHA_256.
+	Recipient *types.RecipientInfoType
+
 	noSmithyDocumentSerde
 }
 
 type GenerateRandomOutput struct {
+
+	// This response field contains a ciphertext encrypted with the public key from the
+	// attestation document in the request. This field is populated only when the
+	// request includes a Recipient parameter with a valid attestation document and
+	// encryption algorithm. When this field is populated, the Plaintext field in the
+	// response is null.
+	CiphertextForRecipient []byte
 
 	// The random byte string. When you use the HTTP API or the Amazon Web Services
 	// CLI, the value is Base64-encoded. Otherwise, it is not Base64-encoded.
@@ -114,6 +127,9 @@ func (c *Client) addOperationGenerateRandomMiddlewares(stack *middleware.Stack, 
 		return err
 	}
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addOpGenerateRandomValidationMiddleware(stack); err != nil {
 		return err
 	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opGenerateRandom(options.Region), middleware.Before); err != nil {
