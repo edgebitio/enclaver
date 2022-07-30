@@ -164,3 +164,12 @@ func Parse(ber []byte) (*EncryptedKey, error) {
 		cipherText:   ciphertext,
 	}, nil
 }
+
+func DecryptEnvelopedKey(key *rsa.PrivateKey, content []byte) ([]byte, error) {
+	ek, err := Parse(content)
+	if err != nil {
+		return nil, err
+	}
+
+	return ek.Decrypt(key)
+}

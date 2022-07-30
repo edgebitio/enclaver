@@ -6,13 +6,14 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/pem"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/kms/types"
-	"github.com/cloudflare/cfssl/crypto/pkcs7"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/go-edgebit/enclaver/crypto/cms"
 	"github.com/go-edgebit/enclaver/runtime"
 	"net/http"
 )
@@ -33,6 +34,15 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	// Dump the private key for use in a future unit test
+	println("Using Private Key:")
+	println(string(pem.EncodeToMemory(
+		&pem.Block{
+			Type:  "RSA PRIVATE KEY",
+			Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+		},
+	)))
 
 	encodedPublicKey, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
 	if err != nil {
@@ -69,21 +79,13 @@ func main() {
 	println("Got non-nil CiphertextForRecipient")
 	println(base64.StdEncoding.EncodeToString(dataKeyRes.CiphertextForRecipient))
 
-	msg, err := pkcs7.ParsePKCS7(dataKeyRes.CiphertextForRecipient)
+	key, err := cms.DecryptEnvelopedKey(privateKey, dataKeyRes.CiphertextForRecipient)
 	if err != nil {
 		panic(err)
 	}
 
-	println("Is PKCS7 Encrypted Data?")
-	println(msg.ContentInfo == pkcs7.ObjIDEncryptedData)
-	spew.Dump(msg.Content)
-
-	plaintext, err := privateKey.Decrypt(rand.Reader, dataKeyRes.CiphertextForRecipient, nil)
-	if err != nil {
-		panic(err)
-	}
-
-	println("Decrypted data key: " + string(plaintext))
+	println("Decrypted Data Key:")
+	spew.Dump(key)
 
 	http.ListenAndServe(":8080", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		println("received a request, fetching google.com...")
