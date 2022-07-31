@@ -44,4 +44,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )
 
-replace github.com/aws/aws-sdk-go-v2/service/kms => ./kms
+replace github.com/aws/aws-sdk-go-v2/service/kms => ./providers/aws/kms

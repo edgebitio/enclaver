@@ -46,7 +46,7 @@ github.com/aws/aws-sdk-go-v2/internal/ini
 # github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.9.8
 ## explicit; go 1.15
 github.com/aws/aws-sdk-go-v2/service/internal/presigned-url
-# github.com/aws/aws-sdk-go-v2/service/kms v1.18.0 => ./kms
+# github.com/aws/aws-sdk-go-v2/service/kms v1.18.0 => ./providers/aws/kms
 ## explicit; go 1.15
 github.com/aws/aws-sdk-go-v2/service/kms
 github.com/aws/aws-sdk-go-v2/service/kms/internal/endpoints
@@ -156,4 +156,4 @@ golang.org/x/sys/unix
 # gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 ## explicit
 gopkg.in/yaml.v3
-# github.com/aws/aws-sdk-go-v2/service/kms => ./kms
+# github.com/aws/aws-sdk-go-v2/service/kms => ./providers/aws/kms
