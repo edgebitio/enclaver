@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"errors"
@@ -27,13 +28,7 @@ var (
 
 type EnclaveRuntime struct {
 	nsm *nsm.Session
-	lpk *lazyRSAKey
-}
-
-func makeRuntime() *EnclaveRuntime {
-	return &EnclaveRuntime{
-		lpk: makeLazyRSAKey(defaultKeyBits),
-	}
+	key *rsa.PrivateKey
 }
 
 func (runtime *EnclaveRuntime) initialize() error {
@@ -51,6 +46,13 @@ func (runtime *EnclaveRuntime) initialize() error {
 	if err != nil {
 		return err
 	}
+
+	key, err := rsa.GenerateKey(rand.Reader, defaultKeyBits)
+	if err != nil {
+		return err
+	}
+
+	runtime.key = key
 
 	return nil
 }
@@ -85,12 +87,7 @@ func (runtime *EnclaveRuntime) Attest(args AttestationOptions) ([]byte, error) {
 			return nil, err
 		}
 	} else if !args.NoPublicKey {
-		rpk, err := runtime.GetPublicKey()
-		if err != nil {
-			return nil, err
-		}
-
-		publicKey, err = x509.MarshalPKIXPublicKey(rpk)
+		publicKey, err = x509.MarshalPKIXPublicKey(runtime.GetPublicKey())
 		if err != nil {
 			return nil, err
 		}
@@ -116,22 +113,12 @@ func (runtime *EnclaveRuntime) Attest(args AttestationOptions) ([]byte, error) {
 	return res.Attestation.Document, nil
 }
 
-func (runtime *EnclaveRuntime) GetPublicKey() (*rsa.PublicKey, error) {
-	key, err := runtime.lpk.getPrivateKey()
-	if err != nil {
-		return nil, err
-	}
-
-	return &key.PublicKey, nil
+func (runtime *EnclaveRuntime) GetPublicKey() *rsa.PublicKey {
+	return &runtime.key.PublicKey
 }
 
-func (runtime *EnclaveRuntime) GetPrivateKey() (*rsa.PrivateKey, error) {
-	key, err := runtime.lpk.getPrivateKey()
-	if err != nil {
-		return nil, err
-	}
-
-	return key, nil
+func (runtime *EnclaveRuntime) GetPrivateKey() *rsa.PrivateKey {
+	return runtime.key
 }
 
 func GetOrInitialize() (*EnclaveRuntime, error) {

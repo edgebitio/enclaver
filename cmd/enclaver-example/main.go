@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -19,27 +18,31 @@ var (
 )
 
 func main() {
+	ctx := context.Background()
+
+	err := run(ctx)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func run(ctx context.Context) error {
 	rt, err := runtime.GetOrInitialize()
 	if err != nil {
-		panic(err)
+		return err
 	}
 
-	privateKey, err := rt.GetPrivateKey()
+	config, err := config.LoadDefaultConfig(ctx, config.WithRegion("us-west-2"))
 	if err != nil {
-		panic(err)
+		return err
 	}
+
+	kmsClient := kms.NewFromConfig(config)
 
 	attestationDoc, err := rt.Attest(runtime.AttestationOptions{})
 	if err != nil {
 		panic(err)
 	}
-
-	config, err := config.LoadDefaultConfig(context.Background(), config.WithRegion("us-west-2"))
-	if err != nil {
-		panic(err)
-	}
-
-	kmsClient := kms.NewFromConfig(config)
 
 	dataKeyRes, err := kmsClient.GenerateDataKey(context.Background(), &kms.GenerateDataKeyInput{
 		KeyId:   kmsKeyId,
@@ -50,16 +53,13 @@ func main() {
 		},
 	})
 	if err != nil {
-		panic(err)
+		return err
 	}
 	if dataKeyRes.CiphertextForRecipient == nil {
-		panic("CiphertextForRecipient is nil")
+		return fmt.Errorf("CiphertextForRecipient is nil")
 	}
 
-	println("Got non-nil CiphertextForRecipient")
-	println(base64.StdEncoding.EncodeToString(dataKeyRes.CiphertextForRecipient))
-
-	key, err := cms.DecryptEnvelopedKey(privateKey, dataKeyRes.CiphertextForRecipient)
+	key, err := cms.DecryptEnvelopedKey(rt.GetPrivateKey(), dataKeyRes.CiphertextForRecipient)
 	if err != nil {
 		panic(err)
 	}
@@ -78,4 +78,6 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(fmt.Sprintf("Got %s from Google\n", resp.Status)))
 	}))
+
+	return nil
 }
