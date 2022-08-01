@@ -2,11 +2,7 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
 	"encoding/base64"
-	"encoding/pem"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -23,33 +19,17 @@ var (
 )
 
 func main() {
-	runtime, err := runtime.GetOrInitialize()
+	rt, err := runtime.GetOrInitialize()
 	if err != nil {
 		panic(err)
 	}
 
-	println("Generating RSA Key..")
-
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	privateKey, err := rt.GetPrivateKey()
 	if err != nil {
 		panic(err)
 	}
 
-	// Dump the private key for use in a future unit test
-	println("Using Private Key:")
-	println(string(pem.EncodeToMemory(
-		&pem.Block{
-			Type:  "RSA PRIVATE KEY",
-			Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
-		},
-	)))
-
-	encodedPublicKey, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
-	if err != nil {
-		panic(err)
-	}
-
-	attestationDoc, err := runtime.Attest(nil, nil, encodedPublicKey)
+	attestationDoc, err := rt.Attest(runtime.AttestationOptions{})
 	if err != nil {
 		panic(err)
 	}

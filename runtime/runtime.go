@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"context"
+	"crypto/rsa"
+	"crypto/x509"
 	"errors"
 	"github.com/go-edgebit/enclaver/proxy"
 	"github.com/hf/nsm"
@@ -13,6 +15,8 @@ import (
 const (
 	initializationEntropy = 1024
 	randomDevice          = "/dev/random"
+
+	defaultKeyBits = 2048
 )
 
 var (
@@ -23,6 +27,13 @@ var (
 
 type EnclaveRuntime struct {
 	nsm *nsm.Session
+	lpk *lazyRSAKey
+}
+
+func makeRuntime() *EnclaveRuntime {
+	return &EnclaveRuntime{
+		lpk: makeLazyRSAKey(defaultKeyBits),
+	}
 }
 
 func (runtime *EnclaveRuntime) initialize() error {
@@ -65,10 +76,29 @@ func (runtime *EnclaveRuntime) initializeEntropy() error {
 	return nil
 }
 
-func (runtime *EnclaveRuntime) Attest(nonce, userData, publicKey []byte) ([]byte, error) {
+func (runtime *EnclaveRuntime) Attest(args AttestationOptions) ([]byte, error) {
+	var publicKey []byte
+	var err error
+	if args.PublicKey != nil && !args.NoPublicKey {
+		publicKey, err = x509.MarshalPKIXPublicKey(args.PublicKey)
+		if err != nil {
+			return nil, err
+		}
+	} else if !args.NoPublicKey {
+		rpk, err := runtime.GetPublicKey()
+		if err != nil {
+			return nil, err
+		}
+
+		publicKey, err = x509.MarshalPKIXPublicKey(rpk)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	res, err := runtime.nsm.Send(&request.Attestation{
-		Nonce:     nonce,
-		UserData:  userData,
+		Nonce:     args.Nonce,
+		UserData:  args.UserData,
 		PublicKey: publicKey,
 	})
 	if err != nil {
@@ -84,6 +114,24 @@ func (runtime *EnclaveRuntime) Attest(nonce, userData, publicKey []byte) ([]byte
 	}
 
 	return res.Attestation.Document, nil
+}
+
+func (runtime *EnclaveRuntime) GetPublicKey() (*rsa.PublicKey, error) {
+	key, err := runtime.lpk.getPrivateKey()
+	if err != nil {
+		return nil, err
+	}
+
+	return &key.PublicKey, nil
+}
+
+func (runtime *EnclaveRuntime) GetPrivateKey() (*rsa.PrivateKey, error) {
+	key, err := runtime.lpk.getPrivateKey()
+	if err != nil {
+		return nil, err
+	}
+
+	return key, nil
 }
 
 func GetOrInitialize() (*EnclaveRuntime, error) {
