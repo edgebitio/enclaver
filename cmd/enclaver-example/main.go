@@ -41,8 +41,17 @@ func run(ctx context.Context) error {
 
 	attestationDoc, err := rt.Attest(runtime.AttestationOptions{})
 	if err != nil {
-		panic(err)
+		return err
 	}
+
+	describeKeyRes, err := kmsClient.DescribeKey(ctx, &kms.DescribeKeyInput{
+		KeyId: kmsKeyId,
+	})
+	if err != nil {
+		return err
+	}
+
+	spew.Dump(describeKeyRes.KeyMetadata)
 
 	dataKeyRes, err := kmsClient.GenerateDataKey(context.Background(), &kms.GenerateDataKeyInput{
 		KeyId:   kmsKeyId,
@@ -61,7 +70,7 @@ func run(ctx context.Context) error {
 
 	key, err := cms.DecryptEnvelopedKey(rt.GetPrivateKey(), dataKeyRes.CiphertextForRecipient)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	println("Decrypted Data Key:")
@@ -71,7 +80,7 @@ func run(ctx context.Context) error {
 		println("received a request, fetching google.com...")
 		resp, err := http.Get("https://google.com")
 		if err != nil {
-			panic(err)
+			w.WriteHeader(http.StatusBadGateway)
 		}
 
 		fmt.Printf("Got status: %d\n", resp.StatusCode)
