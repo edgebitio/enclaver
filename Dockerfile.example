@@ -1,9 +1,9 @@
 FROM golang:1.18-alpine
-
-WORKDIR /usr/src/enclave_example
-
+WORKDIR /usr/src/enclaver_example
 COPY . .
 RUN go build -v -o /usr/local/bin/enclaver-example ./cmd/enclaver-example
-RUN rm -rf /usr/src/enclave_example
 
+
+FROM alpine:latest
+COPY --from=0 /usr/local/bin/enclaver-example /usr/local/bin/enclaver-example
 CMD ["/usr/local/bin/enclaver-example"]
