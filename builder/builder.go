@@ -21,45 +21,45 @@ const (
 // SourceImageToEnclaveImage takes sourceImageName, which is interpreted as a reference
 // to an image in a local docker daemon, and appends a new image layer containing
 // the passed Policy written out in YAML format to `/etc/enclaver/policy.yaml`.
-func SourceImageToEnclaveImage(sourceImageName string, policy *policy.Policy) (any, error) {
+func SourceImageToEnclaveImage(sourceImageName string, policy *policy.Policy) (string, error) {
 	srcRef, err := name.ParseReference(sourceImageName)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	img, err := daemon.Image(srcRef)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	layer, err := enclaverOverlayLayer(policy)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	img, err = mutate.AppendLayers(img, layer)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	tagID, err := uuid.NewRandom()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	tag, err := name.NewTag(tagID.String())
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	_, err = daemon.Write(tag, img)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	hash, err := img.Digest()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	return fmt.Sprintf("%s@%s", tag.String(), hash.String()), nil
