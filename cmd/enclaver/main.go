@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
+	"github.com/go-edgebit/enclaver/builder"
 	policy2 "github.com/go-edgebit/enclaver/policy"
 	"github.com/urfave/cli/v2"
 	"os"
@@ -42,11 +42,14 @@ func ExecuteBuild(cliContext *cli.Context) error {
 		return err
 	}
 
-	err = policy.Validate()
+	parsed := policy.Parsed()
+
+	tag, err := builder.SourceImageToEnclaveImage(parsed.Image, policy)
 	if err != nil {
 		return err
 	}
 
-	spew.Dump(policy)
+	println(tag)
+
 	return nil
 }

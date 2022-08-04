@@ -1,7 +1,9 @@
 package policy
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"hash"
 	"io/ioutil"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"sigs.k8s.io/yaml"
@@ -17,6 +19,63 @@ type PolicyValidationError struct {
 
 func (e *PolicyValidationError) Error() string {
 	return e.Message
+}
+
+type Policy struct {
+	sourcePath string
+	hash       hash.Hash
+	raw        []byte
+	parsed     *AppPolicy
+}
+
+func LoadPolicy(path string) (*Policy, error) {
+	raw, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	parsed := &AppPolicy{}
+
+	err = yaml.Unmarshal(raw, parsed)
+	if err != nil {
+		return nil, err
+	}
+
+	err = parsed.Validate()
+	if err != nil {
+		return nil, err
+	}
+
+	hash := sha256.New()
+	_, err = hash.Write(raw)
+	if err != nil {
+		return nil, err
+	}
+
+	policy := &Policy{
+		sourcePath: path,
+		hash:       hash,
+		raw:        raw,
+		parsed:     parsed,
+	}
+
+	return policy, nil
+}
+
+func (policy *Policy) Raw() []byte {
+	return policy.raw
+}
+
+func (policy *Policy) Size() int {
+	return len(policy.raw)
+}
+
+func (policy *Policy) SHA256() []byte {
+	return policy.hash.Sum(nil)
+}
+
+func (policy *Policy) Parsed() *AppPolicy {
+	return policy.parsed
 }
 
 type AppPolicy struct {
@@ -60,20 +119,4 @@ func (policy *ResourcePolicy) Validate() error {
 	}
 
 	return nil
-}
-
-func LoadPolicy(path string) (*AppPolicy, error) {
-	raw, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	policy := &AppPolicy{}
-
-	err = yaml.Unmarshal(raw, &policy)
-	if err != nil {
-		return nil, err
-	}
-
-	return policy, nil
 }

@@ -2,4 +2,4 @@ version: v1
 image: "example:latest"
 resources:
   cpus: 2
-  memory: 127Mi
+  memory: 1024Mi
