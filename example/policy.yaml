@@ -1,5 +1,6 @@
 version: v1
 image: "example:latest"
+name: "example-enclave"
 resources:
   cpus: 2
   memory: 1024Mi

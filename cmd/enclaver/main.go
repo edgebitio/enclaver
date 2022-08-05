@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/go-edgebit/enclaver/builder"
 	policy2 "github.com/go-edgebit/enclaver/policy"
@@ -35,6 +36,8 @@ func main() {
 }
 
 func ExecuteBuild(cliContext *cli.Context) error {
+	ctx := context.Background()
+
 	policyPath := cliContext.String("file")
 
 	policy, err := policy2.LoadPolicy(policyPath)
@@ -49,7 +52,14 @@ func ExecuteBuild(cliContext *cli.Context) error {
 		return err
 	}
 
-	println(tag)
+	eifPath, err := builder.BuildEIF(ctx, tag)
+	if err != nil {
+		return err
+	}
+
+	imageName, err := builder.BuildEnclaveWrapperImage(ctx, eifPath, policy)
+
+	fmt.Printf("successfully built image: %s\n", imageName)
 
 	return nil
 }
