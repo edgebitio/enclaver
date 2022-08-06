@@ -23,13 +23,17 @@ jobs:
           service_account: 'github-actions-service-account@edgebit-containers.iam.gserviceaccount.com'
       - name: Build Nitro CLI Image
         run: |
+          gcloud auth configure-docker us-docker.pkg.dev
           docker build \
             -t us-docker.pkg.dev/edgebit-containers/containers/nitro-cli \
             -f builder/dockerfiles/nitro-cli.dockerfile \
             .
+          docker image push us-docker.pkg.dev/edgebit-containers/containers/nitro-cli
       - name: Build Enclave Wrapper Base Image
         run: |
+          gcloud auth configure-docker us-docker.pkg.dev
           docker build \
             -t us-docker.pkg.dev/edgebit-containers/containers/enclaver-wrapper-base \
             -f builder/dockerfiles/runtimebase.dockerfile \
             .
+          docker image push us-docker.pkg.dev/edgebit-containers/containers/enclaver-wrapper-bas
