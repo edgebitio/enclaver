@@ -25,7 +25,7 @@ jobs:
         run: |
           gcloud auth configure-docker us-docker.pkg.dev
           docker build \
-            -t us-docker.pkg.dev/edgebit-containers/containers/nitro-cli \
+            -t us-docker.pkg.dev/edgebit-containers/containers/nitro-cli:latest \
             -f builder/dockerfiles/nitro-cli.dockerfile \
             .
           docker image push us-docker.pkg.dev/edgebit-containers/containers/nitro-cli
@@ -33,7 +33,7 @@ jobs:
         run: |
           gcloud auth configure-docker us-docker.pkg.dev
           docker build \
-            -t us-docker.pkg.dev/edgebit-containers/containers/enclaver-wrapper-base \
+            -t us-docker.pkg.dev/edgebit-containers/containers/enclaver-wrapper-base:latest \
             -f builder/dockerfiles/runtimebase.dockerfile \
             .
-          docker image push us-docker.pkg.dev/edgebit-containers/containers/enclaver-wrapper-bas
+          docker image push us-docker.pkg.dev/edgebit-containers/containers/enclaver-wrapper-base
