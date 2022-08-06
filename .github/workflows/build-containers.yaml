@@ -10,9 +10,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - id: auth
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@v0'
+        with:
+          workload_identity_provider: 'projects/77991489452/locations/global/workloadIdentityPools/gh-actions-identity-pool/providers/gh-actions-identity-provider'
+          service_account: 'github-actions-service-account@edgebit-containers.iam.gserviceaccount.com'
       - name: Build Nitro CLI Image
         run: |
           docker build \
             -t us-docker.pkg.dev/edgebit-containers/containers/nitro-cli \
             -f builder/dockerfiles/nitro-cli.dockerfile \
+            .
+      - name: Build Enclave Wrapper Base Image
+        run: |
+          docker build \
+            -t us-docker.pkg.dev/edgebit-containers/containers/enclaver-wrapper-base \
+            -f builder/dockerfiles/runtimebase.dockerfile \
             .
