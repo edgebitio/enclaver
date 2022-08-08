@@ -66,6 +66,7 @@ func run(cliContext *cli.Context) error {
 
 	// TODO: load these from the app manifest
 	nitroCliArgs := []string{
+		"run-enclave",
 		"--cpu-count", "2",
 		"--memory", "4096",
 		"--eif-path", "/enclave/application.eif",
