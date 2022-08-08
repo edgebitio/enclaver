@@ -199,13 +199,18 @@ func BuildEIF(ctx context.Context, srcImg string) (string, error) {
 	return path.Join(outdir, eifFilename), nil
 }
 
-func BuildEnclaveWrapperImage(ctx context.Context, eifPath string, policy *policy.Policy) (string, error) {
+func BuildEnclaveWrapperImage(ctx context.Context, eifPath string, policy *policy.Policy, noPin bool) (string, error) {
 	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return "", err
 	}
 
-	baseRef, err := name.ParseReference(fmt.Sprintf("%s@%s", enclaveWrapperContainer, enclaveWrapperContainerDigest))
+	refString := fmt.Sprintf("%s@%s", enclaveWrapperContainer, enclaveWrapperContainerDigest)
+	if noPin {
+		refString = fmt.Sprintf("%s:latest", enclaveWrapperContainerDigest)
+	}
+
+	baseRef, err := name.ParseReference(refString)
 	if err != nil {
 		return "", err
 	}

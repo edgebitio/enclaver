@@ -23,6 +23,10 @@ func main() {
 						Usage:    "Enclaver application policy is defined in `FILE`",
 						Required: true,
 					},
+					&cli.BoolFlag{
+						Name:  "unpin-dependencies",
+						Usage: "use the latest available version of dependencies, instead of statically pinned version (not recommended)",
+					},
 				},
 				Action: ExecuteBuild,
 			},
@@ -57,7 +61,7 @@ func ExecuteBuild(cliContext *cli.Context) error {
 		return err
 	}
 
-	imageName, err := builder.BuildEnclaveWrapperImage(ctx, eifPath, policy)
+	imageName, err := builder.BuildEnclaveWrapperImage(ctx, eifPath, policy, cliContext.Bool("unpin-dependencies"))
 	if err != nil {
 		return err
 	}
