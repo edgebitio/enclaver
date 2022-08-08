@@ -55,7 +55,7 @@ func run(cliContext *cli.Context) error {
 		return err
 	}
 
-	listener, err := vsock.Listen(uint32(8080))
+	listener, err := vsock.Listen(uint32(3128))
 	if err != nil {
 		return err
 	}
