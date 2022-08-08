@@ -16,6 +16,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/google/uuid"
+	"golang.org/x/exp/slices"
 	"io"
 	"os"
 	"path"
@@ -23,13 +24,17 @@ import (
 )
 
 const (
-	enclavePolicyFileLocation     = `/etc/enclaver/policy.yaml`
-	nitroCLIContainer             = "us-docker.pkg.dev/edgebit-containers/containers/nitro-cli"
-	nitroCLIContainerDigest       = "sha256:18cdfd5550601c1ee92f9bf79bb893bc6789d6c62cc0d34ebdcea81912771e46"
-	enclaveWrapperContainer       = "us-docker.pkg.dev/edgebit-containers/containers/enclaver-wrapper-base"
-	enclaveWrapperContainerDigest = "sha256:e9abccc91832af5c47313344c71306ddd37da578a580bf784b888ba6a0d73f9d"
+	enclavePolicyFileLocation = `/etc/enclaver/policy.yaml`
+	nitroCLIContainer         = "us-docker.pkg.dev/edgebit-containers/containers/nitro-cli"
+	enclaveWrapperContainer   = "us-docker.pkg.dev/edgebit-containers/containers/enclaver-wrapper-base"
 
 	eifFilename = "application.eif"
+)
+
+var (
+	allowedSourceArchitectures = []string{
+		"amd64",
+	}
 )
 
 // SourceImageToEnclaveImage takes sourceImageName, which is interpreted as a reference
@@ -44,6 +49,15 @@ func SourceImageToEnclaveImage(sourceImageName string, policy *policy.Policy) (s
 	img, err := daemon.Image(srcRef)
 	if err != nil {
 		return "", err
+	}
+
+	config, err := img.ConfigFile()
+	if err != nil {
+		return "", err
+	}
+
+	if !slices.Contains(allowedSourceArchitectures, config.Architecture) {
+		return "", fmt.Errorf("unsupported source image architecture: %s", config.Architecture)
 	}
 
 	println("building overlay layer for source image")
@@ -219,9 +233,6 @@ func BuildEnclaveWrapperImage(ctx context.Context, eifPath string, policy *polic
 	if err != nil {
 		return "", err
 	}
-
-	digest, err := img.Digest()
-	println(digest.String())
 
 	img, err = mutate.CreatedAt(img, v1.Time{Time: time.Now()})
 	if err != nil {
