@@ -207,7 +207,7 @@ func BuildEnclaveWrapperImage(ctx context.Context, eifPath string, policy *polic
 
 	refString := fmt.Sprintf("%s@%s", enclaveWrapperContainer, enclaveWrapperContainerDigest)
 	if noPin {
-		refString = fmt.Sprintf("%s:latest", enclaveWrapperContainerDigest)
+		refString = fmt.Sprintf("%s:latest", enclaveWrapperContainer)
 	}
 
 	baseRef, err := name.ParseReference(refString)
