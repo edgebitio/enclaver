@@ -24,6 +24,12 @@ func main() {
 		Name:   "enclaver-wrapper",
 		Usage:  "Start an enclaver application and proxy its traffic",
 		Action: run,
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:  "debug",
+				Usage: "run enclave in debug mode and attach to its console",
+			},
+		},
 	}
 
 	err := app.Run(os.Args)
@@ -58,13 +64,19 @@ func run(cliContext *cli.Context) error {
 
 	go httpProxy.Serve(listener)
 
-	cmd := exec.Command(nitroCLIExecutable,
-		"run-enclave",
-		// TODO: load these from the app manifest
+	// TODO: load these from the app manifest
+	nitroCliArgs := []string{
 		"--cpu-count", "2",
 		"--memory", "4096",
 		"--eif-path", "/enclave/application.eif",
-		"--enclave-cid", fmt.Sprintf("%d", cid))
+		"--enclave-cid", fmt.Sprintf("%d", cid),
+	}
+
+	if cliContext.Bool("debug") {
+		nitroCliArgs = append(nitroCliArgs, "--debug-mode", "--attach-console")
+	}
+
+	cmd := exec.Command(nitroCLIExecutable, nitroCliArgs...)
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -82,7 +94,7 @@ func run(cliContext *cli.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			break
 		case <-ticker.C:
 		}
 
@@ -104,7 +116,12 @@ func run(cliContext *cli.Context) error {
 		}
 	}
 
-	// TODO: terminate enclave when wrapper is terminated
+	// Shutdown phase
+	// TODO: terminate the actual enclave if needed
 
-	return nil
+	// This probably won't actually be graceful because ctx is presumably already canceled,
+	// otherwise we wouldn't be here.
+	httpProxy.Shutdown(ctx)
+
+	return ctx.Err()
 }

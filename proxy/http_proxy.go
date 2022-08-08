@@ -11,20 +11,36 @@ import (
 
 type HTTPProxy struct {
 	logger *zap.Logger
+	server *http.Server
 }
 
 func MakeHTTPProxy(logger *zap.Logger) *HTTPProxy {
 	return &HTTPProxy{
 		logger: logger,
+		server: &http.Server{
+			Handler: &httpProxyHandler{
+				logger: logger,
+			},
+		},
 	}
 }
 
 func (p *HTTPProxy) Serve(listener net.Listener) error {
 	p.logger.Info("starting proxy", zap.String("address", listener.Addr().String()))
 
-	return http.Serve(listener, &httpProxyHandler{
-		logger: p.logger,
-	})
+	return p.server.Serve(listener)
+}
+
+func (p *HTTPProxy) Shutdown(ctx context.Context) error {
+	p.logger.Info("attempting graceful shutdown of proxy")
+
+	// TODO: from the docs:
+	// Shutdown does not attempt to close nor wait for hijacked
+	// connections such as WebSockets. The caller of Shutdown should
+	// separately notify such long-lived connections of shutdown and wait
+	// for them to close, if desired. See RegisterOnShutdown for a way to
+	// register shutdown notification functions.
+	return p.server.Shutdown(ctx)
 }
 
 type httpProxyHandler struct {
