@@ -61,11 +61,14 @@ func run(cliContext *cli.Context) error {
 		"--cpu-count", "2",
 		"--memory", "4096",
 		"--eif-path", "/enclave/application.eif",
-		"--enclave-cid", fmt.Sprint("%d", cid))
+		"--enclave-cid", fmt.Sprintf("%d", cid))
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return err
+		println("non-zero exit code from nitro-cli:")
+		os.Stdout.Write(out)
+		println()
+		return fmt.Errorf("failed to run enclave")
 	}
 
 	println(string(out))
