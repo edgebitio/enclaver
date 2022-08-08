@@ -1,6 +1,6 @@
 package builder
 
 const (
-	nitroCLIContainerDigest       = "sha256:18cdfd5550601c1ee92f9bf79bb893bc6789d6c62cc0d34ebdcea81912771e46"
-	enclaveWrapperContainerDigest = "sha256:4486df3149e951b87b6ab3f3f9421bf5bb564b68fb3df05d37ed95320a8fd46f"
+	nitroCLIContainerDigest       = "sha256:7fd9a8f06dbccb5ae217aa9711d44dd28887cca6e81d2f513ec66d038a0aafad"
+	enclaveWrapperContainerDigest = "sha256:c5ba0fc00e3b804c72d9e44c097dc9dcf3eb04c9c945902db722994960aa1397"
 )
