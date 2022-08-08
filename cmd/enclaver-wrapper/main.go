@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -32,6 +33,8 @@ func main() {
 }
 
 func run(cliContext *cli.Context) error {
+	ctx := context.Background()
+
 	logger, err := zap.NewProduction()
 	if err != nil {
 		return err
@@ -65,16 +68,37 @@ func run(cliContext *cli.Context) error {
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		println("non-zero exit code from nitro-cli:")
-		os.Stdout.Write(out)
-		println()
+		logger.Error("error running nitro-cli run-enclave",
+			zap.Error(err),
+			zap.ByteString("output", out))
+
 		return fmt.Errorf("failed to run enclave")
 	}
 
 	println(string(out))
 
+	for {
+		time.Sleep(5 * time.Second)
+
+		cmd := exec.Command(nitroCLIExecutable,
+			"describe-enclaves")
+
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			logger.Error("error running nitro-cli describe-enclaves; ignoring",
+				zap.Error(err),
+				zap.ByteString("output", out))
+		}
+
+		// TODO: this is an awful hack, we should parse the JSON
+		if len(out) < 10 {
+			logger.Info("enclave appears dead, exiting",
+				zap.ByteString("output", out))
+			return fmt.Errorf("enclave exited")
+		}
+	}
+
 	// TODO: terminate enclave when wrapper is terminated
-	// TODO: terminate wrapper when enclave is terminated
 
 	return nil
 }
