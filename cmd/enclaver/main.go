@@ -58,6 +58,9 @@ func ExecuteBuild(cliContext *cli.Context) error {
 	}
 
 	imageName, err := builder.BuildEnclaveWrapperImage(ctx, eifPath, policy)
+	if err != nil {
+		return err
+	}
 
 	fmt.Printf("successfully built image: %s\n", imageName)
 
