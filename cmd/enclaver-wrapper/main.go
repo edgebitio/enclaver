@@ -77,8 +77,14 @@ func run(cliContext *cli.Context) error {
 
 	println(string(out))
 
+	ticker := time.NewTicker(5 * time.Second)
+
 	for {
-		time.Sleep(5 * time.Second)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
 
 		cmd := exec.Command(nitroCLIExecutable,
 			"describe-enclaves")
