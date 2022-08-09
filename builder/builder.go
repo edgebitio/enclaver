@@ -4,11 +4,14 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/go-edgebit/enclaver/nitrocli"
 	"github.com/go-edgebit/enclaver/policy"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -18,8 +21,9 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/exp/slices"
 	"io"
+	"io/ioutil"
 	"os"
-	"path"
+	"path/filepath"
 	"time"
 )
 
@@ -137,10 +141,15 @@ func enclaverOverlayLayer(policy *policy.Policy) (v1.Layer, error) {
 	})
 }
 
-func BuildEIF(ctx context.Context, srcImg string) (string, error) {
+type EIFBuildResult struct {
+	Path         string
+	Measurements *nitrocli.Measurements
+}
+
+func BuildEIF(ctx context.Context, srcImg string) (*EIFBuildResult, error) {
 	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	containerRef := fmt.Sprintf("%s@%s", nitroCLIContainer, nitroCLIContainerDigest)
@@ -148,14 +157,14 @@ func BuildEIF(ctx context.Context, srcImg string) (string, error) {
 	println("ensuring nitro-cli container image is up to date")
 	statusReader, err := dockerClient.ImagePull(ctx, containerRef, types.ImagePullOptions{})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	StreamDockerStatus(statusReader)
 
 	outdir, err := os.MkdirTemp("", "enclaver-build-")
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	println("building enclave EIF image")
@@ -179,24 +188,46 @@ func BuildEIF(ctx context.Context, srcImg string) (string, error) {
 		},
 	}, nil, nil, "")
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	err = dockerClient.ContainerStart(ctx, createResp.ID, types.ContainerStartOptions{})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	statusCh, errCh := dockerClient.ContainerWait(ctx, createResp.ID, container.WaitConditionNotRunning)
 	select {
 	case err := <-errCh:
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 	case <-statusCh:
 	}
 
-	return path.Join(outdir, eifFilename), nil
+	stdout := bytes.Buffer{}
+
+	logs, err := dockerClient.ContainerLogs(ctx, createResp.ID, types.ContainerLogsOptions{ShowStdout: true})
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = stdcopy.StdCopy(&stdout, ioutil.Discard, logs)
+	if err != nil {
+		return nil, err
+	}
+
+	eifInfo := &nitrocli.EIFInfo{}
+
+	err = json.Unmarshal(stdout.Bytes(), eifInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	return &EIFBuildResult{
+		Path:         filepath.Join(outdir, eifFilename),
+		Measurements: &eifInfo.Measurements,
+	}, nil
 }
 
 func BuildEnclaveWrapperImage(ctx context.Context, eifPath string, policy *policy.Policy, noPin bool) (string, error) {

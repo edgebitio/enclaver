@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/pkg/errors"
+	"fmt"
 	"os/exec"
 )
 
@@ -75,7 +75,7 @@ func (cli *NitroCLI) runAndParseJSON(ctx context.Context, opts argser, out inter
 
 	err = json.Unmarshal(stdout.Bytes(), out)
 	if err != nil {
-		return errors.Wrap(err, "error parsing JSON output from nitro-cli")
+		return fmt.Errorf("parsing JSON from nitro-cli: %w", err)
 	}
 
 	return nil

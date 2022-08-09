@@ -7,7 +7,6 @@ import (
 	"github.com/go-edgebit/enclaver/policy"
 	"github.com/go-edgebit/enclaver/proxy"
 	"github.com/go-edgebit/enclaver/proxy/vsock"
-	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 	"io"
 	"math"
@@ -107,7 +106,7 @@ func run(cliContext *cli.Context) error {
 	if err != nil {
 		logger.Error("error running nitro-cli run-enclave",
 			zap.Error(err))
-		return errors.Wrap(err, "failed to start enclave")
+		fmt.Errorf("failed to start enclave: %w", err)
 	}
 
 	logger.Info("started enclave",

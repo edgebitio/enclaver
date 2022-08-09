@@ -69,17 +69,18 @@ func ExecuteBuild(cliContext *cli.Context) error {
 		return err
 	}
 
-	eifPath, err := builder.BuildEIF(ctx, tag)
+	eifInfo, err := builder.BuildEIF(ctx, tag)
 	if err != nil {
 		return err
 	}
 
-	imageName, err := builder.BuildEnclaveWrapperImage(ctx, eifPath, policy, cliContext.Bool("unpin-dependencies"))
+	imageName, err := builder.BuildEnclaveWrapperImage(ctx, eifInfo.Path, policy, cliContext.Bool("unpin-dependencies"))
 	if err != nil {
 		return err
 	}
 
 	fmt.Printf("successfully built image: %s\n", imageName)
+	fmt.Printf("EIF Image Sha384: %s\n", eifInfo.Measurements.PCR0)
 
 	return nil
 }

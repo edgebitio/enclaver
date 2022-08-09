@@ -48,3 +48,13 @@ type EnclaveInfo struct {
 	EnclaveID   string
 	ProcessID   int
 }
+
+type EIFInfo struct {
+	Measurements Measurements
+}
+
+type Measurements struct {
+	PCR0 string
+	PCR1 string
+	PCR2 string
+}
