@@ -18,7 +18,6 @@ import (
 )
 
 const (
-	wrapperPolicyPath     = "/enclave/policy.yaml"
 	enclaveImagePath      = "/enclave/application.eif"
 	egressProxyListenPort = 3128
 )
@@ -46,7 +45,7 @@ func run(cliContext *cli.Context) error {
 	ctx := context.Background()
 	debugMode := cliContext.Bool("debug")
 
-	policy, err := policy.LoadPolicy(wrapperPolicyPath)
+	policy, err := policy.LoadPolicy(policy.WrapperPolicyLocation)
 	if err != nil {
 		return err
 	}

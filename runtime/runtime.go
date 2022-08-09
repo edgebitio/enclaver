@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"errors"
+	"github.com/go-edgebit/enclaver/policy"
 	"github.com/go-edgebit/enclaver/proxy"
 	"github.com/hf/nsm"
 	"github.com/hf/nsm/request"
@@ -27,12 +28,20 @@ var (
 )
 
 type EnclaveRuntime struct {
-	nsm *nsm.Session
-	key *rsa.PrivateKey
+	nsm    *nsm.Session
+	key    *rsa.PrivateKey
+	policy *policy.Policy
 }
 
 func (runtime *EnclaveRuntime) initialize() error {
-	err := proxy.StartEnclaveForwarder(context.Background())
+	policy, err := policy.LoadPolicy(policy.EnclavePolicyLocation)
+	if err != nil {
+		return err
+	}
+
+	runtime.policy = policy
+
+	err = proxy.StartEnclaveForwarder(context.Background(), policy.Parsed().Network.ListenPorts)
 	if err != nil {
 		return err
 	}

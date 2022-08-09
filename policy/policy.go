@@ -15,6 +15,9 @@ const (
 )
 
 var (
+	EnclavePolicyLocation = "/etc/enclaver/policy.yaml"
+	WrapperPolicyLocation = "/enclave/policy.yaml"
+
 	minMem        = 64
 	appNameRegexp = regexp.MustCompile("^([A-Za-z0-9][[A-Za-z0-9_.-]*)?[A-Za-z0-9]$")
 )

@@ -28,9 +28,8 @@ import (
 )
 
 const (
-	enclavePolicyFileLocation = `/etc/enclaver/policy.yaml`
-	nitroCLIContainer         = "us-docker.pkg.dev/edgebit-containers/containers/nitro-cli"
-	enclaveWrapperContainer   = "us-docker.pkg.dev/edgebit-containers/containers/enclaver-wrapper-base"
+	nitroCLIContainer       = "us-docker.pkg.dev/edgebit-containers/containers/nitro-cli"
+	enclaveWrapperContainer = "us-docker.pkg.dev/edgebit-containers/containers/enclaver-wrapper-base"
 
 	eifFilename = "application.eif"
 )
@@ -108,21 +107,21 @@ func SourceImageToEnclaveImage(sourceImageName string, policy *policy.Policy) (s
 //
 // Note that if this layer gets very large this function should be refactored
 // to lazily generate the layer, rather than buffering the whole thing in memory.
-func enclaverOverlayLayer(policy *policy.Policy) (v1.Layer, error) {
+func enclaverOverlayLayer(appPolicy *policy.Policy) (v1.Layer, error) {
 	var tarbuf bytes.Buffer
 	writer := tar.NewWriter(&tarbuf)
 
 	err := writer.WriteHeader(&tar.Header{
 		Typeflag: tar.TypeReg,
-		Name:     enclavePolicyFileLocation,
-		Size:     int64(policy.Size()),
+		Name:     policy.EnclavePolicyLocation,
+		Size:     int64(appPolicy.Size()),
 		Mode:     0644,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = writer.Write(policy.Raw())
+	_, err = writer.Write(appPolicy.Raw())
 	if err != nil {
 		return nil, err
 	}
