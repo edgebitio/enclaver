@@ -6,6 +6,7 @@ import (
 	"go.uber.org/zap"
 	"io"
 	"net"
+	"strings"
 )
 
 func closeWrite(conn net.Conn) {
@@ -75,7 +76,7 @@ func (sfp *StreamForwardProxy) Serve(ctx context.Context, listener net.Listener)
 			}
 
 			err = Pump(ctx, clientConn, serverConn)
-			if err != nil {
+			if err != nil && !strings.Contains(err.Error(), "use of closed network connection") {
 				sfp.logger.Warn("error pumping", zap.Error(err))
 			}
 		}()
