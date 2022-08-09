@@ -4,3 +4,15 @@ name: "example-enclave"
 resources:
   cpus: 2
   memory: 1024Mi
+network:
+  listen_ports:
+    - 8080
+  egress:
+    - host: 169.254.169.254
+      port: 80
+    - host: kms.us-west-2.amazonaws.com
+      port: 443
+    - host: google.com
+      port: 443
+    - host: www.google.com
+      port: 443

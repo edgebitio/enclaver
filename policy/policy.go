@@ -49,7 +49,7 @@ func LoadPolicy(path string) (*Policy, error) {
 
 	parsed := &AppPolicy{}
 
-	err = yaml.Unmarshal(raw, parsed)
+	err = yaml.UnmarshalStrict(raw, parsed)
 	if err != nil {
 		return nil, err
 	}

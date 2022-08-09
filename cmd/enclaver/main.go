@@ -30,6 +30,19 @@ func main() {
 				},
 				Action: ExecuteBuild,
 			},
+			{
+				Name:  "validate-policy",
+				Usage: "validate an enclaver policy file",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:     "file",
+						Aliases:  []string{"f"},
+						Usage:    "Enclaver application policy is defined in `FILE`",
+						Required: true,
+					},
+				},
+				Action: ValidatePolicy,
+			},
 		},
 	}
 
@@ -67,6 +80,19 @@ func ExecuteBuild(cliContext *cli.Context) error {
 	}
 
 	fmt.Printf("successfully built image: %s\n", imageName)
+
+	return nil
+}
+
+func ValidatePolicy(cliContext *cli.Context) error {
+	policyPath := cliContext.String("file")
+
+	_, err := policy.LoadPolicy(policyPath)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("policy OK")
 
 	return nil
 }
