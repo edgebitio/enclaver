@@ -1,27 +1,26 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/go-edgebit/enclaver/nitrocli"
 	"github.com/go-edgebit/enclaver/policy"
 	"github.com/go-edgebit/enclaver/proxy"
 	"github.com/go-edgebit/enclaver/proxy/vsock"
+	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 	"io"
 	"math"
 	"math/rand"
 	"os"
-	"os/exec"
 	"time"
 
 	"go.uber.org/zap"
 )
 
 const (
-	nitroCLIExecutable    = "nitro-cli"
 	wrapperPolicyPath     = "/enclave/policy.yaml"
+	enclaveImagePath      = "/enclave/application.eif"
 	egressProxyListenPort = 3128
 )
 
@@ -81,54 +80,40 @@ func run(cliContext *cli.Context) error {
 
 	go httpProxy.Serve(listener)
 
-	// TODO: load these from the app manifest
-	nitroCliArgs := []string{
-		"run-enclave",
-		"--cpu-count", "2",
-		"--memory", "4096",
-		"--eif-path", "/enclave/application.eif",
-		"--enclave-cid", fmt.Sprintf("%d", cid),
+	cli := &nitrocli.NitroCLI{}
+	enclaveOpts := nitrocli.RunEnclaveOptions{
+		CPUCount: parsedPolicy.Resources.CPUs,
+		Memory:   parsedPolicy.Resources.Mem.Value(),
+		EIFPath:  enclaveImagePath,
+		CID:      cid,
 	}
 
 	if debugMode {
-		nitroCliArgs = append(nitroCliArgs, "--debug-mode", "--attach-console")
-	}
+		out, err := cli.RunEnclaveDebugConsole(ctx, enclaveOpts)
+		if err != nil {
+			logger.Error("error starting enclave in debug mode",
+				zap.Error(err),
+				zap.ByteString("output", out.Bytes()))
+			return err
+		}
 
-	cmd := exec.Command(nitroCLIExecutable, nitroCliArgs...)
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-
-	err = cmd.Run()
-	if err != nil {
-		logger.Error("error running nitro-cli run-enclave",
-			zap.Error(err),
-			zap.ByteString("stdout", stdout.Bytes()),
-			zap.ByteString("stderr", stderr.Bytes()))
-
-		return fmt.Errorf("failed to run enclave")
-	}
-
-	if debugMode {
-		println("Debug (stdout):")
-		io.Copy(os.Stdout, stderr)
-		println()
-
-		println("Debug (stderr):")
-		io.Copy(os.Stdout, stdout)
-		println()
+		println("DEBUG OUTPUT")
+		io.Copy(os.Stdout, out)
 
 		return nil
 	}
 
-	md := &EnclaveMetadata{}
-	err = json.Unmarshal(stdout.Bytes(), md)
+	enclaveInfo, err := cli.RunEnclave(ctx, enclaveOpts)
+	if err != nil {
+		logger.Error("error running nitro-cli run-enclave",
+			zap.Error(err))
+		return errors.Wrap(err, "failed to start enclave")
+	}
 
-	logger.Info("enclave started",
-		zap.String("name", md.EnclaveName),
-		zap.String("id", md.EnclaveName),
-		zap.Int("process", md.ProcessID))
+	logger.Info("started enclave",
+		zap.String("name", enclaveInfo.EnclaveName),
+		zap.String("enclave_id", enclaveInfo.EnclaveID),
+		zap.Int("process", enclaveInfo.ProcessID))
 
 	ticker := time.NewTicker(5 * time.Second)
 
@@ -139,23 +124,29 @@ func run(cliContext *cli.Context) error {
 		case <-ticker.C:
 		}
 
-		cmd := exec.Command(nitroCLIExecutable,
-			"describe-enclaves")
-
-		out, err := cmd.CombinedOutput()
+		statusInfos, err := cli.DescribeEnclaves(ctx)
 		if err != nil {
 			logger.Error("error running nitro-cli describe-enclaves; ignoring",
-				zap.Error(err),
-				zap.ByteString("output", out))
+				zap.Error(err))
 		}
 
-		// TODO: this is an awful hack, we should parse the JSON
-		if len(out) < 10 {
-			logger.Info("enclave appears dead, exiting",
-				zap.ByteString("output", out))
+		if len(statusInfos) == 0 {
+			logger.Info("enclave appears dead, exiting")
 			return fmt.Errorf("enclave exited")
+		}
+
+		enclaveFound := false
+
+		for _, enclaveStatusInfo := range statusInfos {
+			if enclaveStatusInfo.EnclaveID == enclaveInfo.EnclaveID {
+				enclaveFound = true
+			}
+		}
+
+		if enclaveFound {
+			logger.Info("enclave heartbeat OK")
 		} else {
-			logger.Info("enclave looks alive")
+			return fmt.Errorf("enclave exited")
 		}
 	}
 
@@ -167,10 +158,4 @@ func run(cliContext *cli.Context) error {
 	httpProxy.Shutdown(ctx)
 
 	return ctx.Err()
-}
-
-type EnclaveMetadata struct {
-	EnclaveName string
-	EnclaveID   string
-	ProcessID   int
 }
