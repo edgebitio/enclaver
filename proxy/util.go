@@ -44,8 +44,7 @@ func Pump(ctx context.Context, a net.Conn, b net.Conn) error {
 
 	for i := 0; i < 2; i++ {
 		err := <-ech
-		if err != nil && !errors.Is(err, io.EOF) {
-			println("pump error: ", err)
+		if err != nil && !errors.Is(err, io.EOF) && !strings.Contains(err.Error(), "use of closed network connection") {
 			return err
 		}
 	}
@@ -76,8 +75,8 @@ func (sfp *StreamForwardProxy) Serve(ctx context.Context, listener net.Listener)
 			}
 
 			err = Pump(ctx, clientConn, serverConn)
-			if err != nil && !strings.Contains(err.Error(), "use of closed network connection") {
-				sfp.logger.Warn("error pumping", zap.Error(err))
+			if err != nil {
+				sfp.logger.Warn("error proxying network traffic", zap.Error(err))
 			}
 		}()
 	}
