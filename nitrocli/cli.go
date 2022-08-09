@@ -42,7 +42,7 @@ func (cli *NitroCLI) RunEnclaveDebugConsole(ctx context.Context, opts RunEnclave
 
 func (cli *NitroCLI) DescribeEnclaves(ctx context.Context) ([]EnclaveInfo, error) {
 	infos := []EnclaveInfo{}
-	err := cli.runAndParseJSON(ctx, DescribeEnclavesOptions{}, infos)
+	err := cli.runAndParseJSON(ctx, DescribeEnclavesOptions{}, &infos)
 	if err != nil {
 		return nil, err
 	}
