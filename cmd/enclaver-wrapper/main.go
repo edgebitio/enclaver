@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/go-edgebit/enclaver/policy"
 	"github.com/go-edgebit/enclaver/proxy"
 	"github.com/go-edgebit/enclaver/proxy/vsock"
 	"github.com/urfave/cli/v2"
@@ -19,7 +20,9 @@ import (
 )
 
 const (
-	nitroCLIExecutable = "nitro-cli"
+	nitroCLIExecutable    = "nitro-cli"
+	wrapperPolicyPath     = "/enclave/policy.yaml"
+	egressProxyListenPort = 3128
 )
 
 func main() {
@@ -45,6 +48,13 @@ func run(cliContext *cli.Context) error {
 	ctx := context.Background()
 	debugMode := cliContext.Bool("debug")
 
+	policy, err := policy.LoadPolicy(wrapperPolicyPath)
+	if err != nil {
+		return err
+	}
+
+	parsedPolicy := policy.Parsed()
+
 	logger, err := zap.NewProduction()
 	if err != nil {
 		return err
@@ -54,12 +64,15 @@ func run(cliContext *cli.Context) error {
 
 	// TODO: load all ports from the app manifest
 	pf := proxy.MakeParentForwarder(logger, "localhost", cid)
-	err = pf.ForwardPort(context.Background(), 8080, 8080)
-	if err != nil {
-		return err
+
+	for _, port := range parsedPolicy.Network.ListenPorts {
+		err = pf.ForwardPort(context.Background(), uint32(port), uint32(port))
+		if err != nil {
+			return err
+		}
 	}
 
-	listener, err := vsock.Listen(uint32(3128))
+	listener, err := vsock.Listen(egressProxyListenPort)
 	if err != nil {
 		return err
 	}
@@ -141,6 +154,8 @@ func run(cliContext *cli.Context) error {
 			logger.Info("enclave appears dead, exiting",
 				zap.ByteString("output", out))
 			return fmt.Errorf("enclave exited")
+		} else {
+			logger.Info("enclave looks alive")
 		}
 	}
 

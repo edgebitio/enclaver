@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/go-edgebit/enclaver/builder"
-	policy2 "github.com/go-edgebit/enclaver/policy"
+	"github.com/go-edgebit/enclaver/policy"
 	"github.com/urfave/cli/v2"
 	"os"
 )
@@ -44,7 +44,7 @@ func ExecuteBuild(cliContext *cli.Context) error {
 
 	policyPath := cliContext.String("file")
 
-	policy, err := policy2.LoadPolicy(policyPath)
+	policy, err := policy.LoadPolicy(policyPath)
 	if err != nil {
 		return err
 	}
