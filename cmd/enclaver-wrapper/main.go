@@ -82,7 +82,7 @@ func run(cliContext *cli.Context) error {
 	cli := &nitrocli.NitroCLI{}
 	enclaveOpts := nitrocli.RunEnclaveOptions{
 		CPUCount: parsedPolicy.Resources.CPUs,
-		Memory:   parsedPolicy.Resources.Mem.Value(),
+		Memory:   parsedPolicy.Resources.Mem,
 		EIFPath:  enclaveImagePath,
 		CID:      cid,
 	}
@@ -106,7 +106,7 @@ func run(cliContext *cli.Context) error {
 	if err != nil {
 		logger.Error("error running nitro-cli run-enclave",
 			zap.Error(err))
-		fmt.Errorf("failed to start enclave: %w", err)
+		return fmt.Errorf("failed to start enclave: %w", err)
 	}
 
 	logger.Info("started enclave",

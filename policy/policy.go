@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"hash"
 	"io/ioutil"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"regexp"
 	"sigs.k8s.io/yaml"
@@ -16,7 +15,7 @@ const (
 )
 
 var (
-	minMem        = resource.MustParse("128Mi")
+	minMem        = 64
 	appNameRegexp = regexp.MustCompile("^([A-Za-z0-9][[A-Za-z0-9_.-]*)?[A-Za-z0-9]$")
 )
 
@@ -132,8 +131,8 @@ func (policy *AppPolicy) Validate() error {
 }
 
 type ResourcePolicy struct {
-	CPUs int               `json:"cpus"`
-	Mem  resource.Quantity `json:"memory"`
+	CPUs int `json:"cpus"`
+	Mem  int `json:"memory"`
 }
 
 func (policy *ResourcePolicy) Validate() error {
@@ -141,8 +140,8 @@ func (policy *ResourcePolicy) Validate() error {
 		return &ValidationError{Message: "cpus must be greater than 0"}
 	}
 
-	if policy.Mem.Value() < minMem.Value() {
-		return &ValidationError{Message: fmt.Sprintf("memory must greater than %s", minMem.String())}
+	if policy.Mem < minMem {
+		return &ValidationError{Message: fmt.Sprintf("memory must greater than %d", minMem)}
 	}
 
 	return nil

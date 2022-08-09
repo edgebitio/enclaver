@@ -4,7 +4,7 @@ import "fmt"
 
 type RunEnclaveOptions struct {
 	CPUCount int
-	Memory   int64
+	Memory   int
 	EIFPath  string
 	CID      uint32
 }
