@@ -60,7 +60,7 @@ func run(cliContext *cli.Context) error {
 	cid := uint32(rand.Int63n(math.MaxUint32-4) + 4)
 
 	// TODO: load all ports from the app manifest
-	pf := proxy.MakeParentForwarder(logger, "localhost", cid)
+	pf := proxy.MakeParentForwarder(logger, "0.0.0.0", cid)
 
 	for _, port := range parsedPolicy.Network.ListenPorts {
 		err = pf.ForwardPort(context.Background(), uint32(port), uint32(port))
