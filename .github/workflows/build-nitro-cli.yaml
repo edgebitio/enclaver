@@ -4,7 +4,7 @@ on:
   workflow_dispatch
 
 jobs:
-  build:
+  build-nitro-cli:
     runs-on: ubuntu-latest
 
     permissions:

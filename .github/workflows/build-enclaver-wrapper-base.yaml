@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  build:
+  build-enclaver-wrapper-base:
     runs-on: ubuntu-latest
 
     permissions:
