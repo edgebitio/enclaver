@@ -1,9 +1,7 @@
-name: Build & Push Containers
+name: Build & Push Nitro CLI Container
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch
 
 jobs:
   build:
@@ -29,11 +27,3 @@ jobs:
             -f builder/dockerfiles/nitro-cli.dockerfile \
             .
           docker image push us-docker.pkg.dev/edgebit-containers/containers/nitro-cli
-      - name: Build Enclave Wrapper Base Image
-        run: |
-          gcloud auth configure-docker us-docker.pkg.dev
-          docker build \
-            -t us-docker.pkg.dev/edgebit-containers/containers/enclaver-wrapper-base:latest \
-            -f builder/dockerfiles/runtimebase.dockerfile \
-            .
-          docker image push us-docker.pkg.dev/edgebit-containers/containers/enclaver-wrapper-base

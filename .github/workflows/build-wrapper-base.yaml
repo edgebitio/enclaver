@@ -1,0 +1,31 @@
+name: Build & Push Enclaver Wrapper Base Container
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - uses: actions/checkout@v3
+      - id: auth
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@v0'
+        with:
+          workload_identity_provider: 'projects/77991489452/locations/global/workloadIdentityPools/gh-actions-identity-pool/providers/gh-actions-identity-provider'
+          service_account: 'github-actions-service-account@edgebit-containers.iam.gserviceaccount.com'
+      - name: Build Enclave Wrapper Base Image
+        run: |
+          gcloud auth configure-docker us-docker.pkg.dev
+          docker build \
+            -t us-docker.pkg.dev/edgebit-containers/containers/enclaver-wrapper-base:latest \
+            -f builder/dockerfiles/runtimebase.dockerfile \
+            .
+          docker image push us-docker.pkg.dev/edgebit-containers/containers/enclaver-wrapper-base
