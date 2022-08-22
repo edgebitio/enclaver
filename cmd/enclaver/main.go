@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/go-edgebit/enclaver/builder"
-	"github.com/go-edgebit/enclaver/policy"
+	"github.com/edgebitio/enclaver/builder"
+	"github.com/edgebitio/enclaver/policy"
 	"github.com/urfave/cli/v2"
 	"os"
 )

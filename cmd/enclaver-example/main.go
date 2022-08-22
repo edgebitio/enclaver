@@ -8,8 +8,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/go-edgebit/enclaver/crypto/cms"
-	"github.com/go-edgebit/enclaver/runtime"
+	"github.com/edgebitio/enclaver/crypto/cms"
+	"github.com/edgebitio/enclaver/runtime"
 	"net/http"
 )
 

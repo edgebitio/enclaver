@@ -1,4 +1,4 @@
-module github.com/go-edgebit/enclaver/kms
+module github.com/edgebitio/enclaver/kms
 
 go 1.15
 

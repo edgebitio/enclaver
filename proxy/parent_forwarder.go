@@ -3,7 +3,7 @@ package proxy
 import (
 	"context"
 	"fmt"
-	"github.com/go-edgebit/enclaver/proxy/vsock"
+	"github.com/edgebitio/enclaver/proxy/vsock"
 	"go.uber.org/zap"
 	"net"
 )

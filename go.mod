@@ -1,4 +1,4 @@
-module github.com/go-edgebit/enclaver
+module github.com/edgebitio/enclaver
 
 go 1.18
 

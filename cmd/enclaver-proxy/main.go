@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/go-edgebit/enclaver/proxy"
-	"github.com/go-edgebit/enclaver/proxy/vsock"
+	"github.com/edgebitio/enclaver/proxy"
+	"github.com/edgebitio/enclaver/proxy/vsock"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 )
