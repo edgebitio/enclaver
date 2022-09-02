@@ -10,4 +10,4 @@ enclave-image:
 	enclaver build -f example/policy.yaml
 
 run-enclave:
-	docker run --net=host --privileged enclave-example
+	docker run --net=host --privileged example-enclave
