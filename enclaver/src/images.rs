@@ -6,6 +6,7 @@ use tokio::fs::{create_dir, hard_link, File};
 use thiserror::Error;
 use tokio::io::{AsyncWriteExt, BufWriter};
 use std::fmt::Write;
+use bollard::image::BuildImageOptions;
 
 #[derive(Debug)]
 pub struct ImageRef {
@@ -29,6 +30,9 @@ pub enum Error {
 
     #[error(transparent)]
     StripPrefix(#[from] std::path::StripPrefixError),
+
+    #[error("path error: {0}")]
+    PathError(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -57,10 +61,13 @@ impl ImageManager {
     }
 
     pub async fn append_layer(&self, img: &ImageRef, layer: &LayerBuilder) -> Result<ImageRef> {
-        println!("yoo2");
         let dir = layer.realize(&img.name).await?;
         let path  = dir.into_path();
         println!("tmp dir: {}", path.to_string_lossy());
+        self.docker.build_image(BuildImageOptions {
+
+            ..Default::default()
+        }, None, None);
 
         todo!()
     }
@@ -129,9 +136,7 @@ impl LayerBuilder {
         // Create a temporary directory for use as a Docker context
         let tempdir = TempDir::new()?;
         let local_files = tempdir.path().join("files");
-        println!("expected: {}", local_files.to_string_lossy());
         create_dir(&local_files).await?;
-
 
         let mut dw = BufWriter::new(File::create(tempdir.path().join("Dockerfile")).await?);
 
@@ -142,8 +147,10 @@ impl LayerBuilder {
             // in our context directory.
             if let FileSource::Local { path: source_path } = &file.source {
                 let target = local_files.join(file.path.strip_prefix("/")?);
-                tokio::fs::create_dir_all(target.parent().unwrap()).await?;
-                println!("building hard link: {} -> {}", source_path.to_string_lossy(), target.to_string_lossy());
+                let target_parent = target.parent().ok_or_else(|| {
+                    Error::PathError(format!("error getting parent of {}", target.to_string_lossy()))
+                })?;
+                tokio::fs::create_dir_all(target_parent).await?;
                 hard_link(source_path, target).await?;
             }
 

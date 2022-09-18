@@ -168,7 +168,6 @@ dependencies = [
  "anyhow",
  "bollard",
  "clap",
- "log",
  "serde",
  "serde_yaml",
  "tempfile",

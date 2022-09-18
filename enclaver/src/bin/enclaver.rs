@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 use clap::{Parser, Subcommand};
-use log::error;
 use enclaver::images::{FileBuilder, FileSource, ImageManager, LayerBuilder};
 use enclaver::policy::load_policy;
 
@@ -37,8 +36,6 @@ async fn run(args: Cli) -> anyhow::Result<()> {
                 },
                 chown: "100:100".to_string(),
             });
-
-            println!("yoo");
 
             let res_image = image_manager.append_layer(&source_img, &lb).await?;
 
