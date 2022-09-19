@@ -1,4 +1,4 @@
 extern crate core;
 
-pub mod policy;
 pub mod images;
+pub mod policy;

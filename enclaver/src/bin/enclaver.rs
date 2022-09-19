@@ -1,7 +1,7 @@
-use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 use enclaver::images::{FileBuilder, FileSource, ImageManager, LayerBuilder};
 use enclaver::policy::load_policy;
+use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -14,7 +14,6 @@ struct Cli {
 enum Commands {
     #[clap(name = "build")]
     Build {
-
         #[clap(short, long)]
         file: String,
     },
@@ -22,20 +21,24 @@ enum Commands {
 
 async fn run(args: Cli) -> anyhow::Result<()> {
     match args.subcommand {
-        Commands::Build { file} => {
+        Commands::Build { file } => {
             println!("building from {file}");
 
             let policy = load_policy(&file).await?;
             let image_manager = ImageManager::new()?;
             let source_img = image_manager.image(&policy.image).await?;
-            let res_image = image_manager.append_layer(&source_img, LayerBuilder::new()
-                .append_file(FileBuilder{
-                    path: PathBuf::from("/etc/enclaver/policy.yaml"),
-                    source: FileSource::Local {
-                        path: PathBuf::from(&file),
-                    },
-                    chown: "100:100".to_string(),
-                })).await?;
+            let res_image = image_manager
+                .append_layer(
+                    &source_img,
+                    LayerBuilder::new().append_file(FileBuilder {
+                        path: PathBuf::from("/etc/enclaver/policy.yaml"),
+                        source: FileSource::Local {
+                            path: PathBuf::from(&file),
+                        },
+                        chown: "100:100".to_string(),
+                    }),
+                )
+                .await?;
 
             println!("image: {}", res_image);
         }

@@ -1,9 +1,8 @@
-use tokio::io;
-use tokio::fs::{File};
-use tokio::io::AsyncReadExt;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
-
+use tokio::fs::File;
+use tokio::io;
+use tokio::io::AsyncReadExt;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -11,9 +10,8 @@ pub enum Error {
     IO(#[from] io::Error),
 
     #[error("unable to parse policy file")]
-    Deserialization(#[from] serde_yaml::Error)
+    Deserialization(#[from] serde_yaml::Error),
 }
-
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Policy {
