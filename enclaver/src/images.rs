@@ -1,12 +1,13 @@
 use std::path::{PathBuf};
+use std::fmt::Write;
 use bollard::Docker;
 use bollard::models::ImageInspect;
-use tempfile::TempDir;
-use tokio::fs::{create_dir, hard_link, File};
-use thiserror::Error;
-use tokio::io::{AsyncWriteExt, BufWriter};
-use std::fmt::Write;
 use bollard::image::BuildImageOptions;
+use tokio::fs::{create_dir, hard_link, File};
+use tokio::io::{AsyncWriteExt, BufWriter, AsyncWrite, duplex};
+use tokio_util::codec;
+use thiserror::Error;
+use futures_util::stream::{StreamExt, TryStreamExt};
 
 #[derive(Debug)]
 pub struct ImageRef {
@@ -60,14 +61,27 @@ impl ImageManager {
         })
     }
 
-    pub async fn append_layer(&self, img: &ImageRef, layer: &LayerBuilder) -> Result<ImageRef> {
-        let dir = layer.realize(&img.name).await?;
-        let path  = dir.into_path();
-        println!("tmp dir: {}", path.to_string_lossy());
-        self.docker.build_image(BuildImageOptions {
+    pub async fn append_layer<'a>(&self, img: &ImageRef, layer: &LayerBuilder) -> Result<ImageRef> {
+        let (tar_write, tar_read) = duplex(1024);
+        let byte_stream = codec::FramedRead::new(tar_read, codec::BytesCodec::new()).map(|r| {
+            let bytes = r.unwrap().freeze();
+            Ok::<_, tokio::io::Error>(bytes)
+        });
 
+        let body = hyper::Body::wrap_stream(byte_stream);
+
+        let realize_future = layer.realize(&img.name, tar_write);
+
+        let build_future = self.docker.build_image(BuildImageOptions {
+            dockerfile: "Dockerfile",
             ..Default::default()
-        }, None, None);
+        }, None, Some(body)).try_collect::<Vec<_>>();
+
+        let (realize_res, build_res) = tokio::join!(realize_future, build_future);
+
+        realize_res?;
+
+        let build_infos = build_res?;
 
         todo!()
     }
@@ -132,14 +146,19 @@ impl LayerBuilder {
         self.files.push(file)
     }
 
-    async fn realize(&self, source_image_name: &str) -> Result<TempDir> {
-        // Create a temporary directory for use as a Docker context
-        let tempdir = TempDir::new()?;
+    async fn realize<W: AsyncWrite + Unpin + Send + 'static>(&self, source_image_name: &str, dst: W) -> Result<()> {
+        // Create a temporary directory in which to construct a Docker context.
+        let tempdir = tempfile::TempDir::new()?;
+
+        // Create a "files" subdirectory. Within "files" we will hardlink any
+        // local files to be copied to the image.
         let local_files = tempdir.path().join("files");
         create_dir(&local_files).await?;
 
+        // We'll also write out a Dockerfile with a COPY line for each file:
+        // - for local files we'll COPY from the "files" directory
+        // - for image-sourced files we'll write COPY to pull from the image
         let mut dw = BufWriter::new(File::create(tempdir.path().join("Dockerfile")).await?);
-
         dw.write(format!("FROM {source_image_name}\n\n").as_bytes()).await?;
 
         for file in &self.files {
@@ -159,6 +178,10 @@ impl LayerBuilder {
 
         dw.flush().await?;
 
-        Ok(tempdir)
+        // Write the entire context directory to a tarball.
+        let mut tb = tokio_tar::Builder::new(dst);
+        tb.append_dir_all(".", tempdir).await?;
+
+        Ok(())
     }
 }
