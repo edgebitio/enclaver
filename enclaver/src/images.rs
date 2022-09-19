@@ -1,3 +1,4 @@
+use crate::error::{Error, Result};
 use bollard::image::BuildImageOptions;
 use bollard::models::ImageId;
 use bollard::Docker;
@@ -5,7 +6,6 @@ use futures_util::stream::{StreamExt, TryStreamExt};
 use std::fmt;
 use std::fmt::Write;
 use std::path::PathBuf;
-use thiserror::Error;
 use tokio::fs::{create_dir, hard_link, File};
 use tokio::io::{duplex, AsyncWrite, AsyncWriteExt, BufWriter};
 use tokio_util::codec;
@@ -20,32 +20,6 @@ impl fmt::Display for ImageRef {
         write!(f, "{}", self.id)
     }
 }
-
-#[derive(Error, Debug)]
-pub enum Error {
-    #[error("IO error: {0}")]
-    IO(#[from] std::io::Error),
-
-    #[error("docker daemon error")]
-    Daemon(#[from] bollard::errors::Error),
-
-    #[error("unsupported filename encoding: `{0}`")]
-    FilenameEncoding(String),
-
-    #[error("invalid format")]
-    Format(#[from] std::fmt::Error),
-
-    #[error(transparent)]
-    StripPrefix(#[from] std::path::StripPrefixError),
-
-    #[error("path error: {0}")]
-    PathError(String),
-
-    #[error("invalid response from docker: {0}")]
-    InvalidDaemonResponse(String),
-}
-
-pub type Result<T> = std::result::Result<T, Error>;
 
 /// An interface for manipulating Docker images.
 pub struct ImageManager {
@@ -148,7 +122,7 @@ impl FileBuilder {
             .path
             .strip_prefix("/")?
             .to_str()
-            .ok_or({ Error::FilenameEncoding(String::from(self.path.to_string_lossy())) })?;
+            .ok_or( Error::FilenameEncoding(String::from(self.path.to_string_lossy())) )?;
 
         write!(&mut line, " --chown={}", self.chown)?;
 
