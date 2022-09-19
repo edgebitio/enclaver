@@ -1,7 +1,5 @@
 use clap::{Parser, Subcommand};
-use enclaver::images::{FileBuilder, FileSource, ImageManager, LayerBuilder};
-use enclaver::policy::load_policy;
-use std::path::PathBuf;
+use enclaver::build::EnclaveArtifactBuilder;
 
 #[derive(Debug, Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -19,32 +17,14 @@ enum Commands {
     },
 }
 
-async fn run(args: Cli) -> anyhow::Result<()> {
+async fn run(args: Cli) -> enclaver::error::Result<()> {
     match args.subcommand {
         Commands::Build { file } => {
-            println!("building from {file}");
+            let builder = EnclaveArtifactBuilder::new()?;
 
-            let policy = load_policy(&file).await?;
-            let image_manager = ImageManager::new()?;
-            let source_img = image_manager.image(&policy.image).await?;
-            let res_image = image_manager
-                .append_layer(
-                    &source_img,
-                    LayerBuilder::new().append_file(FileBuilder {
-                        path: PathBuf::from("/etc/enclaver/policy.yaml"),
-                        source: FileSource::Local {
-                            path: PathBuf::from(&file),
-                        },
-                        chown: "100:100".to_string(),
-                    }),
-                )
-                .await?;
-
-            println!("image: {}", res_image);
+            builder.build_artifact(&file).await
         }
     }
-
-    Ok(())
 }
 
 #[tokio::main]

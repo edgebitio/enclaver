@@ -6,6 +6,7 @@ use futures_util::stream::{StreamExt, TryStreamExt};
 use std::fmt;
 use std::fmt::Write;
 use std::path::PathBuf;
+use std::rc::Rc;
 use tokio::fs::{create_dir, hard_link, File};
 use tokio::io::{duplex, AsyncWrite, AsyncWriteExt, BufWriter};
 use tokio_util::codec;
@@ -13,6 +14,12 @@ use tokio_util::codec;
 #[derive(Debug)]
 pub struct ImageRef {
     id: String,
+}
+
+impl ImageRef {
+    pub fn to_str(&self) -> &str {
+        return &self.id;
+    }
 }
 
 impl fmt::Display for ImageRef {
@@ -23,17 +30,22 @@ impl fmt::Display for ImageRef {
 
 /// An interface for manipulating Docker images.
 pub struct ImageManager {
-    docker: Docker,
+    docker: Rc<Docker>,
 }
 
 impl ImageManager {
     /// Constructs a new ImageManager pointing to a local Docker daemon.
     pub fn new() -> Result<Self> {
-        let docker_client = Docker::connect_with_local_defaults()?;
+        let docker_client = Rc::new(Docker::connect_with_local_defaults()?);
 
         Ok(Self {
             docker: docker_client,
         })
+    }
+
+    /// Constructs a new ImageManager pointing to a local Docker daemon.
+    pub fn new_with_docker(docker: Rc<Docker>) -> Result<Self> {
+        Ok(Self { docker })
     }
 
     /// Resolves a name-like string to an ImageRef referencing a specific immutable image.
@@ -122,7 +134,9 @@ impl FileBuilder {
             .path
             .strip_prefix("/")?
             .to_str()
-            .ok_or( Error::FilenameEncoding(String::from(self.path.to_string_lossy())) )?;
+            .ok_or(Error::FilenameEncoding(String::from(
+                self.path.to_string_lossy(),
+            )))?;
 
         write!(&mut line, " --chown={}", self.chown)?;
 

@@ -5,7 +5,10 @@ pub enum Error {
     #[error("IO error: {0}")]
     IO(#[from] std::io::Error),
 
-    #[error("docker daemon error")]
+    #[error("YAML parse error: {0}")]
+    Deserialization(#[from] serde_yaml::Error),
+
+    #[error("docker daemon error: {0}")]
     Daemon(#[from] bollard::errors::Error),
 
     #[error("unsupported filename encoding: `{0}`")]
