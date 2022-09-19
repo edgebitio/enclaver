@@ -1,14 +1,19 @@
 use std::sync::{Arc, Mutex};
-use std::os::unix::io::{RawFd, AsRawFd};
+use std::os::unix::io::AsRawFd;
 use tokio_pipe::{PipeRead, PipeWrite};
 use circbuf::CircBuf;
-use anyhow::{Result};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use std::io::Write;
+use anyhow::Result;
+use tokio::io::{AsyncWrite, AsyncReadExt, AsyncWriteExt};
+use tokio::task::JoinHandle;
+use tokio::sync::watch::{Sender, Receiver};
+use tokio_vsock::VsockStream;
+use futures::Stream;
+
+use crate::launcher::ExitStatus;
 
 const APP_LOG_CAPACITY: usize = 128*1024;
 
-pub struct LogCursor {
+struct LogCursor {
     pos: usize,
 }
 
@@ -23,6 +28,7 @@ impl LogCursor {
 struct ByteLog {
     buffer: CircBuf,
     head: usize,
+    watches: WatchSet,
 }
 
 impl ByteLog {
@@ -30,11 +36,14 @@ impl ByteLog {
         Self{
             buffer: CircBuf::with_capacity(APP_LOG_CAPACITY).unwrap(),
             head: 0usize,
+            watches: WatchSet::new(),
         }
     }
 
     // returns the number of bytes it trimmed from the head
     fn append(&mut self, data: &[u8]) -> usize {
+        use std::io::Write;
+
         let mut trim_cnt = 0usize;
 
         let avail = self.buffer.avail();
@@ -46,6 +55,9 @@ impl ByteLog {
         assert!(self.buffer.avail() >= data.len());
 
         assert!(self.buffer.write(data).unwrap() == data.len());
+
+        // notify the watchers that an append happened
+        self.watches.notify();
 
         trim_cnt
     }
@@ -79,29 +91,36 @@ impl ByteLog {
         copied
     }
 
+    fn watch(&mut self) -> Receiver<()> {
+        self.watches.add()
+    }
+
+    #[cfg(test)]
     fn cap(&self) -> usize {
         self.buffer.cap()
     }
 
+    #[cfg(test)]
     fn len(&self) -> usize {
         self.buffer.len()
     }
 }
 
-pub struct LogWriter {
+struct LogWriter {
     w_pipe: PipeWrite,
 }
 
-pub struct LogServicer {
+struct LogServicer {
     r_pipe: PipeRead,
     log: Arc<Mutex<ByteLog>>,
 }
 
-pub struct LogReader {
+#[derive(Clone)]
+struct LogReader {
     log: Arc<Mutex<ByteLog>>,
 }
 
-pub fn new_app_log() -> Result<(LogWriter, LogServicer, LogReader)> {
+fn new_app_log() -> Result<(LogWriter, LogServicer, LogReader)> {
     let (r, w) = tokio_pipe::pipe()?;
 
     let log = Arc::new(Mutex::new(ByteLog::new()));
@@ -123,18 +142,15 @@ pub fn new_app_log() -> Result<(LogWriter, LogServicer, LogReader)> {
 }
 
 impl LogWriter {
-    pub fn redirect_stdio(&self) -> Result<()> {
+    fn redirect_stdio(&self) -> Result<()> {
         nix::unistd::dup2(self.w_pipe.as_raw_fd(), std::io::stdout().as_raw_fd())?;
         nix::unistd::dup2(self.w_pipe.as_raw_fd(), std::io::stderr().as_raw_fd())?;
 
         Ok(())
     }
 
-    pub fn as_raw_fd(&self) -> RawFd {
-        self.w_pipe.as_raw_fd()
-    }
-
-    pub async fn write(&mut self, data: &[u8]) -> Result<()> {
+    #[cfg(test)]
+    async fn write(&mut self, data: &[u8]) -> Result<()> {
         self.w_pipe.write_all(data).await?;
         Ok(())
     }
@@ -142,7 +158,7 @@ impl LogWriter {
 
 impl LogServicer {
     // run in the background and pull data off of the pipe
-    pub async fn run(&mut self) -> Result<()> {
+    async fn run(&mut self) -> Result<()> {
         let mut buf = vec![0u8; 16*1024];
         loop {
             let n = self.r_pipe.read(&mut buf).await?;
@@ -156,19 +172,218 @@ impl LogServicer {
 }
 
 impl LogReader {
-    pub fn read(&self, cursor: &mut LogCursor, buf: &mut [u8]) -> usize {
+    fn read(&self, cursor: &mut LogCursor, buf: &mut [u8]) -> usize {
        self.log.lock().unwrap().read(cursor, buf)
     }
 
-    pub fn len(&self) -> usize {
+    #[cfg(test)]
+    fn len(&self) -> usize {
         self.log.lock().unwrap().len()
+    }
+
+    async fn write_all<W: AsyncWrite + Unpin>(&self, cursor: &mut LogCursor, writer: &mut W) -> Result<()> {
+        let mut buf = vec![0u8; 4096];
+        loop {
+            let nread = self.read(cursor, &mut buf);
+            if nread == 0 {
+                break;
+            }
+            writer.write_all(&buf[..nread]).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn stream<W: AsyncWrite + Unpin>(&self, writer: &mut W) -> Result<()> {
+        let mut cursor = LogCursor::new();
+        let mut w = self.log.lock().unwrap().watch();
+        loop {
+            self.write_all(&mut cursor, writer).await?;
+
+            // wait for new data
+            // unwrap() since the sender never closes first
+            w.changed().await.unwrap();
+        }
+    }
+}
+
+pub struct AppLog {
+    servicer: LogServicer,
+    reader: LogReader,
+}
+
+impl AppLog {
+    pub fn with_stdio_redirect() -> Result<Self> {
+        let (w, s, r) = new_app_log()?;
+        w.redirect_stdio()?;
+
+        Ok(Self{
+            servicer: s,
+            reader: r,
+        })
+    }
+
+    // serve the log over vsock
+    async fn serve_log(incoming: impl Stream<Item=VsockStream>, lr: LogReader) -> Result<()> {
+        use futures::stream::StreamExt;
+
+        let mut incoming = Box::pin(incoming);
+        while let Some(mut sock) = incoming.next().await {
+            // TODO: get rid of detached tasks
+            let lr = lr.clone();
+            tokio::task::spawn(async move {
+                // if send fails, remote side probably hung up, no need to do anything.
+                _ = lr.stream(&mut sock).await;
+            });
+        }
+
+        Ok(())
+    }
+
+    // launch a task to service the pipe and serve the log over vsock
+    pub fn start_serving(mut self, port: u32) -> JoinHandle<Result<()>> {
+        match crate::vsock::ingress::serve(port) {
+            Ok(incoming) => {
+                tokio::task::spawn(async move {
+                    tokio::try_join!(self.servicer.run(), AppLog::serve_log(incoming, self.reader))?;
+                    Ok(())
+                })
+            },
+            Err(e) => tokio::task::spawn(async move { Err(e) }),
+        }
+    }
+}
+
+
+enum EntrypointStatus {
+    Running,
+    Exited(ExitStatus),
+}
+
+impl EntrypointStatus {
+    fn as_json(&self) -> String {
+        match self {
+            Self::Running => "{ \"status\": \"running\" }\n".to_string(),
+            Self::Exited(exit_status) => {
+                match exit_status {
+                    ExitStatus::Exited(code) => format!("{{ \"status\": \"exited\", \"code\": {} }}\n", code),
+                    ExitStatus::Signaled(sig) => format!("{{ \"status\": \"signaled\", \"signal\": \"{}\" }}\n", sig),
+                }
+            }
+        }
+    }
+}
+
+struct AppStatusInner {
+    status: EntrypointStatus,
+    watches: WatchSet,
+}
+
+impl AppStatusInner {
+    fn new() -> Self {
+        Self{
+            status: EntrypointStatus::Running,
+            watches: WatchSet::new(),
+        }
+    }
+
+    fn exited(&mut self, status: ExitStatus) {
+        self.status = EntrypointStatus::Exited(status);
+        self.watches.notify();
+    }
+}
+
+#[derive(Clone)]
+pub struct AppStatus {
+    inner: Arc<Mutex<AppStatusInner>>,
+}
+
+impl AppStatus {
+    pub fn new() -> Self {
+        Self{
+            inner: Arc::new(Mutex::new(AppStatusInner::new())),
+        }
+    }
+
+    pub fn exited(&self, status: ExitStatus) {
+        self.inner.lock().unwrap().exited(status);
+    }
+
+    pub fn start_serving(&self, port: u32) -> JoinHandle<Result<()>> {
+        use futures::stream::StreamExt;
+
+        match crate::vsock::ingress::serve(port) {
+            Ok(incoming) => {
+                let mut incoming = Box::pin(incoming);
+                let app_status = self.clone();
+                tokio::task::spawn(async move {
+                    while let Some(sock) = incoming.next().await {
+                        let app_status = app_status.clone();
+                        tokio::task::spawn(async move {
+                            app_status.stream(sock).await;
+                        });
+                    }
+                    Ok(())
+                })
+            },
+            Err(e) => tokio::task::spawn(async move { Err(e) })
+        }
+    }
+
+    async fn stream(&self, mut sock: VsockStream) {
+        let mut w = self.inner.lock().unwrap().watches.add();
+
+        loop {
+            let json_str = self.inner.lock().unwrap().status.as_json();
+            _ = sock.write_all(json_str.as_bytes()).await;
+
+            // wait for new data
+            // unwrap() since the sender never closes first
+            w.changed().await.unwrap();
+        }
+    }
+}
+
+// Broadcast mechanism that something being watched has changed
+struct WatchSet {
+    watches: Vec<Sender<()>>,
+}
+
+impl WatchSet {
+    fn new() -> Self {
+        Self{
+            watches: Vec::new(),
+        }
+    }
+
+    fn add(&mut self) -> Receiver<()> {
+        let (tx, rx) = tokio::sync::watch::channel(());
+        self.watches.push(tx);
+        rx
+    }
+
+    fn notify(&mut self) {
+        // first, clean up any closed channels
+        self.watches.retain(|s| !s.is_closed());
+
+        // now notify
+        for w in &self.watches {
+            _ = w.send(())
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use assert2::assert;
+    use json::{object, JsonValue};
+    use nix::sys::signal::Signal;
+    use tokio::io::{BufReader, Lines, AsyncBufRead, AsyncBufReadExt};
+    use tokio_vsock::VsockStream;
+    use anyhow::{Result, anyhow};
+
     use super::{ByteLog, LogCursor};
+    use crate::launcher::ExitStatus;
 
     fn check_log(log: &ByteLog, mut expected: u8) {
         // check that the log contents monotonically increase
@@ -276,5 +491,62 @@ mod tests {
 
         let tail_pos = expected.len() - actual.len();
         assert!(actual == expected[tail_pos..]);
+    }
+
+    async fn read_json<R: AsyncBufRead + Unpin>(lines: &mut Lines<R>) -> Result<JsonValue> {
+        let line = lines.next_line()
+            .await?
+            .ok_or(anyhow!("unexpected EOF"))?;
+
+        Ok(json::parse(&line)?)
+    }
+
+    async fn app_status_lines() -> Result<Lines<impl AsyncBufRead + Unpin>> {
+        let sock = VsockStream::connect(crate::vsock::VMADDR_CID_HOST, 17000).await?;
+        // bug in VsockStream::connect: it can return Ok even if connect failed
+        _ = sock.peer_addr()?;
+        Ok(BufReader::new(sock).lines())
+    }
+
+    #[tokio::test]
+    async fn test_app_status() {
+        let app_status = super::AppStatus::new();
+        let status_task = app_status.start_serving(17000);
+
+        let mut client1 = app_status_lines().await.unwrap();
+        let mut client2 = app_status_lines().await.unwrap();
+
+        // Running
+        let mut expected = object!{ status: "running" };
+
+        let mut status = read_json(&mut client1).await.unwrap();
+
+        assert!(status == expected);
+
+        status = read_json(&mut client2).await.unwrap();
+        assert!(status == expected);
+
+        // Exited
+        app_status.exited(ExitStatus::Exited(2));
+        expected = object!{ status: "exited", code: 2 };
+
+        status = read_json(&mut client1).await.unwrap();
+        assert!(status == expected);
+
+        status = read_json(&mut client2).await.unwrap();
+        assert!(status == expected);
+
+        // Signaled
+        app_status.exited(ExitStatus::Signaled(Signal::SIGTERM));
+        expected = object!{ status: "signaled", signal: "SIGTERM" };
+
+        status = read_json(&mut client1).await.unwrap();
+        assert!(status == expected);
+
+        status = read_json(&mut client2).await.unwrap();
+        assert!(status == expected);
+
+        status_task.abort();
+        _ = status_task.await;
     }
 }
