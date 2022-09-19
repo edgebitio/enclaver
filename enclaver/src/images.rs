@@ -1,7 +1,7 @@
 use std::path::{PathBuf};
 use std::fmt::Write;
 use bollard::Docker;
-use bollard::models::ImageInspect;
+use bollard::models::{ImageId};
 use bollard::image::BuildImageOptions;
 use tokio::fs::{create_dir, hard_link, File};
 use tokio::io::{AsyncWriteExt, BufWriter, AsyncWrite, duplex};
@@ -11,8 +11,7 @@ use futures_util::stream::{StreamExt, TryStreamExt};
 
 #[derive(Debug)]
 pub struct ImageRef {
-    name: String,
-    inspect: ImageInspect,
+    id: String,
 }
 
 #[derive(Error, Debug)]
@@ -34,6 +33,9 @@ pub enum Error {
 
     #[error("path error: {0}")]
     PathError(String),
+
+    #[error("invalid response from docker: {0}")]
+    InvalidDaemonResponse(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -41,7 +43,6 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub struct ImageManager {
     docker: Docker,
 }
-
 
 impl ImageManager {
     pub fn new() -> Result<Self> {
@@ -55,10 +56,10 @@ impl ImageManager {
     pub async fn image(&self, img_name: &str) -> Result<ImageRef> {
         let img = self.docker.inspect_image(img_name).await?;
 
-        Ok(ImageRef{
-            name: String::from(img_name),
-            inspect: img,
-        })
+        match img.id {
+            Some(id) => Ok(ImageRef{ id }),
+            None => Err(Error::InvalidDaemonResponse(String::from("missing image ID in image_inspect result"))),
+        }
     }
 
     pub async fn append_layer<'a>(&self, img: &ImageRef, layer: &LayerBuilder) -> Result<ImageRef> {
@@ -70,7 +71,7 @@ impl ImageManager {
 
         let body = hyper::Body::wrap_stream(byte_stream);
 
-        let realize_future = layer.realize(&img.name, tar_write);
+        let realize_future = layer.realize(&img.id, tar_write);
 
         let build_future = self.docker.build_image(BuildImageOptions {
             dockerfile: "Dockerfile",
@@ -80,10 +81,20 @@ impl ImageManager {
         let (realize_res, build_res) = tokio::join!(realize_future, build_future);
 
         realize_res?;
-
         let build_infos = build_res?;
+        let mut maybe_id = None;
 
-        todo!()
+        for info in &build_infos {
+            if let Some(ImageId { id: Some(id) }) = &info.aux {
+                maybe_id = Some(id);
+                break;
+            }
+        };
+
+        match maybe_id {
+            Some(image_id) => self.image(image_id).await,
+            None => Err(Error::InvalidDaemonResponse(String::from("missing image ID")))
+        }
     }
 }
 
