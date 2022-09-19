@@ -1,3 +1,4 @@
+use std::fmt;
 use std::path::{PathBuf};
 use std::fmt::Write;
 use bollard::Docker;
@@ -12,6 +13,12 @@ use futures_util::stream::{StreamExt, TryStreamExt};
 #[derive(Debug)]
 pub struct ImageRef {
     id: String,
+}
+
+impl fmt::Display for ImageRef {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.id)
+    }
 }
 
 #[derive(Error, Debug)]
@@ -40,11 +47,13 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// An interface for manipulating Docker images.
 pub struct ImageManager {
     docker: Docker,
 }
 
 impl ImageManager {
+    /// Constructs a new ImageManager pointing to a local Docker daemon.
     pub fn new() -> Result<Self> {
         let docker_client = Docker::connect_with_local_defaults()?;
 
@@ -53,8 +62,9 @@ impl ImageManager {
         })
     }
 
-    pub async fn image(&self, img_name: &str) -> Result<ImageRef> {
-        let img = self.docker.inspect_image(img_name).await?;
+    /// Resolves a name-like string to an ImageRef referencing a specific immutable image.
+    pub async fn image(&self, name: &str) -> Result<ImageRef> {
+        let img = self.docker.inspect_image(name).await?;
 
         match img.id {
             Some(id) => Ok(ImageRef{ id }),
@@ -62,25 +72,39 @@ impl ImageManager {
         }
     }
 
+    /// Build and append a new layer to an image.
+    ///
+    /// This works by converting `layer` to a docker build operation, and executing
+    /// that operation against the connected docker daemon.
     pub async fn append_layer<'a>(&self, img: &ImageRef, layer: &LayerBuilder) -> Result<ImageRef> {
+        // We're going to realize `layer` to a docker context, in the form of a tarball.
+        // Rather than realizing the full tarball into memory, we'll construct a pipe-like
+        // pair of streams, and lazily write the tarball to one of them while streaming
+        // the other end of the pipe into the daemon request.
         let (tar_write, tar_read) = duplex(1024);
-        let byte_stream = codec::FramedRead::new(tar_read, codec::BytesCodec::new()).map(|r| {
+        let byte_stream = codec::FramedRead::new(
+            tar_read,
+            codec::BytesCodec::new()).map(|r| {
             let bytes = r.unwrap().freeze();
             Ok::<_, tokio::io::Error>(bytes)
         });
 
         let body = hyper::Body::wrap_stream(byte_stream);
 
-        let realize_future = layer.realize(&img.id, tar_write);
-
-        let build_future = self.docker.build_image(BuildImageOptions {
-            dockerfile: "Dockerfile",
-            ..Default::default()
-        }, None, Some(body)).try_collect::<Vec<_>>();
-
-        let (realize_res, build_res) = tokio::join!(realize_future, build_future);
+        // Concurrently build the context tarball and perform the build request.
+        let (realize_res, build_res) = tokio::join!(
+            layer.realize(&img.id, tar_write),
+            self.docker.build_image(BuildImageOptions {
+                dockerfile: "Dockerfile",
+                ..Default::default()
+            }, None, Some(body)).try_collect::<Vec<_>>(),
+        );
 
         realize_res?;
+
+        // The build process streams back a bunch of BuildInfos. One of them
+        // should contain the ID of the resulting image; hunt through them and
+        // find it.
         let build_infos = build_res?;
         let mut maybe_id = None;
 
@@ -153,10 +177,18 @@ impl LayerBuilder {
         }
     }
 
-    pub fn append_file(&mut self, file: FileBuilder) {
-        self.files.push(file)
+    /// Add a file to the LayerBuilder, in the form of a FileBuilder.
+    pub fn append_file(&mut self, file: FileBuilder) -> &mut Self {
+        self.files.push(file);
+        self
     }
 
+    /// Realize the LayerBuilder to a tarred up Docker context containing a Dockerfile
+    /// which will build the requested layer, and write the resulting context to `dst`.
+    ///
+    /// Note that currently this builds the context on the filesystem before generating
+    /// a tarball from that file tree, but in the future it could build the context directly
+    /// into the tar stream.
     async fn realize<W: AsyncWrite + Unpin + Send + 'static>(&self, source_image_name: &str, dst: W) -> Result<()> {
         // Create a temporary directory in which to construct a Docker context.
         let tempdir = tempfile::TempDir::new()?;

@@ -28,18 +28,16 @@ async fn run(args: Cli) -> anyhow::Result<()> {
             let policy = load_policy(&file).await?;
             let image_manager = ImageManager::new()?;
             let source_img = image_manager.image(&policy.image).await?;
-            let mut lb = LayerBuilder::new();
-            lb.append_file(FileBuilder{
-                path: PathBuf::from("/etc/enclaver/policy.yaml"),
-                source: FileSource::Local {
-                    path: PathBuf::from(&file),
-                },
-                chown: "100:100".to_string(),
-            });
+            let res_image = image_manager.append_layer(&source_img, LayerBuilder::new()
+                .append_file(FileBuilder{
+                    path: PathBuf::from("/etc/enclaver/policy.yaml"),
+                    source: FileSource::Local {
+                        path: PathBuf::from(&file),
+                    },
+                    chown: "100:100".to_string(),
+                })).await?;
 
-            let res_image = image_manager.append_layer(&source_img, &lb).await?;
-
-            println!("image: {res_image:#?}");
+            println!("image: {}", res_image);
         }
     }
 
