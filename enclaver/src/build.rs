@@ -1,19 +1,42 @@
 use crate::error::{Error, Result};
-use crate::images::{FileBuilder, FileSource, ImageManager, LayerBuilder};
+use crate::images::{FileBuilder, FileSource, ImageManager, ImageRef, LayerBuilder};
 use crate::policy::load_policy;
 use bollard::container::{Config, LogOutput, LogsOptions, WaitContainerOptions};
 use bollard::models::{HostConfig, Mount, MountTypeEnum};
 use bollard::Docker;
 use futures_util::stream::{StreamExt, TryStreamExt};
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::TempDir;
 use tokio::io::{stderr, AsyncWriteExt};
 use uuid::Uuid;
 
+const EIF_FILE_NAME: &str = "application.eif";
+const ENCLAVE_POLICY_PATH: &str = "/etc/enclaver/policy.yaml";
+const ENCLAVE_POLICY_PERMS: &str = "100:100";
+
 pub struct EnclaveArtifactBuilder {
     docker: Arc<Docker>,
     image_manager: ImageManager,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct EIFInfo {
+    #[serde(rename = "Measurements")]
+    measurements: EIFMeasurements,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct EIFMeasurements {
+    #[serde(rename = "PCR0")]
+    pcr0: String,
+
+    #[serde(rename = "PCR1")]
+    pcr1: String,
+
+    #[serde(rename = "PCR2")]
+    pcr2: String,
 }
 
 impl EnclaveArtifactBuilder {
@@ -27,7 +50,6 @@ impl EnclaveArtifactBuilder {
     }
 
     pub async fn build_artifact(&self, policy_path: &str) -> Result<()> {
-        let mut stderr = stderr();
         let policy = load_policy(policy_path).await?;
         let source_img = self.image_manager.image(&policy.image).await?;
         let res_image = self
@@ -35,23 +57,56 @@ impl EnclaveArtifactBuilder {
             .append_layer(
                 &source_img,
                 LayerBuilder::new().append_file(FileBuilder {
-                    path: PathBuf::from("/etc/enclaver/policy.yaml"),
+                    path: PathBuf::from(ENCLAVE_POLICY_PATH),
                     source: FileSource::Local {
                         path: PathBuf::from(policy_path),
                     },
-                    chown: "100:100".to_string(),
+                    chown: ENCLAVE_POLICY_PERMS.to_string(),
                 }),
             )
             .await?;
 
+        let build_dir = TempDir::new()?;
+
+        let eif_info = self
+            .build_eif(&res_image, &build_dir, EIF_FILE_NAME)
+            .await?;
+
+        println!("{:#?}", eif_info);
+
+        let source_img = self.image_manager.image(&policy.image).await?;
+        let res_image = self
+            .image_manager
+            .append_layer(
+                &source_img,
+                LayerBuilder::new().append_file(FileBuilder {
+                    path: PathBuf::from(ENCLAVE_POLICY_PATH),
+                    source: FileSource::Local {
+                        path: PathBuf::from(policy_path),
+                    },
+                    chown: ENCLAVE_POLICY_PERMS.to_string(),
+                }),
+            )
+            .await?;
+
+        Ok(())
+    }
+
+    async fn build_eif(
+        &self,
+        src_image: &ImageRef,
+        build_dir: &TempDir,
+        eif_name: &str,
+    ) -> Result<EIFInfo> {
+        let mut stderr = stderr();
+
+        let build_dir_path = build_dir.path().to_str().unwrap();
+
         // There is currently no way to point nitro-cli to a local image ID; it insists
-        // on attempting to pull the image. As a workaround, give our image a random
+        // on attempting to pull the image (this may be a bug;. As a workaround, give our image a random
         // tag, and pass that.
         let img_tag = Uuid::new_v4().to_string();
-        self.image_manager.tag_image(&res_image, &img_tag).await?;
-
-        let tmpdir = TempDir::new()?;
-        let tmpdir_str = tmpdir.path().to_str().unwrap();
+        self.image_manager.tag_image(&src_image, &img_tag).await?;
 
         let build_container_id = self
             .docker
@@ -64,7 +119,7 @@ impl EnclaveArtifactBuilder {
                         "--docker-uri",
                         &img_tag,
                         "--output-file",
-                        "application.eif",
+                        eif_name,
                     ]),
                     attach_stderr: Some(true),
                     attach_stdout: Some(true),
@@ -78,7 +133,7 @@ impl EnclaveArtifactBuilder {
                             },
                             Mount {
                                 typ: Some(MountTypeEnum::BIND),
-                                source: Some(tmpdir_str.into()),
+                                source: Some(build_dir_path.into()),
                                 target: Some(String::from("/build")),
                                 ..Default::default()
                             },
@@ -95,7 +150,11 @@ impl EnclaveArtifactBuilder {
             .start_container::<String>(&build_container_id, None)
             .await?;
 
-        // Stream stderr logs to stderr
+        // Stream stderr logs to stderr. This is useful when debugging failures, but
+        // also provides visual feedback that something is happening when on track
+        // to succeed. It is kind of weird for this function to have a side-effect like
+        // this; perhaps the EnclaveArtifactBuilder should be passed some kind of logging
+        // facility?
         let mut log_stream = self.docker.logs::<String>(
             &build_container_id,
             Some(LogsOptions {
@@ -131,8 +190,7 @@ impl EnclaveArtifactBuilder {
         }
 
         let mut json_buf = Vec::with_capacity(4096);
-
-        let mut logstream = self.docker.logs::<String>(
+        let mut log_stream = self.docker.logs::<String>(
             &build_container_id,
             Some(LogsOptions {
                 stdout: true,
@@ -141,15 +199,13 @@ impl EnclaveArtifactBuilder {
         );
 
         loop {
-            if let Some(Ok(LogOutput::StdOut { message })) = logstream.next().await {
+            if let Some(Ok(LogOutput::StdOut { message })) = log_stream.next().await {
                 json_buf.extend_from_slice(message.as_ref());
             } else {
                 break;
             }
         }
 
-        stderr.write_all(&json_buf).await?;
-
-        Ok(())
+        Ok(serde_json::from_slice(&json_buf)?)
     }
 }

@@ -171,6 +171,7 @@ dependencies = [
  "futures-util",
  "hyper",
  "serde",
+ "serde_json",
  "serde_yaml",
  "tempfile",
  "thiserror",

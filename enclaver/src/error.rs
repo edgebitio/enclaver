@@ -6,7 +6,10 @@ pub enum Error {
     IO(#[from] std::io::Error),
 
     #[error("YAML parse error: {0}")]
-    Deserialization(#[from] serde_yaml::Error),
+    YAMLDeserialization(#[from] serde_yaml::Error),
+
+    #[error("JSON parse error: {0}")]
+    JSONDeserialization(#[from] serde_json::Error),
 
     #[error("docker daemon error: {0}")]
     Daemon(#[from] bollard::errors::Error),
