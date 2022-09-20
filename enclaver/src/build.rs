@@ -1,17 +1,17 @@
 use crate::images::{FileBuilder, FileSource, ImageManager, ImageRef, LayerBuilder};
 use crate::policy::{load_policy, Policy};
+use anyhow::{anyhow, Result};
 use bollard::container::{Config, LogOutput, LogsOptions, WaitContainerOptions};
 use bollard::models::{HostConfig, Mount, MountTypeEnum};
 use bollard::Docker;
 use futures_util::stream::{StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
-use std::path::{PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::TempDir;
-use tokio::fs::{rename};
+use tokio::fs::{canonicalize, rename};
 use tokio::io::{stderr, AsyncWriteExt};
 use uuid::Uuid;
-use anyhow::{anyhow, Result};
 
 const EIF_FILE_NAME: &str = "application.eif";
 const ENCLAVE_POLICY_PATH: &str = "/etc/enclaver/policy.yaml";
@@ -57,6 +57,7 @@ impl EnclaveArtifactBuilder {
         })
     }
 
+    /// Build a release image based on the referenced policy.
     pub async fn build_release(&self, policy_path: &str) -> Result<(EIFInfo, ImageRef)> {
         let (_policy, build_dir, eif_info) = self.common_build(policy_path).await?;
         let eif_path = build_dir.path().join(EIF_FILE_NAME);
@@ -65,14 +66,21 @@ impl EnclaveArtifactBuilder {
         Ok((eif_info, release_img))
     }
 
-    pub async fn build_eif_only(&self, policy_path: &str, dst_eif_path: &str) -> Result<EIFInfo> {
+    /// Build an EIF, as would be included in a release image, based on the referenced policy.
+    pub async fn build_eif_only(
+        &self,
+        policy_path: &str,
+        dst_path: &str,
+    ) -> Result<(EIFInfo, PathBuf)> {
         let (_policy, build_dir, eif_info) = self.common_build(policy_path).await?;
         let eif_path = build_dir.path().join(EIF_FILE_NAME);
-        rename(eif_path, dst_eif_path).await?;
+        rename(&eif_path, dst_path).await?;
 
-        Ok(eif_info)
+        Ok((eif_info, canonicalize(dst_path).await?))
     }
 
+    /// Load the referenced policy, amend the image it references to match what we expect in
+    /// an enclave, then convert the resulting image to an EIF.
     pub async fn common_build(&self, policy_path: &str) -> Result<(Policy, TempDir, EIFInfo)> {
         let policy = load_policy(policy_path).await?;
         let source_img = self.image_manager.image(&policy.image).await?;
@@ -87,6 +95,8 @@ impl EnclaveArtifactBuilder {
         Ok((policy, build_dir, eif_info))
     }
 
+    /// Amend a source image by adding one or more layers containing the files we expect
+    /// to have within the enclave.
     async fn amend_source_image(
         &self,
         source_img: &ImageRef,
@@ -109,6 +119,11 @@ impl EnclaveArtifactBuilder {
         Ok(amended_image)
     }
 
+    /// Convert an EIF file into a release OCI image.
+    ///
+    /// TODO: this currently is incomplete; file permissions are wrong, the base image
+    /// doesn't match our current requirements, and the exact intended format is still
+    /// TBD.
     async fn package_eif(&self, eif_path: PathBuf, policy_path: &str) -> Result<ImageRef> {
         let base_img = self.image_manager.image(RELEASE_BASE_IMAGE).await?;
 
@@ -126,9 +141,7 @@ impl EnclaveArtifactBuilder {
                     })
                     .append_file(FileBuilder {
                         path: PathBuf::from(RELEASE_EIF_PATH),
-                        source: FileSource::Local {
-                            path: eif_path,
-                        },
+                        source: FileSource::Local { path: eif_path },
                         chown: ENCLAVE_POLICY_CHOWN.to_string(),
                     }),
             )
@@ -137,6 +150,11 @@ impl EnclaveArtifactBuilder {
         Ok(packaged_img)
     }
 
+    /// Convert the referenced image to an EIF file, which will be deposited into `build_dir`
+    /// using the file name `eif_name`.
+    ///
+    /// This operates by mounting the build dir into a docker container, and invoking `nitro-cli build-enclave`
+    /// inside that container.
     async fn image_to_eif(
         &self,
         source_img: &ImageRef,
@@ -223,15 +241,11 @@ impl EnclaveArtifactBuilder {
             .try_collect::<Vec<_>>()
             .await?
             .first()
-            .ok_or(anyhow!(
-                "missing wait response from daemon",
-            ))?
+            .ok_or(anyhow!("missing wait response from daemon",))?
             .status_code;
 
         if status_code != 0 {
-            return Err(anyhow!(
-                "non-zero exit code from nitro-cli",
-            ));
+            return Err(anyhow!("non-zero exit code from nitro-cli",));
         }
 
         let mut json_buf = Vec::with_capacity(4096);

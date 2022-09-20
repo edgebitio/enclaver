@@ -1,6 +1,6 @@
+use anyhow::Result;
 use clap::{Parser, Subcommand};
 use enclaver::build::EnclaveArtifactBuilder;
-use anyhow::Result;
 
 #[derive(Debug, Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -31,7 +31,7 @@ async fn run(args: Cli) -> Result<()> {
 
             let (eif_info, release_img) = builder.build_release(&policy_file).await?;
 
-            println!("built release image: {}", release_img);
+            println!("Built Release Image: {}", release_img);
             println!("EIF Info: {:#?}", eif_info);
 
             Ok(())
@@ -43,9 +43,9 @@ async fn run(args: Cli) -> Result<()> {
         } => {
             let builder = EnclaveArtifactBuilder::new()?;
 
-            let eif_info = builder.build_eif_only(&policy_file, &eif_file).await?;
+            let (eif_info, eif_path) = builder.build_eif_only(&policy_file, &eif_file).await?;
 
-            println!("built EIF: {}", eif_file);
+            println!("Built EIF: {}", eif_path.display());
             println!("EIF Info: {:#?}", eif_info);
 
             Ok(())

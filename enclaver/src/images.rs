@@ -1,3 +1,5 @@
+use anyhow::anyhow;
+use anyhow::Result;
 use bollard::image::{BuildImageOptions, TagImageOptions};
 use bollard::models::ImageId;
 use bollard::Docker;
@@ -6,8 +8,6 @@ use std::fmt;
 use std::fmt::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
-use anyhow::anyhow;
-use anyhow::Result;
 use tokio::fs::{create_dir, hard_link, File};
 use tokio::io::{duplex, AsyncWrite, AsyncWriteExt, BufWriter};
 use tokio_util::codec;
@@ -55,9 +55,7 @@ impl ImageManager {
 
         match img.id {
             Some(id) => Ok(ImageRef { id }),
-            None => Err(anyhow!(
-                "missing image ID in image_inspect result",
-            )),
+            None => Err(anyhow!("missing image ID in image_inspect result",)),
         }
     }
 
@@ -110,9 +108,7 @@ impl ImageManager {
 
         match maybe_id {
             Some(image_id) => self.image(image_id).await,
-            None => Err(anyhow!(
-                "missing image ID",
-            )),
+            None => Err(anyhow!("missing image ID",)),
         }
     }
 
@@ -162,7 +158,9 @@ impl FileBuilder {
                 name: image_name,
                 path,
             } => {
-                let src_path = path.to_str().ok_or(anyhow!("filename contains non-UTF-8 characters"))?;
+                let src_path = path
+                    .to_str()
+                    .ok_or(anyhow!("filename contains non-UTF-8 characters"))?;
 
                 write!(&mut line, " --from={} {}", image_name, src_path)?;
             }
@@ -220,9 +218,10 @@ impl LayerBuilder {
             // in our context directory.
             if let FileSource::Local { path: source_path } = &file.source {
                 let target = local_files.join(file.path.strip_prefix("/")?);
-                let target_parent = target.parent().ok_or(
-                    anyhow!("error getting parent of {}", target.to_string_lossy())
-                )?;
+                let target_parent = target.parent().ok_or(anyhow!(
+                    "error getting parent of {}",
+                    target.to_string_lossy()
+                ))?;
                 tokio::fs::create_dir_all(target_parent).await?;
                 hard_link(source_path, target).await?;
             }
