@@ -1,12 +1,12 @@
 use crate::error::{Error, Result};
 use crate::images::{FileBuilder, FileSource, ImageManager, ImageRef, LayerBuilder};
-use crate::policy::load_policy;
+use crate::policy::{load_policy, Policy};
 use bollard::container::{Config, LogOutput, LogsOptions, WaitContainerOptions};
 use bollard::models::{HostConfig, Mount, MountTypeEnum};
 use bollard::Docker;
 use futures_util::stream::{StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{PathBuf};
 use std::sync::Arc;
 use tempfile::TempDir;
 use tokio::fs::{rename};
@@ -58,25 +58,22 @@ impl EnclaveArtifactBuilder {
     }
 
     pub async fn build_release(&self, policy_path: &str) -> Result<(EIFInfo, ImageRef)> {
-        let policy = load_policy(policy_path).await?;
-        let source_img = self.image_manager.image(&policy.image).await?;
-        let amended_img = self.amend_source_image(&source_img, policy_path).await?;
-
-        let build_dir = TempDir::new()?;
-
-        let eif_info = self
-            .image_to_eif(&amended_img, &build_dir, EIF_FILE_NAME)
-            .await?;
-
+        let (_policy, build_dir, eif_info) = self.common_build(policy_path).await?;
         let eif_path = build_dir.path().join(EIF_FILE_NAME);
-        let eif_path_str = eif_path.to_str().unwrap();
-
-        let release_img = self.package_eif(eif_path_str, policy_path).await?;
+        let release_img = self.package_eif(eif_path, policy_path).await?;
 
         Ok((eif_info, release_img))
     }
 
     pub async fn build_eif_only(&self, policy_path: &str, dst_eif_path: &str) -> Result<EIFInfo> {
+        let (_policy, build_dir, eif_info) = self.common_build(policy_path).await?;
+        let eif_path = build_dir.path().join(EIF_FILE_NAME);
+        rename(eif_path, dst_eif_path).await?;
+
+        Ok(eif_info)
+    }
+
+    pub async fn common_build(&self, policy_path: &str) -> Result<(Policy, TempDir, EIFInfo)> {
         let policy = load_policy(policy_path).await?;
         let source_img = self.image_manager.image(&policy.image).await?;
         let amended_img = self.amend_source_image(&source_img, policy_path).await?;
@@ -87,11 +84,7 @@ impl EnclaveArtifactBuilder {
             .image_to_eif(&amended_img, &build_dir, EIF_FILE_NAME)
             .await?;
 
-        let eif_path = build_dir.path().join(EIF_FILE_NAME);
-
-        rename(eif_path, dst_eif_path).await?;
-
-        Ok(eif_info)
+        Ok((policy, build_dir, eif_info))
     }
 
     async fn amend_source_image(
@@ -116,7 +109,7 @@ impl EnclaveArtifactBuilder {
         Ok(amended_image)
     }
 
-    async fn package_eif(&self, eif_path: &str, policy_path: &str) -> Result<ImageRef> {
+    async fn package_eif(&self, eif_path: PathBuf, policy_path: &str) -> Result<ImageRef> {
         let base_img = self.image_manager.image(RELEASE_BASE_IMAGE).await?;
 
         let packaged_img = self
@@ -134,7 +127,7 @@ impl EnclaveArtifactBuilder {
                     .append_file(FileBuilder {
                         path: PathBuf::from(RELEASE_EIF_PATH),
                         source: FileSource::Local {
-                            path: PathBuf::from(eif_path),
+                            path: eif_path,
                         },
                         chown: ENCLAVE_POLICY_CHOWN.to_string(),
                     }),
