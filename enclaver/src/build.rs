@@ -227,12 +227,8 @@ impl EnclaveArtifactBuilder {
             }),
         );
 
-        loop {
-            if let Some(Ok(LogOutput::StdErr { message })) = log_stream.next().await {
-                stderr.write_all(message.as_ref()).await?;
-            } else {
-                break;
-            }
+        while let Some(Ok(LogOutput::StdErr { message })) = log_stream.next().await {
+            stderr.write_all(message.as_ref()).await?;
         }
 
         let status_code = self
@@ -257,12 +253,8 @@ impl EnclaveArtifactBuilder {
             }),
         );
 
-        loop {
-            if let Some(Ok(LogOutput::StdOut { message })) = log_stream.next().await {
-                json_buf.extend_from_slice(message.as_ref());
-            } else {
-                break;
-            }
+        while let Some(Ok(LogOutput::StdOut { message })) = log_stream.next().await {
+            json_buf.extend_from_slice(message.as_ref());
         }
 
         Ok(serde_json::from_slice(&json_buf)?)
