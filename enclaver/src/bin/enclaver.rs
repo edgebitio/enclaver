@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 use enclaver::build::EnclaveArtifactBuilder;
+use anyhow::Result;
 
 #[derive(Debug, Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -20,7 +21,7 @@ enum Commands {
     },
 }
 
-async fn run(args: Cli) -> enclaver::error::Result<()> {
+async fn run(args: Cli) -> Result<()> {
     match args.subcommand {
         Commands::Build {
             policy_file,

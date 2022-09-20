@@ -1,4 +1,3 @@
-use crate::error::{Error, Result};
 use crate::images::{FileBuilder, FileSource, ImageManager, ImageRef, LayerBuilder};
 use crate::policy::{load_policy, Policy};
 use bollard::container::{Config, LogOutput, LogsOptions, WaitContainerOptions};
@@ -12,6 +11,7 @@ use tempfile::TempDir;
 use tokio::fs::{rename};
 use tokio::io::{stderr, AsyncWriteExt};
 use uuid::Uuid;
+use anyhow::{anyhow, Result};
 
 const EIF_FILE_NAME: &str = "application.eif";
 const ENCLAVE_POLICY_PATH: &str = "/etc/enclaver/policy.yaml";
@@ -223,15 +223,15 @@ impl EnclaveArtifactBuilder {
             .try_collect::<Vec<_>>()
             .await?
             .first()
-            .ok_or(Error::InvalidDaemonResponse(String::from(
+            .ok_or(anyhow!(
                 "missing wait response from daemon",
-            )))?
+            ))?
             .status_code;
 
         if status_code != 0 {
-            return Err(Error::NitroCLIError(String::from(
+            return Err(anyhow!(
                 "non-zero exit code from nitro-cli",
-            )));
+            ));
         }
 
         let mut json_buf = Vec::with_capacity(4096);
