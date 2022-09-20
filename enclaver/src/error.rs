@@ -25,6 +25,9 @@ pub enum Error {
 
     #[error("invalid response from docker: {0}")]
     InvalidDaemonResponse(String),
+
+    #[error("nitro-cli error: {0}")]
+    NitroCLIError(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

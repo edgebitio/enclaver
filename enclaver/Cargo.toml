@@ -19,3 +19,4 @@ anyhow = { version = "=1.0.64", features = ["std"] }
 tempfile = "3.0"
 tokio-tar = "0.3.0"
 hyper = "0.14.20"
+uuid = { version = "1.1.2", features = ["v4"] }

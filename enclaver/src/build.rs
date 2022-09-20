@@ -1,22 +1,24 @@
-use crate::error::{Result};
+use crate::error::{Error, Result};
 use crate::images::{FileBuilder, FileSource, ImageManager, LayerBuilder};
 use crate::policy::load_policy;
-use bollard::container::{Config};
+use bollard::container::{Config, LogOutput, LogsOptions, WaitContainerOptions};
 use bollard::models::{HostConfig, Mount, MountTypeEnum};
 use bollard::Docker;
-
+use futures_util::stream::{StreamExt, TryStreamExt};
 use std::path::PathBuf;
-use std::rc::Rc;
+use std::sync::Arc;
 use tempfile::TempDir;
+use tokio::io::{stderr, AsyncWriteExt};
+use uuid::Uuid;
 
 pub struct EnclaveArtifactBuilder {
-    docker: Rc<Docker>,
+    docker: Arc<Docker>,
     image_manager: ImageManager,
 }
 
 impl EnclaveArtifactBuilder {
     pub fn new() -> Result<Self> {
-        let docker_client = Rc::new(Docker::connect_with_local_defaults()?);
+        let docker_client = Arc::new(Docker::connect_with_local_defaults()?);
 
         Ok(Self {
             docker: docker_client.clone(),
@@ -25,9 +27,11 @@ impl EnclaveArtifactBuilder {
     }
 
     pub async fn build_artifact(&self, policy_path: &str) -> Result<()> {
+        let mut stderr = stderr();
         let policy = load_policy(policy_path).await?;
         let source_img = self.image_manager.image(&policy.image).await?;
-        let res_image = self.image_manager
+        let res_image = self
+            .image_manager
             .append_layer(
                 &source_img,
                 LayerBuilder::new().append_file(FileBuilder {
@@ -40,10 +44,16 @@ impl EnclaveArtifactBuilder {
             )
             .await?;
 
+        // There is currently no way to point nitro-cli to a local image ID; it insists
+        // on attempting to pull the image. As a workaround, give our image a random
+        // tag, and pass that.
+        let img_tag = Uuid::new_v4().to_string();
+        self.image_manager.tag_image(&res_image, &img_tag).await?;
+
         let tmpdir = TempDir::new()?;
         let tmpdir_str = tmpdir.path().to_str().unwrap();
 
-        let container_res = self
+        let build_container_id = self
             .docker
             .create_container::<&str, &str>(
                 None,
@@ -52,7 +62,7 @@ impl EnclaveArtifactBuilder {
                     cmd: Some(vec![
                         "build-enclave",
                         "--docker-uri",
-                        res_image.to_str(),
+                        &img_tag,
                         "--output-file",
                         "application.eif",
                     ]),
@@ -78,9 +88,67 @@ impl EnclaveArtifactBuilder {
                     ..Default::default()
                 },
             )
+            .await?
+            .id;
+
+        self.docker
+            .start_container::<String>(&build_container_id, None)
             .await?;
 
-        println!("container: {:#?}", container_res);
+        // Stream stderr logs to stderr
+        let mut log_stream = self.docker.logs::<String>(
+            &build_container_id,
+            Some(LogsOptions {
+                follow: true,
+                stderr: true,
+                ..Default::default()
+            }),
+        );
+
+        loop {
+            if let Some(Ok(LogOutput::StdErr { message })) = log_stream.next().await {
+                stderr.write_all(message.as_ref()).await?;
+            } else {
+                break;
+            }
+        }
+
+        let status_code = self
+            .docker
+            .wait_container(&build_container_id, None::<WaitContainerOptions<String>>)
+            .try_collect::<Vec<_>>()
+            .await?
+            .first()
+            .ok_or(Error::InvalidDaemonResponse(String::from(
+                "missing wait response from daemon",
+            )))?
+            .status_code;
+
+        if status_code != 0 {
+            return Err(Error::NitroCLIError(String::from(
+                "non-zero exit code from nitro-cli",
+            )));
+        }
+
+        let mut json_buf = Vec::with_capacity(4096);
+
+        let mut logstream = self.docker.logs::<String>(
+            &build_container_id,
+            Some(LogsOptions {
+                stdout: true,
+                ..Default::default()
+            }),
+        );
+
+        loop {
+            if let Some(Ok(LogOutput::StdOut { message })) = logstream.next().await {
+                json_buf.extend_from_slice(message.as_ref());
+            } else {
+                break;
+            }
+        }
+
+        stderr.write_all(&json_buf).await?;
 
         Ok(())
     }

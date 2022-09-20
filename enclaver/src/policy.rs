@@ -1,4 +1,4 @@
-use crate::error::{Result};
+use crate::error::Result;
 use serde::{Deserialize, Serialize};
 
 use tokio::fs::File;

@@ -1,12 +1,12 @@
 use crate::error::{Error, Result};
-use bollard::image::BuildImageOptions;
+use bollard::image::{BuildImageOptions, TagImageOptions};
 use bollard::models::ImageId;
 use bollard::Docker;
 use futures_util::stream::{StreamExt, TryStreamExt};
 use std::fmt;
 use std::fmt::Write;
 use std::path::PathBuf;
-use std::rc::Rc;
+use std::sync::Arc;
 use tokio::fs::{create_dir, hard_link, File};
 use tokio::io::{duplex, AsyncWrite, AsyncWriteExt, BufWriter};
 use tokio_util::codec;
@@ -30,13 +30,13 @@ impl fmt::Display for ImageRef {
 
 /// An interface for manipulating Docker images.
 pub struct ImageManager {
-    docker: Rc<Docker>,
+    docker: Arc<Docker>,
 }
 
 impl ImageManager {
     /// Constructs a new ImageManager pointing to a local Docker daemon.
     pub fn new() -> Result<Self> {
-        let docker_client = Rc::new(Docker::connect_with_local_defaults()?);
+        let docker_client = Arc::new(Docker::connect_with_local_defaults()?);
 
         Ok(Self {
             docker: docker_client,
@@ -44,7 +44,7 @@ impl ImageManager {
     }
 
     /// Constructs a new ImageManager pointing to a local Docker daemon.
-    pub fn new_with_docker(docker: Rc<Docker>) -> Result<Self> {
+    pub fn new_with_docker(docker: Arc<Docker>) -> Result<Self> {
         Ok(Self { docker })
     }
 
@@ -113,6 +113,21 @@ impl ImageManager {
                 "missing image ID",
             ))),
         }
+    }
+
+    /// Tag an image.
+    pub async fn tag_image(&self, img: &ImageRef, tag: &str) -> Result<()> {
+        self.docker
+            .tag_image(
+                img.to_str(),
+                Some(TagImageOptions {
+                    repo: tag,
+                    ..Default::default()
+                }),
+            )
+            .await?;
+
+        Ok(())
     }
 }
 
