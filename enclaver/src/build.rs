@@ -9,12 +9,20 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::TempDir;
+use tokio::fs::{rename};
 use tokio::io::{stderr, AsyncWriteExt};
 use uuid::Uuid;
 
 const EIF_FILE_NAME: &str = "application.eif";
 const ENCLAVE_POLICY_PATH: &str = "/etc/enclaver/policy.yaml";
-const ENCLAVE_POLICY_PERMS: &str = "100:100";
+const ENCLAVE_POLICY_CHOWN: &str = "100:100";
+
+const RELEASE_EIF_PATH: &str = "/enclave/application.eif";
+const RELEASE_POLICY_PATH: &str = "/enclave/policy.yaml";
+
+const NITRO_CLI_IMAGE: &str = "us-docker.pkg.dev/edgebit-containers/containers/nitro-cli";
+const RELEASE_BASE_IMAGE: &str =
+    "us-docker.pkg.dev/edgebit-containers/containers/enclaver-wrapper-base";
 
 pub struct EnclaveArtifactBuilder {
     docker: Arc<Docker>,
@@ -49,33 +57,49 @@ impl EnclaveArtifactBuilder {
         })
     }
 
-    pub async fn build_artifact(&self, policy_path: &str) -> Result<()> {
+    pub async fn build_release(&self, policy_path: &str) -> Result<(EIFInfo, ImageRef)> {
         let policy = load_policy(policy_path).await?;
         let source_img = self.image_manager.image(&policy.image).await?;
-        let res_image = self
-            .image_manager
-            .append_layer(
-                &source_img,
-                LayerBuilder::new().append_file(FileBuilder {
-                    path: PathBuf::from(ENCLAVE_POLICY_PATH),
-                    source: FileSource::Local {
-                        path: PathBuf::from(policy_path),
-                    },
-                    chown: ENCLAVE_POLICY_PERMS.to_string(),
-                }),
-            )
-            .await?;
+        let amended_img = self.amend_source_image(&source_img, policy_path).await?;
 
         let build_dir = TempDir::new()?;
 
         let eif_info = self
-            .build_eif(&res_image, &build_dir, EIF_FILE_NAME)
+            .image_to_eif(&amended_img, &build_dir, EIF_FILE_NAME)
             .await?;
 
-        println!("{:#?}", eif_info);
+        let eif_path = build_dir.path().join(EIF_FILE_NAME);
+        let eif_path_str = eif_path.to_str().unwrap();
 
+        let release_img = self.package_eif(eif_path_str, policy_path).await?;
+
+        Ok((eif_info, release_img))
+    }
+
+    pub async fn build_eif_only(&self, policy_path: &str, dst_eif_path: &str) -> Result<EIFInfo> {
+        let policy = load_policy(policy_path).await?;
         let source_img = self.image_manager.image(&policy.image).await?;
-        let res_image = self
+        let amended_img = self.amend_source_image(&source_img, policy_path).await?;
+
+        let build_dir = TempDir::new()?;
+
+        let eif_info = self
+            .image_to_eif(&amended_img, &build_dir, EIF_FILE_NAME)
+            .await?;
+
+        let eif_path = build_dir.path().join(EIF_FILE_NAME);
+
+        rename(eif_path, dst_eif_path).await?;
+
+        Ok(eif_info)
+    }
+
+    async fn amend_source_image(
+        &self,
+        source_img: &ImageRef,
+        policy_path: &str,
+    ) -> Result<ImageRef> {
+        let amended_image = self
             .image_manager
             .append_layer(
                 &source_img,
@@ -84,17 +108,45 @@ impl EnclaveArtifactBuilder {
                     source: FileSource::Local {
                         path: PathBuf::from(policy_path),
                     },
-                    chown: ENCLAVE_POLICY_PERMS.to_string(),
+                    chown: ENCLAVE_POLICY_CHOWN.to_string(),
                 }),
             )
             .await?;
 
-        Ok(())
+        Ok(amended_image)
     }
 
-    async fn build_eif(
+    async fn package_eif(&self, eif_path: &str, policy_path: &str) -> Result<ImageRef> {
+        let base_img = self.image_manager.image(RELEASE_BASE_IMAGE).await?;
+
+        let packaged_img = self
+            .image_manager
+            .append_layer(
+                &base_img,
+                LayerBuilder::new()
+                    .append_file(FileBuilder {
+                        path: PathBuf::from(RELEASE_POLICY_PATH),
+                        source: FileSource::Local {
+                            path: PathBuf::from(policy_path),
+                        },
+                        chown: ENCLAVE_POLICY_CHOWN.to_string(),
+                    })
+                    .append_file(FileBuilder {
+                        path: PathBuf::from(RELEASE_EIF_PATH),
+                        source: FileSource::Local {
+                            path: PathBuf::from(eif_path),
+                        },
+                        chown: ENCLAVE_POLICY_CHOWN.to_string(),
+                    }),
+            )
+            .await?;
+
+        Ok(packaged_img)
+    }
+
+    async fn image_to_eif(
         &self,
-        src_image: &ImageRef,
+        source_img: &ImageRef,
         build_dir: &TempDir,
         eif_name: &str,
     ) -> Result<EIFInfo> {
@@ -106,14 +158,14 @@ impl EnclaveArtifactBuilder {
         // on attempting to pull the image (this may be a bug;. As a workaround, give our image a random
         // tag, and pass that.
         let img_tag = Uuid::new_v4().to_string();
-        self.image_manager.tag_image(&src_image, &img_tag).await?;
+        self.image_manager.tag_image(&source_img, &img_tag).await?;
 
         let build_container_id = self
             .docker
             .create_container::<&str, &str>(
                 None,
                 Config {
-                    image: Some("us-docker.pkg.dev/edgebit-containers/containers/nitro-cli"),
+                    image: Some(NITRO_CLI_IMAGE),
                     cmd: Some(vec![
                         "build-enclave",
                         "--docker-uri",

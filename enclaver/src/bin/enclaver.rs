@@ -12,17 +12,42 @@ struct Cli {
 enum Commands {
     #[clap(name = "build")]
     Build {
-        #[clap(short, long)]
-        file: String,
+        #[clap(long = "file", short = 'f')]
+        policy_file: String,
+
+        #[clap(long = "eif-only")]
+        eif_file: Option<String>,
     },
 }
 
 async fn run(args: Cli) -> enclaver::error::Result<()> {
     match args.subcommand {
-        Commands::Build { file } => {
+        Commands::Build {
+            policy_file,
+            eif_file: None,
+        } => {
             let builder = EnclaveArtifactBuilder::new()?;
 
-            builder.build_artifact(&file).await
+            let (eif_info, release_img) = builder.build_release(&policy_file).await?;
+
+            println!("built release image: {}", release_img);
+            println!("EIF Info: {:#?}", eif_info);
+
+            Ok(())
+        }
+
+        Commands::Build {
+            policy_file,
+            eif_file: Some(eif_file),
+        } => {
+            let builder = EnclaveArtifactBuilder::new()?;
+
+            let eif_info = builder.build_eif_only(&policy_file, &eif_file).await?;
+
+            println!("built EIF: {}", eif_file);
+            println!("EIF Info: {:#?}", eif_info);
+
+            Ok(())
         }
     }
 }
