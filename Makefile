@@ -4,7 +4,7 @@ enclaver:
 	go install ./cmd/enclaver/
 
 demo-app:
-	docker build . -f example/Dockerfile
+	docker build . -t example:latest -f example/Dockerfile
 
 enclave-image:
 	enclaver build -f example/policy.yaml
