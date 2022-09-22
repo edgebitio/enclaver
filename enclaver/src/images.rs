@@ -36,6 +36,7 @@ pub struct ImageManager {
 
 impl ImageManager {
     /// Constructs a new ImageManager pointing to a local Docker daemon.
+    #[allow(dead_code)]
     pub fn new() -> Result<Self> {
         let docker_client = Arc::new(Docker::connect_with_local_defaults()?);
 
@@ -129,8 +130,15 @@ impl ImageManager {
 }
 
 pub enum FileSource {
-    Local { path: PathBuf },
-    Image { name: String, path: PathBuf },
+    Local {
+        path: PathBuf,
+    },
+
+    #[allow(dead_code)]
+    Image {
+        name: String,
+        path: PathBuf,
+    },
 }
 
 pub struct FileBuilder {
