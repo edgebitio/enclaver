@@ -3,7 +3,8 @@ use crate::nitro_cli::EIFInfo;
 use crate::policy::{load_policy, Policy};
 use anyhow::{anyhow, Result};
 use bollard::container::{Config, LogOutput, LogsOptions, WaitContainerOptions};
-use bollard::models::{HostConfig, Mount, MountTypeEnum};
+use bollard::image::CreateImageOptions;
+use bollard::models::{CreateImageInfo, HostConfig, Mount, MountTypeEnum};
 use bollard::Docker;
 use futures_util::stream::{StreamExt, TryStreamExt};
 use std::path::PathBuf;
@@ -152,6 +153,29 @@ impl EnclaveArtifactBuilder {
         // tag, and pass that.
         let img_tag = Uuid::new_v4().to_string();
         self.image_manager.tag_image(&source_img, &img_tag).await?;
+
+        let mut fetch_stream = self.docker.create_image(
+            Some(CreateImageOptions {
+                from_image: NITRO_CLI_IMAGE,
+                ..Default::default()
+            }),
+            None,
+            None,
+        );
+
+        while let Some(item) = fetch_stream.next().await {
+            let create_image_info = item?;
+            match create_image_info {
+                CreateImageInfo {
+                    id: Some(id),
+                    status: Some(status),
+                    ..
+                } => {
+                    println!("{}: {}", id, status);
+                }
+                _ => {}
+            }
+        }
 
         let build_container_id = self
             .docker
