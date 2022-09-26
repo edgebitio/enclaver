@@ -1,11 +1,11 @@
 use crate::images::{FileBuilder, FileSource, ImageManager, ImageRef, LayerBuilder};
+use crate::nitro_cli::EIFInfo;
 use crate::policy::{load_policy, Policy};
 use anyhow::{anyhow, Result};
 use bollard::container::{Config, LogOutput, LogsOptions, WaitContainerOptions};
 use bollard::models::{HostConfig, Mount, MountTypeEnum};
 use bollard::Docker;
 use futures_util::stream::{StreamExt, TryStreamExt};
-use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::TempDir;
@@ -27,24 +27,6 @@ const RELEASE_BASE_IMAGE: &str =
 pub struct EnclaveArtifactBuilder {
     docker: Arc<Docker>,
     image_manager: ImageManager,
-}
-
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
-pub struct EIFInfo {
-    #[serde(rename = "Measurements")]
-    measurements: EIFMeasurements,
-}
-
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
-pub struct EIFMeasurements {
-    #[serde(rename = "PCR0")]
-    pcr0: String,
-
-    #[serde(rename = "PCR1")]
-    pcr1: String,
-
-    #[serde(rename = "PCR2")]
-    pcr2: String,
 }
 
 impl EnclaveArtifactBuilder {
