@@ -29,6 +29,8 @@ Read the [architecture doc](docs/architecture.md) for the full details. Enclaver
  - “Outer Proxy” + Enclave Supervisor
  - “Inner Proxy” + Process Supervisor
 
+<img src="docs/img/diagram-enclaver-components.svg" width="800" />
+
 ## FAQ
 
 See [the FAQ](docs/faq.md) for common questions and a comparison of Enclaver to similar technologies.
