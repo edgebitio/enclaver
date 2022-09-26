@@ -1,15 +1,18 @@
+pub mod config;
 pub mod enclave;
 pub mod nsm;
 pub mod console;
 pub mod launcher;
-pub mod vsock;
-pub mod tls;
+pub mod ingress;
 
 use log::{info, error};
 use std::ffi::OsString;
 use clap::{Parser};
 use anyhow::{Result};
+
 use console::{AppLog, AppStatus};
+use config::Configuration;
+use ingress::IngressService;
 
 // start "internal" ports above the 16-bit boundary (reserved for proxying TCP)
 const STATUS_PORT: u32 = 17000;
@@ -23,12 +26,16 @@ struct CliArgs {
     #[clap(long = "no-console", action)]
     no_console: bool,
 
-    #[clap()]
+    #[clap(long = "config-dir")]
+    config_dir: String,
+
+    #[clap(required = true)]
     entrypoint: Vec<OsString>,
 }
 
-
 async fn run(args: &CliArgs) -> Result<()> {
+    let config = Configuration::load(&args.config_dir).await?;
+
     let mut console_task = None;
     if !args.no_console {
         let app_log = AppLog::with_stdio_redirect()?;
@@ -43,6 +50,8 @@ async fn run(args: &CliArgs) -> Result<()> {
         info!("Enclave initialized");
     }
 
+    let ingress = IngressService::start(&config)?;
+
     let creds = launcher::Credentials{
         uid: 100,
         gid: 100,
@@ -51,6 +60,9 @@ async fn run(args: &CliArgs) -> Result<()> {
     info!("Starting {:?}", args.entrypoint);
     let exit_status = launcher::start_child(args.entrypoint.clone(), creds).await??;
     info!("Entrypoint {}", exit_status);
+
+    info!("Stopping ingress");
+    ingress.stop().await;
 
     app_status.exited(exit_status);
 

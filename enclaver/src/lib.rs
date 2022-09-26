@@ -4,5 +4,9 @@ pub mod build;
 
 mod images;
 mod nitro_cli;
-mod policy;
+pub mod policy;
 pub mod run;
+
+pub mod proxy;
+pub mod vsock;
+pub mod tls;
