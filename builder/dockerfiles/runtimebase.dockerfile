@@ -1,4 +1,4 @@
-FROM rust:latest AS builder
+FROM --platform=$BUILDPLATFORM rust:latest AS builder
 ARG TARGETARCH
 
 RUN rustup toolchain install nightly
