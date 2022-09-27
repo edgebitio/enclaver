@@ -1,8 +1,29 @@
-FROM golang:latest AS builder
+FROM rust:latest AS builder
+ARG TARGETARCH
 
-WORKDIR /usr/src/app
-COPY . .
-RUN go build -v -o /usr/local/bin/enclaver-wrapper ./cmd/enclaver-wrapper
+RUN rustup toolchain install nightly
+
+# This is awful; there must be a better way???
+RUN case ${TARGETARCH} in \
+  "arm64") \
+    rustup target add aarch64-unknown-linux-musl \
+    ;; \
+  "amd64") \
+    rustup target add x86_64-unknown-linux-musl \
+    ;; \
+esac
+
+WORKDIR /usr/src/enclaver
+COPY enclaver .
+
+RUN case ${TARGETARCH} in \
+  "arm64") \
+      cargo install --target=aarch64-unknown-linux-musl --path . \
+    ;; \
+  "amd64") \
+      cargo install --target=x86_64-unknown-linux-musl --path . \
+    ;; \
+esac
 
 FROM amazonlinux:latest
 
@@ -13,6 +34,6 @@ RUN \
     && yum clean all \
     && rm -rf /var/cache/yum
 
-COPY --from=builder /usr/local/bin/enclaver-wrapper /usr/local/bin/enclaver-wrapper
+COPY --from=builder /usr/local/cargo/bin/enclaver /usr/local/bin/enclaver
 
-ENTRYPOINT ["/usr/local/bin/enclaver-wrapper"]
+ENTRYPOINT ["/usr/local/bin/enclaver", "run-eif", "--eif-file", "/enclave/application.eif"]
