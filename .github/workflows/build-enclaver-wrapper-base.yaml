@@ -1,9 +1,7 @@
 name: Build & Push Enclaver Wrapper Base Container
 
 on:
-  push:
-    branches:
-      - main
+  push
 
 jobs:
   build-enclaver-wrapper-base:
