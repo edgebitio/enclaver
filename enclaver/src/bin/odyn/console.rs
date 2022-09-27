@@ -242,7 +242,7 @@ impl AppLog {
 
     // launch a task to service the pipe and serve the log over vsock
     pub fn start_serving(mut self, port: u32) -> JoinHandle<Result<()>> {
-        match crate::vsock::ingress::serve(port) {
+        match enclaver::vsock::serve(port) {
             Ok(incoming) => {
                 tokio::task::spawn(async move {
                     tokio::try_join!(self.servicer.run(), AppLog::serve_log(incoming, self.reader))?;
@@ -312,7 +312,7 @@ impl AppStatus {
     pub fn start_serving(&self, port: u32) -> JoinHandle<Result<()>> {
         use futures::stream::StreamExt;
 
-        match crate::vsock::ingress::serve(port) {
+        match enclaver::vsock::serve(port) {
             Ok(incoming) => {
                 let mut incoming = Box::pin(incoming);
                 let app_status = self.clone();
@@ -502,7 +502,7 @@ mod tests {
     }
 
     async fn app_status_lines() -> Result<Lines<impl AsyncBufRead + Unpin>> {
-        let sock = VsockStream::connect(crate::vsock::VMADDR_CID_HOST, 17000).await?;
+        let sock = VsockStream::connect(enclaver::vsock::VMADDR_CID_HOST, 17000).await?;
         // bug in VsockStream::connect: it can return Ok even if connect failed
         _ = sock.peer_addr()?;
         Ok(BufReader::new(sock).lines())

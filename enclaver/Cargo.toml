@@ -6,16 +6,32 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "1.0", features = ["full"] }
+anyhow = { version = "1.0", features = ["std"] }
+tokio = { version = "1.20", features = ["full"] }
+tokio-pipe = "0.2"
+tokio-vsock = "0.3"
+tokio-rustls = { version = "0.23", features = ["dangerous_configuration"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 tokio-tar = "0.3"
+rustls = "0.20"
+rustls-pemfile = "1.0"
+log = "0.4"
+pretty_env_logger = "0.4"
+nix = "0.24"
+futures = "0.3"
+rand = { version = "0.8", features = ["std", "std_rng"] }
 futures-util = "0.3"
 clap = { version = "3.0", features = ["derive"] }
 serde_yaml = "0.9"
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 bollard = "0.13"
-anyhow = { version = "1.0", features = ["std"] }
 tempfile = "3.0"
 hyper = "0.14"
 uuid = { version = "1.0", features = ["v4"] }
+aws-nitro-enclaves-nsm-api = "0.2.1"
+rtnetlink = "0.11"
+circbuf = "0.2"
+
+assert2 = "0.3"
+json = "0.12"
