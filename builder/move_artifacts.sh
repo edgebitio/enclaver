@@ -13,6 +13,6 @@ case $target_arch in
     ;;
 esac
 
-RUN mkdir out && \
-    mv enclaver/target/${target_arch}/release/enclaver out/enclaver && \
-    mv enclaver/target/${target_arch}/release/odyn out/odyn
+mkdir out
+mv enclaver/target/${target_arch}/release/enclaver out/enclaver
+mv enclaver/target/${target_arch}/release/odyn out/odyn
