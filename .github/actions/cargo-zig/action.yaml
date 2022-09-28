@@ -1,0 +1,16 @@
+# action.yml
+name: 'Cargo + Zig'
+description: 'Build with Cargo + Zig'
+inputs:
+  command:
+    description: 'Cargo subcommand to execute'
+    required: true
+  target:
+    description: 'Cargo target'
+    required: true
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - ${{ inputs.target }}
+    - ${{ inputs.command }}
