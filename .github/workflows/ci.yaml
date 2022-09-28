@@ -11,9 +11,20 @@ jobs:
       contents: 'read'
       id-token: 'write'
 
+    strategy:
+      matrix:
+        build-target: ['x86_64-unknown-linux-musl']
+
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/cargo-zigbuild
         with:
-          target: 'x86_64-unknown-linux-musl'
-          args: '--manifest-path enclaver/Cargo.toml'
+          target: ${{ matrix.build-target }}
+          args: '--manifest-path enclaver/Cargo.toml --release'
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: release/${{ matrix.build-target }}
+          path: |
+            enclaver/target/${{ matrix.build-target }}/release/enclaver
+            enclaver/target/${{ matrix.build-target }}/release/odyn
