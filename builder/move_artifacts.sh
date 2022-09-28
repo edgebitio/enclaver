@@ -14,5 +14,5 @@ case $target_arch in
 esac
 
 mkdir out
-mv enclaver/target/${target_arch}/release/enclaver out/enclaver
-mv enclaver/target/${target_arch}/release/odyn out/odyn
+mv enclaver/target/${rust_target}/release/enclaver out/enclaver
+mv enclaver/target/${rust_target}/release/odyn out/odyn
