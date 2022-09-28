@@ -1,5 +1,4 @@
-FROM --platform=$BUILDPLATFORM rust:latest AS builder
-ARG BUILDARCH
+FROM rust:latest AS builder
 
 ARG ZIG_VERSION=0.9.1
 RUN curl -L "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-$(uname -m)-${ZIG_VERSION}.tar.xz" | tar -J -x -C /usr/local && \
