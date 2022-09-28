@@ -25,15 +25,6 @@ RUN mkdir out && \
     mv enclaver/target/aarch64-unknown-linux-musl/release/enclaver out/enclaver && \
     mv enclaver/target/aarch64-unknown-linux-musl/release/odyn out/odyn
 
-FROM amazonlinux:latest
+FROM scratch
 
-# TODO: Figure out how to make this way smaller
-RUN \
-    amazon-linux-extras install aws-nitro-enclaves-cli \
-    && mkdir /enclave \
-    && yum clean all \
-    && rm -rf /var/cache/yum
-
-COPY --from=builder /usr/src/enclaver/out/enclaver /usr/local/bin/enclaver
-
-ENTRYPOINT ["/usr/local/bin/enclaver", "run-eif", "--eif-file", "/enclave/application.eif"]
+COPY --from=builder /usr/src/enclaver/out/* /usr/local/bin/
