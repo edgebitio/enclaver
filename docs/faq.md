@@ -19,7 +19,7 @@ Specifically Enclaver is focused on these threat reductions:
 
  - Insider Threats
    - Prevent an engineer debugging production from encountering sensitive data in memory or on disk
-   - Prevent stolen production credentials from reading sensitive data in memory or on disk ([Twilio/Signal attack][twilio],[Uber attack][uber])
+   - Prevent stolen production credentials from reading sensitive data in memory or on disk ([Twilio/Signal attack][twilio], [Uber attack][uber])
  - Application or infrastructure compromise
    - Prevent a compromise of the main application from reading sensitive data in memory or on disk
    - Prevent modification of the enclave code from its trusted attestation after boot
@@ -53,10 +53,15 @@ With Enclaver, running a secure enclave feels just like a `docker run`. More dif
  - automatically wrap KMS API calls with the enclave's attestation document with no effort on the user's part
  - kernel entropy is seeded and ready for operations
 
-### How can I use Enclaver in my existing CI and CD tools?
+### How can I use Enclaver in my existing CI/CD tools?
 
-If you produce a container for the service or part of your app you'd like to run with Enclaver, all you need to do is add an additional build step.
+If you produce a container for the service or part of your app you'd like to run with Enclaver, all you need to do is add an additional build step. First, check in an enclave configuration into your code with parameters for running the enclave and the desired network policy.
 
-First, check in an enclave configuration into your code with parameters for running the enclave and the desired network policy. In your continuous integration (CI) tool, after your container build is complete, run `enclaver build` with a reference to the enclave configuration file. If desired, you can pass in the `from` container image via flag or environment variable to reference the container you just built instead of using the configuration file. The result of your build is another container image, the enclave image, which you can push to your registry.
+#### Continuous Integration (CI)
+
+In your continuous integration (CI) tool, after your container build is complete, run `enclaver build` with a reference to the enclave configuration file. If desired, you can pass in the `from` container image via flag or environment variable to reference the container you just built instead of using the configuration file. The result of your build is another container image, the enclave image, which you can push to your registry.
+
+
+#### Continuous Deployment (CD)
 
 In your continuous deployment (CD) tool, update the references to the new enclave image. This is commonly in a systemd unit file and looks similar to `enclaver run registry.example.com/app:v1.0.1`. It might be useful to consider a systemd drop-in for this purpose. After the unit is updated, execute a `systemctl daemon-reload` to pick up the new unit file changes, and then `systemctl restart example.service` to restart the enclave. When the restart is triggered, Enclaver will read the signal to stop the existing enclave, pull down the new enclave image and then start it based on the parameters in the embedded configuration file.
