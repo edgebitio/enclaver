@@ -21,9 +21,7 @@ RUN touch enclaver/src/lib.rs
 
 RUN ./builder/build.sh ${TARGETARCH}
 
-RUN mkdir out && \
-    mv enclaver/target/aarch64-unknown-linux-musl/release/enclaver out/enclaver && \
-    mv enclaver/target/aarch64-unknown-linux-musl/release/odyn out/odyn
+RUN ./builder/move_artifacts.sh ${TARGETARCH}
 
 FROM scratch
 

@@ -4,7 +4,7 @@ on:
   push
 
 jobs:
-  build-nitro-cli:
+  build-release-binaries:
     runs-on: ubuntu-latest
 
     permissions:
@@ -29,3 +29,5 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: us-docker.pkg.dev/edgebit-containers/containers/release
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
