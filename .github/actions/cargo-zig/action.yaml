@@ -3,7 +3,7 @@ name: 'Cargo + Zig'
 description: 'Build with Cargo + Zig'
 inputs:
   command:
-    description: 'Cargo subcommand to execute'
+    description: 'Cargo subcommand to execute (excluding --target)'
     required: true
   target:
     description: 'Cargo target'
