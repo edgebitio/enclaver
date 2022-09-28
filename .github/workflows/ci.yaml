@@ -16,4 +16,4 @@ jobs:
       - uses: ./.github/actions/cargo-zig
         with:
           target: 'x86_64-unknown-linux-musl'
-          command: 'build --manifest-path enclaver/Cargo.toml'
+          args: '--manifest-path enclaver/Cargo.toml'
