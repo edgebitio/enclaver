@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - uses: ./.github/actions/cargo-zig
+      - uses: ./.github/actions/cargo-zigbuild
         with:
           target: 'x86_64-unknown-linux-musl'
           args: '--manifest-path enclaver/Cargo.toml'
