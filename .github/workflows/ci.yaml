@@ -61,8 +61,8 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: "{{defaultContext}}:builder/dockerfiles"
-          build-context: artifacts=.
+          build-contexts: artifacts=.
           file: odyn-release.dockerfile
           platforms: linux/amd64,linux/arm64
-          push: true
+          push: false
           tags: us-docker.pkg.dev/edgebit-containers/containers/odyn:latest
