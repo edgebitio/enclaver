@@ -9,7 +9,7 @@ jobs:
 
     strategy:
       matrix:
-        build-target: ['x86_64-unknown-linux-musl']
+        build-target: ['x86_64-unknown-linux-musl', 'aarch64-unknown-linux-musl arm64']
 
     steps:
       - uses: actions/checkout@v3
