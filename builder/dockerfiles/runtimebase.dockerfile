@@ -1,4 +1,5 @@
 FROM amazonlinux:latest
+ARG TARGETARCH
 
 # TODO: Figure out how to make this way smaller
 RUN \
