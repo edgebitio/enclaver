@@ -4,7 +4,7 @@ use tokio::fs::File;
 
 use tokio::io::AsyncReadExt;
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Policy {
     pub version: String,
     pub name: String,
@@ -12,13 +12,13 @@ pub struct Policy {
     pub ingress: Option<Vec<Ingress>>,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Ingress {
     pub listen_port: u16,
     pub tls: ServerTls,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ServerTls {
     pub key_file: String,
     pub cert_file: String,

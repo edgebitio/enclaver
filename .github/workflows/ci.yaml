@@ -1,0 +1,20 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  clippy-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          components: clippy
+      - uses: actions-rs/clippy@master
+        with:
+          args: --all-features --manifest-path enclaver/Cargo.toml
+
+
+  ## TODO: Add test job here?
