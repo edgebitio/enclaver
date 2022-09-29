@@ -40,7 +40,7 @@ impl NitroCLI {
     }
 
     pub async fn run_enclave(&self, args: RunEnclaveArgs) -> Result<EnclaveInfo> {
-        Ok(self.run_and_deserialize_output(args).await?)
+        self.run_and_deserialize_output(args).await
     }
 
     pub async fn run_enclave_with_debug(&self, args: RunEnclaveArgs) -> Result<()> {
@@ -62,9 +62,9 @@ impl NitroCLI {
     }
 
     pub async fn describe_enclaves(&self) -> Result<Vec<EnclaveInfo>> {
-        Ok(self
+        self
             .run_and_deserialize_output(DescribeEnclavesArgs {})
-            .await?)
+            .await
     }
 
     pub async fn terminate_enclave(&self, enclave_id: &str) -> Result<()> {
@@ -81,13 +81,13 @@ impl NitroCLI {
     }
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EIFInfo {
     #[serde(rename = "Measurements")]
     measurements: EIFMeasurements,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EIFMeasurements {
     #[serde(rename = "PCR0")]
     pcr0: String,
@@ -99,7 +99,7 @@ pub struct EIFMeasurements {
     pcr2: String,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EnclaveInfo {
     #[serde(rename = "EnclaveName")]
     pub name: String,
@@ -111,7 +111,7 @@ pub struct EnclaveInfo {
     pub process_id: i32,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EnclaveTerminationStatus {
     #[serde(rename = "EnclaveID")]
     pub id: String,

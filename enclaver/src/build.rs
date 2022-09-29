@@ -36,7 +36,7 @@ impl EnclaveArtifactBuilder {
 
         Ok(Self {
             docker: docker_client.clone(),
-            image_manager: ImageManager::new_with_docker(docker_client.clone())?,
+            image_manager: ImageManager::new_with_docker(docker_client)?,
         })
     }
 
@@ -88,7 +88,7 @@ impl EnclaveArtifactBuilder {
         let amended_image = self
             .image_manager
             .append_layer(
-                &source_img,
+                source_img,
                 LayerBuilder::new().append_file(FileBuilder {
                     path: PathBuf::from(ENCLAVE_POLICY_PATH),
                     source: FileSource::Local {
@@ -152,7 +152,7 @@ impl EnclaveArtifactBuilder {
         // on attempting to pull the image (this may be a bug;. As a workaround, give our image a random
         // tag, and pass that.
         let img_tag = Uuid::new_v4().to_string();
-        self.image_manager.tag_image(&source_img, &img_tag).await?;
+        self.image_manager.tag_image(source_img, &img_tag).await?;
 
         let mut fetch_stream = self.docker.create_image(
             Some(CreateImageOptions {
@@ -165,15 +165,13 @@ impl EnclaveArtifactBuilder {
 
         while let Some(item) = fetch_stream.next().await {
             let create_image_info = item?;
-            match create_image_info {
-                CreateImageInfo {
-                    id: Some(id),
-                    status: Some(status),
-                    ..
-                } => {
-                    println!("{}: {}", id, status);
-                }
-                _ => {}
+            if let CreateImageInfo {
+                id: Some(id),
+                status: Some(status),
+                ..
+            } = create_image_info
+            {
+                println!("{}: {}", id, status);
             }
         }
 
@@ -243,7 +241,7 @@ impl EnclaveArtifactBuilder {
             .try_collect::<Vec<_>>()
             .await?
             .first()
-            .ok_or(anyhow!("missing wait response from daemon",))?
+            .ok_or_else(|| anyhow!("missing wait response from daemon",))?
             .status_code;
 
         if status_code != 0 {

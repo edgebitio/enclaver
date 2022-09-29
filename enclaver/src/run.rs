@@ -33,7 +33,7 @@ impl Enclave {
     }
 
     pub async fn start(&mut self) -> Result<EnclaveState> {
-        if let Some(_) = self.enclave_id {
+        if self.enclave_id.is_some() {
             return Err(anyhow!("Enclave already started"));
         }
 
@@ -51,7 +51,7 @@ impl Enclave {
 
         self.enclave_id = Some(enclave_info.id.clone());
 
-        Ok(EnclaveState::Running(enclave_info.id.clone()))
+        Ok(EnclaveState::Running(enclave_info.id))
     }
 
     pub async fn run_with_debug(&self) -> Result<()> {

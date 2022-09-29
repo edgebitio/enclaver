@@ -19,7 +19,7 @@ pub struct ImageRef {
 
 impl ImageRef {
     pub fn to_str(&self) -> &str {
-        return &self.id;
+        &self.id
     }
 }
 
@@ -154,7 +154,7 @@ impl FileBuilder {
             .path
             .strip_prefix("/")?
             .to_str()
-            .ok_or(anyhow!("filename contains non-UTF-8 characters"))?;
+            .ok_or_else(|| anyhow!("filename contains non-UTF-8 characters"))?;
 
         write!(&mut line, " --chown={}", self.chown)?;
 
@@ -168,13 +168,13 @@ impl FileBuilder {
             } => {
                 let src_path = path
                     .to_str()
-                    .ok_or(anyhow!("filename contains non-UTF-8 characters"))?;
+                    .ok_or_else(|| anyhow!("filename contains non-UTF-8 characters"))?;
 
                 write!(&mut line, " --from={} {}", image_name, src_path)?;
             }
         }
 
-        write!(&mut line, " {}\n", dst_path)?;
+        writeln!(&mut line, " {}", dst_path)?;
 
         Ok(line)
     }
@@ -218,7 +218,7 @@ impl LayerBuilder {
         // - for local files we'll COPY from the "files" directory
         // - for image-sourced files we'll write COPY to pull from the image
         let mut dw = BufWriter::new(File::create(tempdir.path().join("Dockerfile")).await?);
-        dw.write(format!("FROM {source_image_name}\n\n").as_bytes())
+        dw.write_all(format!("FROM {source_image_name}\n\n").as_bytes())
             .await?;
 
         for file in &self.files {
@@ -226,15 +226,15 @@ impl LayerBuilder {
             // in our context directory.
             if let FileSource::Local { path: source_path } = &file.source {
                 let target = local_files.join(file.path.strip_prefix("/")?);
-                let target_parent = target.parent().ok_or(anyhow!(
-                    "error getting parent of {}",
-                    target.to_string_lossy()
-                ))?;
+                let target_parent = target.parent().ok_or_else(|| {
+                    anyhow!("error getting parent of {}", target.to_string_lossy())
+                })?;
                 tokio::fs::create_dir_all(target_parent).await?;
                 hard_link(source_path, target).await?;
             }
 
-            dw.write(file.realize_to_copy_line()?.as_bytes()).await?;
+            dw.write_all(file.realize_to_copy_line()?.as_bytes())
+                .await?;
         }
 
         dw.flush().await?;
