@@ -13,7 +13,7 @@ Enclaver (and all secure enclaves) guarantees that any sensitive data inserted, 
 
 In short, if you handled 100% of your plaintext or sensitive data within an enclave, you should be protected from an attacker that has exploited the infrastructure hosting the enclave. This is just like an attacker stealing your iPhone – they can't obtain your fingerprint or FaceID.
 
-It is your responsibility to ensure that only encrypted/hashed/tokenized data or summaries and non-sensitive result sets leave the enclave. Enumeration attacks are possible, based on what your code does, but your crown jewels, like encryption keys, are always protected.
+It is your responsibility to ensure that only encrypted/hashed/tokenized data or summaries and non-sensitive result sets leave the enclave. Enumeration attacks are possible, based on what your code returns to requesters. Overall, the risk to your crown jewels, like encryption keys, is dramatically lower than using a regular virtual machine workflow.
 
 Specifically Enclaver is focused on these threat reductions:
 
@@ -21,28 +21,33 @@ Specifically Enclaver is focused on these threat reductions:
    - Prevent an engineer debugging production from encountering sensitive data in memory or on disk
    - Prevent stolen production credentials from reading sensitive data in memory or on disk ([Twilio/Signal attack][twilio], [Uber attack][uber])
  - Application or infrastructure compromise
-   - Prevent a compromise of the main application from reading sensitive data in memory or on disk
+   - Prevent an attacker who is able to [dump application memory][heartbleed] from accessing sensitive data
    - Prevent modification of the enclave code from its trusted attestation after boot
  - Unwanted Data Ingress
    - Operate as a sidecar over vsock (basically localhost) or connect to a specific network interface
  - Unwanted Data Egress
    - Allow list of hostnames that the enclave can communicate with
-   - Prevent data egress due to coding or logic bugs (in your code, a partner SDK, etc)
+   - Prevent data egress due to coding or logic bugs
    - Prevent data egress due to exploit (Log4j)
  - Supply Chain Attacks
    - Prevent modification of enclave code from its trusted attestation prior to boot
    - Prevent enclave from reading cryptographic material from that doesn't match the trusted attestation (KMS policy)
+   - Prevent data egress due to coding or logic bugs present in software dependencies out of your control
  - Reduced scope and footprint
    - Prevent chained attacks that rely on large amounts of software dependencies
 
 Take care in returning data from the enclave to external parties and ensure your attestations are verfied, audited and specific.
+TODO: make this closing more specific
 
 [twilio]: https://edgebit.io/blog/threatvector-twilio-signal/
 [uber]: https://edgebit.io/blog/threatvector-uber/
+[heartbleed]: https://heartbleed.com/
 
 ### How is Enclaver different than using Amazon's Nitro Enclave tools?
 
-In short, Amazon tools introduce a ton of friction and don't result in a useful enclave. For example, almost everyone desires an enclave that can receive traffic from another service.
+Existing tools for working with Nitro Enclaves provide awesome building blocks, but actually using those building blocks to run code in an enclave is challenging.
+
+Enclaver makes it simple to put applications into Nitro Enclaves by automatically doing most of the heavy lifting, while encouraging best practices to keep enclaves "secure by default".
 
 With Enclaver, running a secure enclave feels just like a `docker run`. More differences:
 
