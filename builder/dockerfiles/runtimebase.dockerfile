@@ -1,10 +1,5 @@
-FROM golang:latest AS builder
-
-WORKDIR /usr/src/app
-COPY . .
-RUN go build -v -o /usr/local/bin/enclaver-wrapper ./cmd/enclaver-wrapper
-
 FROM amazonlinux:latest
+ARG TARGETARCH
 
 # TODO: Figure out how to make this way smaller
 RUN \
@@ -13,6 +8,6 @@ RUN \
     && yum clean all \
     && rm -rf /var/cache/yum
 
-COPY --from=builder /usr/local/bin/enclaver-wrapper /usr/local/bin/enclaver-wrapper
+COPY --from=artifacts ${TARGETARCH}/enclaver /usr/local/bin/enclaver
 
-ENTRYPOINT ["/usr/local/bin/enclaver-wrapper"]
+ENTRYPOINT ["/usr/local/bin/enclaver", "run-eif", "--eif-file", "/enclave/application.eif"]
