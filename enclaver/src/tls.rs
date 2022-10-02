@@ -79,3 +79,16 @@ pub fn load_insecure_client_config() -> Result<Arc<ClientConfig>> {
 
     Ok(Arc::new(cfg))
 }
+
+#[cfg(test)]
+fn data_file(name: &str) -> Result<std::path::PathBuf> {
+    let mut path = std::path::PathBuf::from(file!()).canonicalize()?;
+    path.pop(); // pop the filename of the .rs file
+    path.push(name);
+    Ok(path)
+}
+
+#[cfg(test)]
+pub fn test_server_config() -> Result<Arc<ServerConfig>> {
+    load_server_config(data_file("test.key")?, data_file("test.crt")?)
+}
