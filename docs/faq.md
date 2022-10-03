@@ -13,7 +13,7 @@ Enclaver (and all secure enclaves) guarantees that any sensitive data inserted, 
 
 In short, if you handled 100% of your plaintext or sensitive data within an enclave, you should be protected from an attacker that has exploited the infrastructure hosting the enclave. This is just like an attacker stealing your iPhone – they can't obtain your fingerprint or FaceID.
 
-It is your responsibility to ensure that only encrypted/hashed/tokenized data or summaries and non-sensitive result sets leave the enclave. Enumeration attacks are possible, based on what your code returns to requesters. Overall, the risk to your crown jewels, like encryption keys, is dramatically lower than using a regular virtual machine workflow.
+It is your responsibility to ensure that only encrypted/hashed/tokenized data or summaries and non-sensitive result sets leave the enclave. Overall, the risk to your crown jewels, like encryption keys, is dramatically lower than using a regular virtual machine workflow.
 
 Specifically Enclaver is focused on these threat reductions:
 
