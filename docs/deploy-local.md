@@ -7,7 +7,7 @@ weight: 30
 
 ## Running an Enclave Locally
 
-An app running with Enclaver starts as a source container image. In almost all cases, local development of your app can be done by running this container normally with Docker or another runtime.
+An app running with Enclaver starts as a source container image. In most cases, local development of your app can be done by running this container normally with Docker or another runtime.
 
 For testing the specific differences laid out below, see [Deploying on AWS][aws].
 
