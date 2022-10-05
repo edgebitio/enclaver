@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Test Enclaver on a single EC2 machine with Nitro Enclaves enabled
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Existing VPC to place the machine
+  ImageId:
+    Type: String
+    Description: 'Amazon Linux 2 AMI for us-east1 Region'
+    Default: 'ami-026b57f3c383c2eec'
+  InstanceType:
+    Type: String
+    Description: Cheapest instance that supports Nitro Enclaves
+    Default: c6a.xlarge
+  KeyName:
+    Description: SSH Keypair to login to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+Resources:
+  DemoInstance:
+    Type: 'AWS::EC2::Instance'
+    Properties: 
+      ImageId: !Ref ImageId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      SecurityGroupIds: 
+        - !Ref DemoSecurityGroup
+      EnclaveOptions:
+        Enabled: true
+      UserData:
+        Fn::Base64: 
+          !Sub |
+            #!/bin/bash
+            amazon-linux-extras install aws-nitro-enclaves-cli
+            yum install aws-nitro-enclaves-cli-devel -y
+            systemctl start nitro-enclaves-allocator.service && sudo systemctl enable nitro-enclaves-allocator.service
+            systemctl start docker && sudo systemctl enable docker
+  DemoSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !Ref VpcId
+      GroupDescription: Allow SSH access via port 22
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: '0.0.0.0/0'
+      Tags:
+        - Key: Name
+          Value: Enclaver-Security-Group
+Outputs:
+  DemoInstanceId:
+    Description: Instance Id 
+    Value: !Ref DemoInstance

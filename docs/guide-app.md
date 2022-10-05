@@ -32,7 +32,11 @@ TODO: add real attestation
 
 In the recent past, there was an incident  – this is a rumor – that caused the entire cast of Sesame Street to be added to the no-fly list. We can find out if that's true :)
 
-For this example you’ll need an EC2 instance with support for Nitro Enclaves enabled (`c5.xlarge` is the cheapest qualifying instance type as of this writing) and Docker installed.  See [the Deploying on AWS](deploy-aws.md) for more details.
+For this example you’ll need an EC2 instance with support for Nitro Enclaves enabled (`c6a.xlarge` is the cheapest qualifying instance type as of this writing) and Docker installed.  See [the Deploying on AWS](deploy-aws.md) for more details.
+
+[![CloudFormation](img/launch-stack.svg)][cloudformation]
+
+[cloudformation]: https://us-east-1.console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://enclaver-cloudformation.s3.amazonaws.com/enclaver.cloudformation.yaml&stackName=Enclaver-Demo
 
 ## The No-Fly-List App
 
@@ -161,6 +165,21 @@ foo is cleared to fly. Enjoy your flight!
 ```
 
 See how many names you can discover that won't be flying today.
+
+### Dedicated CPUs
+
+If you booted a `c6a.xlarge`, the full machine has 4 vCPUs. By default, Enclaver dedicates 2 of those to the Nitro Enclave. Dedicated CPUs are part of the isolation and protection of your workloads in the enclave.
+
+You can test this out by running `top` and then hitting `1` to show a breakdown of CPUs. Notice that CPUs `Cpu1` and `Cpu3` are missing here:
+
+```
+top - 14:48:27 up 6 min,  1 user,  load average: 0.01, 0.06, 0.03
+Tasks: 111 total,   1 running,  52 sleeping,   0 stopped,   0 zombie
+%Cpu0  :  0.3 us,  0.0 sy,  0.0 ni, 99.7 id,  0.0 wa,  0.0 hi,  0.0 si,  0.0 st
+%Cpu2  :  0.3 us,  0.0 sy,  0.0 ni, 99.7 id,  0.0 wa,  0.0 hi,  0.0 si,  0.0 st
+KiB Mem :  7949808 total,  6388256 free,   669472 used,   892080 buff/cache
+KiB Swap:        0 total,        0 free,        0 used.  7046532 avail Mem
+```
 
 ## Check out the Code
 
