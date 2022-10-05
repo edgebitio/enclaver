@@ -11,7 +11,7 @@ Enclaver consists of a CLI tool for building and running secure enclaves. This d
 
 Different enclave technologies vary in capabilities and deployment patterns. Enclaver currently only supports AWS Nitro Enclaves and this document reflects this deployment pattern. Support for other cloud provider offerings and Intel/AMD enclave features will come in the future.
 
-<img src="img/diagram-enclaver-components.svg" width="800" />
+![Enclaver Architecture Diagram](img/diagram-enclaver-components.svg)
 
 ## Enclaver CLI
 
@@ -26,7 +26,7 @@ These use-cases directly map to `enclaver` commands. Refer to the [full list of 
 
 `enclaver build` takes an existing container image of your application code and builds it into a new container image. `--policy-file` specifies a policy for network ingress/egress and runtime parameters of the enclave itself. This policy is packaged into the image because it is distributed with the image and included in its [cryptographic attestation][attestation].
 
-```
+```sh
 $ enclaver build registry.example.com/my-app:v1.0 --policy-file policy.yaml
 TODO: add output
 ```
@@ -57,7 +57,7 @@ Refer to the [full list of commands][cmd-run] to learn about all of the features
 
 The Enclaver image format is a regular OCI container image with a specific layout, roughly split into the inside and outside components:
 
-```
+```sh
 TODO: add image structure in style of `ls -la`
 /enclave/application.eif
 /enclave/policy.yaml
@@ -71,7 +71,7 @@ The network policy is duplicated in two places: inside of the EIF so it's part o
 
 `enclaver trust` outputs the cryptographic attestation of an image. An attestation is a reproducable "measurement" of a piece of code that can be used to give the code a unique identity. The word "measurement" is used because, just like a ruler, Enclaver records the content of various parts of the code that make up the enclave image. The hash of this measurement is recorded into Platform Configuration Registers (PCRs). A collection of certain PCRs (eg. PCR0-4 + PCR8) is the unique attestation of that particular piece of code.
 
-```
+```sh
 $ enclaver trust registry.example.com/my-app:v1.0
 {
   "Measurements": {
@@ -110,7 +110,7 @@ These components have minimal overhead, in the order of xx MB of RAM and xx mill
 
 `enclaver run` is the enclave supervisor. It runs as a systemd unit and exits if the enclave dies. By design, there is very little visibility into the enclave, so the command watches the context ID (CID) for information provided directly from the Nitro hypervisor.
 
-```
+```yaml
 [Unit]
 Description=Enclaver
 Documentation=https://edgebit.io/enclaver/docs/
