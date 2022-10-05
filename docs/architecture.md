@@ -7,7 +7,7 @@ weight: 10
 
 # Enclaver Architecture
 
-Enclaver consists of a CLI tool for building and running secure enclaves. This document describes the architecture of [the CLI], the container-based [image format][format], and the components that [run outside][outside] and [inside the enclave][inside] to allow your code to make the best use of the enclave's security properties.
+Enclaver consists of a CLI tool for building and running secure enclaves. This document describes the architecture of [the CLI][cli], the container-based [image format][format], and the components that [run outside][outside] and [inside the enclave][inside] to allow your code to make the best use of the enclave's security properties.
 
 Different enclave technologies vary in capabilities and deployment patterns. Enclaver currently only supports AWS Nitro Enclaves and this document reflects this deployment pattern. Support for other cloud provider offerings and Intel/AMD enclave features will come in the future.
 
@@ -182,6 +182,7 @@ TODO: expand general usage with other non-KMS systems
 
 TODO: update header links
 
+[cli]: #enclaver-cli
 [format]: #enclaver-image-format
 [outside]: #components-outside-the-enclave
 [inside]: #components-inside-the-enclave
