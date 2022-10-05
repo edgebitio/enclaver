@@ -4,7 +4,7 @@ layout: docs-enclaver-single
 category: guides
 ---
 
-## Running the No-Fly-List app inside an Enclave
+# Running the No-Fly-List app inside an Enclave
 
 This guide will walk through running the No-Fly-List app, which checks passengers attempting to fly on an airline against a no-fly list. It's a fairly simple Python application that requires protection "in-use" for it's data, because we don't want anyone to be able to see the full no-fly list. The app uses a secure enclave and Amazon KMS to achieve that.
 
@@ -24,7 +24,7 @@ The enclave has a code identity, called an attestation, that unqiuely identifies
 Here's an example of an attestation:
 
 TODO: add real container image
-```
+```sh
 $ enclave trust us-docker.pkg.dev/edgebit-containers/containers/no-fly-list-enclave:latest
 TODO: add real attestation
 ```
@@ -34,15 +34,15 @@ In the recent past, there was an incident  – this is a rumor – that caused t
 
 For this example you’ll need an EC2 instance with support for Nitro Enclaves enabled (`c5.xlarge` is the cheapest qualifying instance type as of this writing) and Docker installed.  See [the Deploying on AWS](deploy-aws.md) for more details.
 
-### The No-Fly-List App
+## The No-Fly-List App
 
 On startup, the app fetches an encrypted blob from S3. This blob is encrypted with a scheme called "envelope encryption". Let's take a quick detour to understand it, because it's both interesting and really useful.
 
-#### Envelope Encryption
+### Envelope Encryption
 
 Envelope Encryption involves encrypting our data twice, once at the app-level with key A, and then encrypting key A with key B. In our app, we have the data that was encrypted with key A (the data key), and an encrypted version of key A. This is our "envelope", because we've wrapped our data with the second level of encryption using key B (master key).
 
-```
+```json
 {
   "key-A-ciphertext": "UhOUXl...besRT=",
   "data-ciphertext":  "QZQE2J...uypwE="
@@ -68,14 +68,14 @@ Functionally, this means we'll have two layers of encryption, the inner layer is
 
 Here's what the actual envelope used by the app looks like:
 
-```
+```json
 {
   "data-key-ciphertext-base64": "AQIDAHgFXi2TEB5uhOUXl62UNxtALVzp0EqotGT2an02XqvQvQFPsDGUMVCbesRTBymyEYYBAAAAfjB8BgkqhkiG9w0BBwagbzBtAgEAMGgGCSqGSIb3DQEHATAeBglghkgBZQMEAS4wEQQMn/xg+FHWxztbsikDAgEQgDulQ5ROICb+58HcwXTls2bUohxdxN4FFZnp4QFbAweKGJwEEmhkNp7HnrQU+wPUXvQVc7m+bPVeoXksSQ==",
   "aes-ciphertext-base64": "U2FsdGVkX18a+Ji6uIdSAc9GQF3BV1EqZQE2J42nOJUxiyDJr12mSXI2qm5Z5no1KZGM4dKeuBSDwQuyOCJrpwE0g6+XERruQLdazh02Vq3VLx5MwaM7pVBwJLXlt6Wnl8HWtXNjNCySQKrMJmUIH+arCxthxUho4ABiNZ+nJEW3+GEYsmD92KcK/CzytFJVH6X8QajJn4kq5dbMa6rDxw=="
 }
 ```
 
-#### Decrypting the No-Fly List
+### Decrypting the No-Fly List
 
 Inside of the enclave, we have a policy that allows us to decrypt the data key. Since it's recorded in the file, it's easy to know which one to request from KMS. When we get that, we can use it to decrypt the main part of our file.
 
@@ -85,14 +85,14 @@ The concept of multiple data keys is called "field level encryption" and passing
 
 Hope you learned something! Let's jump into deploying our app.
 
-### Create the Enclave Configuration
+## Create the Enclave Configuration
 
 Enclaver builds enclave images based on a configuration file, which specifies the container that holds the app code, the network policy for egress, and a few other details.
 This policy is packaged into the image because it is distributed with the image and included in its [cryptographic attestation][attestation].
 
 Here's the configuration for the No-Fly list app.
 
-```
+```yaml
 TODO: add configuration
 ```
 
@@ -100,7 +100,7 @@ It's pretty straightforward. The `from` parameter specifies the source container
 
 [attestation]: architecture.md#calculating-cryptographic-attestations
 
-### Build the Enclave Image
+## Build the Enclave Image
 
 `enclaver build` takes an existing container image of your application code and builds it into a new container image with enclave-specific components added in. This is what we'll run on our EC2 machine. This image can be pushed to a registry like any other container.
 
@@ -111,11 +111,11 @@ $ enclaver build us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:lat
 TODO: add output
 ```
 
-### Run the Enclave
+## Run the Enclave
 
 `enclaver run` executes on an EC2 machine to fetch, unpack and run your enclave image. First, SSH to your EC2 machine:
 
-```
+```sh
 $ ssh ec2-user@<ip address>
 ```
 
@@ -125,7 +125,7 @@ We will start it manually using Docker, but you can also set up a [systemd unit]
 
 TODO: update ports once final logic is in place
 TODO: add real container image
-```
+```sh
 $ docker run \
     --rm \
     --detach \
@@ -139,7 +139,7 @@ $ docker run \
 
 Check to see that the enclave was run successfully:
 
-```
+```sh
 $ docker logs enclave
 TODO: add log output
 ```
@@ -148,21 +148,21 @@ TODO: add log output
 [outside]: architecture.md#components-outside-the-enclave
 [inside]: architecture.md#components-inside-the-enclave
 
-### Submit Passenger Names
+## Submit Passenger Names
 
 Now the fun part. Let's see who can fly and who can't. Remember, a key part of this scenario is that no one should be able to see the complete no-fly list, but we should get back an answer for each person when they buy a ticket.
 
 We know that members of Sesame Street might not be allowed to fly. Test it out for yourself from the EC2 machine:
 
 TODO: update ports once final logic is in place
-```
+```sh
 $ curl localhost:8001/enclave/passenger?name=foo
 foo is cleared to fly. Enjoy your flight!
 ```
 
 See how many names you can discover that won't be flying today.
 
-### Check out the Code
+## Check out the Code
 
 This application is on GitHub: https://github.com/edgebitio/no-fly-list/blob/main/server.py
 
@@ -170,7 +170,7 @@ Once you factor out the S3 fetching and the boilerplate KMS handling, our actual
 
 [code]: https://github.com/edgebitio/no-fly-list/blob/main/server.py#L54-L61
 
-### Next Steps
+## Next Steps
 
 This example walked through running a simple Python app that represented running a specific microservice or a security-centric function within an enclave. It's also possible to run an entire application in an enclave to wrap it in a higher level of security.
 

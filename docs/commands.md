@@ -5,7 +5,7 @@ category: reference
 weight: 10
 ---
 
-## Enclaver Commands
+# Enclaver Commands
 
 Enclaver is shipped as a single binary that fulfills two main use-cases:
 
@@ -18,9 +18,9 @@ All environment variables are prefixed with `ENC_` and exclusively use underscor
 
 When overriding a configuration file parameter that is nested, like `image > from`, flatten it like so: `--image-from` or `ENC_IMAGE_FROM`.
 
-### Build
+## Build
 
-```
+```sh
 $ enclaver build [options]
 ```
 
@@ -31,9 +31,9 @@ Builds an OCI container image in [Enclaver image format][format] containing the 
 | `-f`, `--file` | String (Default=enclaver.yaml) | Path on disk to your enclave configuration file. |
 | `--eif-only` | String | If set, build only the components that run inside of the enclave. EIF is written to the provided path on disk and the containing directory must exist. |
 
-### Run
+## Run
 
-```
+```sh
 $ enclaver run
 ```
 
@@ -41,9 +41,9 @@ $ enclaver run
 |:-----|:-----|:------------|
 | TODO | TODO | TODO: add options |
 
-### Run-EIF
+## Run-EIF
 
-```
+```sh
 $ enclaver run-eif [file] [cpus] [memory] [debug]
 ```
 

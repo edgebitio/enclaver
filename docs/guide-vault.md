@@ -4,7 +4,7 @@ layout: docs-enclaver-single
 category: guides
 ---
 
-## Running Hashicorp Vault in an Enclave
+# Running Hashicorp Vault in an Enclave
 
 Enclaver works by transforming a containerized application into a new container image which runs the underlying application in an enclave.
 
@@ -16,7 +16,7 @@ For this example you’ll need an EC2 instance with support for Nitro Enclaves e
 
 Enclaver uses a declarative policy file to define the contents of an enclave. Let’s start by creating a policy file called `policy.yaml`.
 
-```
+```yaml
 version: v1
 image: "vault:1.11.2"
 name: "enclaver-vault"
@@ -46,7 +46,7 @@ TODO:   Configuring in-enclave KMS proxy
 
 Now, we’ll ask Enclaver to build a new container image using this policy:
 
-```
+```sh
 $ enclaver build -f policy.yaml
 building overlay layer for source image
 overlay completed, saving overlaid image
@@ -73,7 +73,7 @@ The result of the build step is a new Docker image named `enclaver-vault`. Runni
 
 On your EC2 machine, start the enclave with Enclaver:
 
-```
+```sh
 $ enclaver run enclaver-vault
 TODO: add output
 ```
