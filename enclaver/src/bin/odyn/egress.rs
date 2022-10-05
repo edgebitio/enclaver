@@ -1,7 +1,10 @@
+use std::sync::Arc;
+
 use tokio::task::JoinHandle;
 use anyhow::Result;
 
 use enclaver::proxy::egress_http::EnclaveHttpProxy;
+use enclaver::policy::EgressPolicy;
 use crate::config::Configuration;
 
 const HTTP_EGRESS_PROXY_PORT: u16 = 9000;
@@ -13,21 +16,23 @@ pub struct EgressService {
 
 impl EgressService {
     pub async fn start(config: &Configuration) -> Result<Self> {
-        let proxy = match proxy_port(config) {
-            Some(port) => {
-                set_proxy_env_var(&format!("http://127.0.0.1:{port}"));
+        let task = if is_enabled(config) {
+            let proxy_port = proxy_port(config);
+            let policy = Arc::new(EgressPolicy::new(config.manifest.egress.as_ref().unwrap()));
 
-                let proxy = EnclaveHttpProxy::bind(HTTP_EGRESS_PROXY_PORT).await?;
+            set_proxy_env_var(&format!("http://127.0.0.1:{proxy_port}"));
 
-                Some(tokio::task::spawn(async move {
-                    proxy.serve(HTTP_EGRESS_VSOCK_PORT).await;
-                }))
-            },
-            None => None,
+            let proxy = EnclaveHttpProxy::bind(proxy_port).await?;
+
+            Some(tokio::task::spawn(async move {
+                proxy.serve(HTTP_EGRESS_VSOCK_PORT, policy).await;
+            }))
+        } else {
+            None
         };
 
         Ok(Self{
-            proxy: proxy,
+            proxy: task,
         })
     }
 
@@ -39,15 +44,20 @@ impl EgressService {
     }
 }
 
-fn proxy_port(config: &Configuration) -> Option<u16> {
-    if let Some(ref egress) = config.policy.egress {
-        if egress.enabled? {
-            let port = egress.proxy_port.unwrap_or(HTTP_EGRESS_PROXY_PORT);
-            return Some(port)
+fn is_enabled(config: &Configuration) -> bool {
+    if let Some(ref egress) = config.manifest.egress {
+        if let Some(ref allow) = egress.allow {
+            return !allow.is_empty();
         }
     }
 
-    None
+    false
+}
+
+fn proxy_port(config: &Configuration) -> u16 {
+    config.manifest
+        .egress.as_ref().unwrap()
+        .proxy_port.unwrap_or(HTTP_EGRESS_PROXY_PORT)
 }
 
 fn set_proxy_env_var(value: &str) {

@@ -23,7 +23,7 @@ enum Commands {
     #[clap(name = "build")]
     Build {
         #[clap(long = "file", short = 'f')]
-        policy_file: String,
+        manifest_file: String,
 
         #[clap(long = "eif-only")]
         eif_file: Option<String>,
@@ -48,12 +48,12 @@ enum Commands {
 async fn run(args: Cli) -> Result<()> {
     match args.subcommand {
         Commands::Build {
-            policy_file,
+            manifest_file,
             eif_file: None,
         } => {
             let builder = EnclaveArtifactBuilder::new()?;
 
-            let (eif_info, release_img) = builder.build_release(&policy_file).await?;
+            let (eif_info, release_img) = builder.build_release(&manifest_file).await?;
 
             println!("Built Release Image: {}", release_img);
             println!("EIF Info: {:#?}", eif_info);
@@ -62,12 +62,12 @@ async fn run(args: Cli) -> Result<()> {
         }
 
         Commands::Build {
-            policy_file,
+            manifest_file,
             eif_file: Some(eif_file),
         } => {
             let builder = EnclaveArtifactBuilder::new()?;
 
-            let (eif_info, eif_path) = builder.build_eif_only(&policy_file, &eif_file).await?;
+            let (eif_info, eif_path) = builder.build_eif_only(&manifest_file, &eif_file).await?;
 
             println!("Built EIF: {}", eif_path.display());
             println!("EIF Info: {:#?}", eif_info);

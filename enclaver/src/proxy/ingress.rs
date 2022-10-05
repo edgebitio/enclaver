@@ -104,6 +104,7 @@ mod tests {
     use tokio_rustls::TlsConnector;
     use anyhow::Result;
     use rustls::ServerName;
+    use assert2::assert;
 
     use super::{EnclaveProxy, HostProxy};
 

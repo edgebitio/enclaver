@@ -1,6 +1,6 @@
 use crate::images::{FileBuilder, FileSource, ImageManager, ImageRef, LayerBuilder};
 use crate::nitro_cli::EIFInfo;
-use crate::policy::{load_policy, Policy};
+use crate::manifest::{load_manifest, Manifest};
 use anyhow::{anyhow, Result};
 use bollard::container::{Config, LogOutput, LogsOptions, WaitContainerOptions};
 use bollard::image::CreateImageOptions;
@@ -18,7 +18,7 @@ use crate::constants::{ENCLAVE_CONFIG_DIR, CONFIG_FILE_NAME, ENCLAVE_ODYN_PATH};
 
 const EIF_FILE_NAME: &str = "application.eif";
 
-const ENCLAVE_POLICY_PERMS: &str = "440";
+const ENCLAVE_MANIFEST_PERMS: &str = "440";
 const ENCLAVE_ODYN_PERMS: &str = "550";
 const ENCLAVE_OVERLAY_CHOWN: &str = "0:0";
 
@@ -48,34 +48,34 @@ impl EnclaveArtifactBuilder {
         })
     }
 
-    /// Build a release image based on the referenced policy.
-    pub async fn build_release(&self, policy_path: &str) -> Result<(EIFInfo, ImageRef)> {
-        let (_policy, build_dir, eif_info) = self.common_build(policy_path).await?;
+    /// Build a release image based on the referenced manifest.
+    pub async fn build_release(&self, manifest_path: &str) -> Result<(EIFInfo, ImageRef)> {
+        let (_manifest, build_dir, eif_info) = self.common_build(manifest_path).await?;
         let eif_path = build_dir.path().join(EIF_FILE_NAME);
-        let release_img = self.package_eif(eif_path, policy_path).await?;
+        let release_img = self.package_eif(eif_path, manifest_path).await?;
 
         Ok((eif_info, release_img))
     }
 
-    /// Build an EIF, as would be included in a release image, based on the referenced policy.
+    /// Build an EIF, as would be included in a release image, based on the referenced manifest.
     pub async fn build_eif_only(
         &self,
-        policy_path: &str,
+        manifest_path: &str,
         dst_path: &str,
     ) -> Result<(EIFInfo, PathBuf)> {
-        let (_policy, build_dir, eif_info) = self.common_build(policy_path).await?;
+        let (_manifest, build_dir, eif_info) = self.common_build(manifest_path).await?;
         let eif_path = build_dir.path().join(EIF_FILE_NAME);
         rename(&eif_path, dst_path).await?;
 
         Ok((eif_info, canonicalize(dst_path).await?))
     }
 
-    /// Load the referenced policy, amend the image it references to match what we expect in
+    /// Load the referenced manifest, amend the image it references to match what we expect in
     /// an enclave, then convert the resulting image to an EIF.
-    pub async fn common_build(&self, policy_path: &str) -> Result<(Policy, TempDir, EIFInfo)> {
-        let policy = load_policy(policy_path).await?;
-        let source_img = self.image_manager.image(&policy.image).await?;
-        let amended_img = self.amend_source_image(&source_img, policy_path).await?;
+    pub async fn common_build(&self, manifest_path: &str) -> Result<(Manifest, TempDir, EIFInfo)> {
+        let manifest = load_manifest(manifest_path).await?;
+        let source_img = self.image_manager.image(&manifest.image).await?;
+        let amended_img = self.amend_source_image(&source_img, manifest_path).await?;
 
         info!("built intermediate image: {}", amended_img);
 
@@ -85,7 +85,7 @@ impl EnclaveArtifactBuilder {
             .image_to_eif(&amended_img, &build_dir, EIF_FILE_NAME)
             .await?;
 
-        Ok((policy, build_dir, eif_info))
+        Ok((manifest, build_dir, eif_info))
     }
 
     /// Amend a source image by adding one or more layers containing the files we expect
@@ -93,7 +93,7 @@ impl EnclaveArtifactBuilder {
     async fn amend_source_image(
         &self,
         source_img: &ImageRef,
-        policy_path: &str,
+        manifest_path: &str,
     ) -> Result<ImageRef> {
         let img_config = self.docker.inspect_image(source_img.to_str()).await?.config;
 
@@ -139,10 +139,10 @@ impl EnclaveArtifactBuilder {
                     .append_file(FileBuilder {
                         path: PathBuf::from(ENCLAVE_CONFIG_DIR).join(CONFIG_FILE_NAME),
                         source: FileSource::Local {
-                            path: PathBuf::from(policy_path),
+                            path: PathBuf::from(manifest_path),
                         },
                         chown: ENCLAVE_OVERLAY_CHOWN.to_string(),
-                        chmod: ENCLAVE_POLICY_PERMS.into(),
+                        chmod: ENCLAVE_MANIFEST_PERMS.into(),
                     })
                     .append_file(FileBuilder {
                         path: PathBuf::from(ENCLAVE_ODYN_PATH),
@@ -165,7 +165,7 @@ impl EnclaveArtifactBuilder {
     /// TODO: this currently is incomplete; file permissions are wrong, the base image
     /// doesn't match our current requirements, and the exact intended format is still
     /// TBD.
-    async fn package_eif(&self, eif_path: PathBuf, policy_path: &str) -> Result<ImageRef> {
+    async fn package_eif(&self, eif_path: PathBuf, manifest_path: &str) -> Result<ImageRef> {
         let base_img = self.pull_image(RELEASE_BASE_IMAGE).await?;
 
         debug!("packaging EIF file: {}", eif_path.to_string_lossy());
@@ -178,7 +178,7 @@ impl EnclaveArtifactBuilder {
                     .append_file(FileBuilder {
                         path: PathBuf::from(RELEASE_BUNDLE_DIR).join(CONFIG_FILE_NAME),
                         source: FileSource::Local {
-                            path: PathBuf::from(policy_path),
+                            path: PathBuf::from(manifest_path),
                         },
                         chown: RELEASE_OVERLAY_CHOWN.to_string(),
                         chmod: RELEASE_OVERLAY_PERMS.into(),
