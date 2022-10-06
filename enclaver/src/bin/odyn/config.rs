@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::collections::HashMap;
 use log::{debug};
 use anyhow::Result;
+use enclaver::constants::CONFIG_FILE_NAME;
 
 use enclaver::policy;
 use enclaver::tls;
@@ -16,7 +17,7 @@ pub struct Configuration {
 impl Configuration {
     pub async fn load<P: AsRef<Path>>(config_dir: P) -> Result<Self> {
         let mut policy_path = config_dir.as_ref().to_path_buf();
-        policy_path.push("policy.yaml");
+        policy_path.push(CONFIG_FILE_NAME);
 
         let policy = enclaver::policy::load_policy(policy_path.to_str().unwrap()).await?;
 

@@ -1,14 +1,15 @@
 use anyhow::anyhow;
 use anyhow::Result;
 use bollard::image::{BuildImageOptions, TagImageOptions};
-use bollard::models::ImageId;
+use bollard::models::{BuildInfo, ImageId};
 use bollard::Docker;
 use futures_util::stream::{StreamExt, TryStreamExt};
 use std::fmt;
 use std::fmt::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::fs::{create_dir, hard_link, File};
+use log::trace;
+use tokio::fs::{create_dir, File};
 use tokio::io::{duplex, AsyncWrite, AsyncWriteExt, BufWriter};
 use tokio_util::codec;
 
@@ -38,7 +39,8 @@ impl ImageManager {
     /// Constructs a new ImageManager pointing to a local Docker daemon.
     #[allow(dead_code)]
     pub fn new() -> Result<Self> {
-        let docker_client = Arc::new(Docker::connect_with_local_defaults()?);
+        let docker_client = Arc::new(Docker::connect_with_local_defaults()
+            .map_err(|e| anyhow!("connecting to docker: {}", e))?);
 
         Ok(Self {
             docker: docker_client,
@@ -101,9 +103,18 @@ impl ImageManager {
         let mut maybe_id = None;
 
         for info in &build_infos {
-            if let Some(ImageId { id: Some(id) }) = &info.aux {
-                maybe_id = Some(id);
-                break;
+            match info {
+                BuildInfo {
+                    aux: Some(ImageId { id: Some(id) }),
+                    ..
+                } => {
+                    maybe_id = Some(id);
+                    break;
+                }
+                BuildInfo {
+                    error: Some(msg), ..
+                } => return Err(anyhow!("build error appending layer: {}", msg)),
+                _ => {}
             }
         }
 
@@ -129,6 +140,7 @@ impl ImageManager {
     }
 }
 
+#[derive(Debug)]
 pub enum FileSource {
     Local {
         path: PathBuf,
@@ -141,18 +153,25 @@ pub enum FileSource {
     },
 }
 
+#[derive(Debug)]
 pub struct FileBuilder {
     pub path: PathBuf,
     pub source: FileSource,
     pub chown: String,
+    pub chmod: String,
 }
 
 impl FileBuilder {
-    fn realize_to_copy_line(&self) -> Result<String> {
+    fn realize(&self) -> Result<String> {
         let mut line = String::from("COPY");
-        let dst_path = self
+        let local_path = self
             .path
             .strip_prefix("/")?
+            .to_str()
+            .ok_or_else(|| anyhow!("filename contains non-UTF-8 characters"))?;
+
+        let dst_path = self
+            .path
             .to_str()
             .ok_or_else(|| anyhow!("filename contains non-UTF-8 characters"))?;
 
@@ -160,7 +179,7 @@ impl FileBuilder {
 
         match &self.source {
             FileSource::Local { .. } => {
-                write!(&mut line, " files/{}", dst_path)?;
+                write!(&mut line, " files/{}", local_path)?;
             }
             FileSource::Image {
                 name: image_name,
@@ -176,22 +195,35 @@ impl FileBuilder {
 
         writeln!(&mut line, " {}", dst_path)?;
 
+        writeln!(&mut line, "RUN chmod {} {}", self.chmod, dst_path)?;
+
         Ok(line)
     }
 }
 
 pub struct LayerBuilder {
     files: Vec<FileBuilder>,
+
+    entrypoint: Option<Vec<String>>,
 }
 
 impl LayerBuilder {
     pub fn new() -> Self {
-        Self { files: vec![] }
+        Self {
+            files: vec![],
+            entrypoint: None,
+        }
     }
 
     /// Add a file to the LayerBuilder, in the form of a FileBuilder.
     pub fn append_file(&mut self, file: FileBuilder) -> &mut Self {
         self.files.push(file);
+        self
+    }
+
+    /// Set the entrypoint for the layer.
+    pub fn set_entrypoint(&mut self, entrypoint: Vec<String>) -> &mut Self {
+        self.entrypoint = Some(entrypoint);
         self
     }
 
@@ -208,6 +240,7 @@ impl LayerBuilder {
     ) -> Result<()> {
         // Create a temporary directory in which to construct a Docker context.
         let tempdir = tempfile::TempDir::new()?;
+        trace!("realizing Docker build env to temp directory: {}", tempdir.path().to_string_lossy());
 
         // Create a "files" subdirectory. Within "files" we will hardlink any
         // local files to be copied to the image.
@@ -218,22 +251,31 @@ impl LayerBuilder {
         // - for local files we'll COPY from the "files" directory
         // - for image-sourced files we'll write COPY to pull from the image
         let mut dw = BufWriter::new(File::create(tempdir.path().join("Dockerfile")).await?);
+
         dw.write_all(format!("FROM {source_image_name}\n\n").as_bytes())
             .await?;
 
         for file in &self.files {
             // For local files, hard link them into the `files` directory
             // in our context directory.
+            trace!("realizing file: {:#?}", file);
             if let FileSource::Local { path: source_path } = &file.source {
                 let target = local_files.join(file.path.strip_prefix("/")?);
                 let target_parent = target.parent().ok_or_else(|| {
                     anyhow!("error getting parent of {}", target.to_string_lossy())
                 })?;
                 tokio::fs::create_dir_all(target_parent).await?;
-                hard_link(source_path, target).await?;
+                tokio::fs::copy(source_path, target).await?;
             }
 
-            dw.write_all(file.realize_to_copy_line()?.as_bytes())
+            dw.write_all(file.realize()?.as_bytes()).await?;
+        }
+
+        // Write out the ENTRYPOINT, if set
+        if let Some(entrypoint) = &self.entrypoint {
+            let ep_array_str = serde_json::to_string(entrypoint)?;
+            trace!("writing ENTRYPOINT: {}", ep_array_str);
+            dw.write_all(format!("ENTRYPOINT {}\n", ep_array_str).as_bytes())
                 .await?;
         }
 

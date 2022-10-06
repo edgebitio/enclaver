@@ -4,6 +4,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::Stdio;
 use tokio::process::Command;
+use log::{debug};
 
 pub struct NitroCLI {
     program: String,
@@ -20,8 +21,12 @@ impl NitroCLI {
     where
         T: serde::de::DeserializeOwned,
     {
+        let cmd_args = args.to_args()?;
+
+        debug!("executing nitro-cli with args: {:#?}", cmd_args);
+
         let child = Command::new(&self.program)
-            .args(args.to_args()?)
+            .args(cmd_args)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
@@ -62,8 +67,7 @@ impl NitroCLI {
     }
 
     pub async fn describe_enclaves(&self) -> Result<Vec<EnclaveInfo>> {
-        self
-            .run_and_deserialize_output(DescribeEnclavesArgs {})
+        self.run_and_deserialize_output(DescribeEnclavesArgs {})
             .await
     }
 
@@ -109,6 +113,9 @@ pub struct EnclaveInfo {
 
     #[serde(rename = "ProcessID")]
     pub process_id: i32,
+
+    #[serde(rename = "EnclaveCID")]
+    pub cid: u32,
 }
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -128,7 +135,7 @@ pub struct RunEnclaveArgs {
     pub cpu_count: i32,
     pub memory_mb: i32,
     pub eif_path: PathBuf,
-    pub cid: Option<i32>,
+    pub cid: Option<u32>,
 }
 
 impl NitroCLIArgs for RunEnclaveArgs {

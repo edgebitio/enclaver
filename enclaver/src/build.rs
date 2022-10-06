@@ -4,24 +4,31 @@ use crate::policy::{load_policy, Policy};
 use anyhow::{anyhow, Result};
 use bollard::container::{Config, LogOutput, LogsOptions, WaitContainerOptions};
 use bollard::image::CreateImageOptions;
-use bollard::models::{CreateImageInfo, HostConfig, Mount, MountTypeEnum};
+use bollard::models::{ContainerConfig, CreateImageInfo, HostConfig, Mount, MountTypeEnum};
 use bollard::Docker;
 use futures_util::stream::{StreamExt, TryStreamExt};
 use std::path::PathBuf;
 use std::sync::Arc;
+use log::{debug, info};
 use tempfile::TempDir;
 use tokio::fs::{canonicalize, rename};
 use tokio::io::{stderr, AsyncWriteExt};
 use uuid::Uuid;
+use crate::constants::{ENCLAVE_CONFIG_DIR, CONFIG_FILE_NAME, ENCLAVE_ODYN_PATH};
 
 const EIF_FILE_NAME: &str = "application.eif";
-const ENCLAVE_POLICY_PATH: &str = "/etc/enclaver/policy.yaml";
-const ENCLAVE_POLICY_CHOWN: &str = "100:100";
 
-const RELEASE_EIF_PATH: &str = "/enclave/application.eif";
-const RELEASE_POLICY_PATH: &str = "/enclave/policy.yaml";
+const ENCLAVE_POLICY_PERMS: &str = "440";
+const ENCLAVE_ODYN_PERMS: &str = "550";
+const ENCLAVE_OVERLAY_CHOWN: &str = "0:0";
+
+const RELEASE_BUNDLE_DIR: &str = "/enclave";
+const RELEASE_OVERLAY_PERMS: &str = "444";
+const RELEASE_OVERLAY_CHOWN: &str = "0:0";
 
 const NITRO_CLI_IMAGE: &str = "us-docker.pkg.dev/edgebit-containers/containers/nitro-cli";
+const ODYN_IMAGE: &str = "us-docker.pkg.dev/edgebit-containers/containers/odyn";
+const ODYN_IMAGE_BINARY_PATH: &str = "/usr/local/bin/odyn";
 const RELEASE_BASE_IMAGE: &str =
     "us-docker.pkg.dev/edgebit-containers/containers/enclaver-wrapper-base";
 
@@ -32,7 +39,8 @@ pub struct EnclaveArtifactBuilder {
 
 impl EnclaveArtifactBuilder {
     pub fn new() -> Result<Self> {
-        let docker_client = Arc::new(Docker::connect_with_local_defaults()?);
+        let docker_client = Arc::new(Docker::connect_with_local_defaults()
+            .map_err(|e| anyhow!("connecting to docker: {}", e))?);
 
         Ok(Self {
             docker: docker_client.clone(),
@@ -69,6 +77,8 @@ impl EnclaveArtifactBuilder {
         let source_img = self.image_manager.image(&policy.image).await?;
         let amended_img = self.amend_source_image(&source_img, policy_path).await?;
 
+        info!("built intermediate image: {}", amended_img);
+
         let build_dir = TempDir::new()?;
 
         let eif_info = self
@@ -85,17 +95,64 @@ impl EnclaveArtifactBuilder {
         source_img: &ImageRef,
         policy_path: &str,
     ) -> Result<ImageRef> {
+        let img_config = self.docker.inspect_image(source_img.to_str()).await?.config;
+
+        // Find the CMD and ENTRYPOINT from the source image. If either was specified in "shell form"
+        // Docker seems to convert it to "exec form" as an actual shell invocation, so we can simply
+        // ignore that possibility.
+        //
+        // Since the enclave image cannot take any arguments (which whould normally override a CMD),
+        // we can simply take everything from CMD and append it to the ENTRYPOINT, then append that
+        // whole thing to the odyn invocation.
+        // TODO(russell_h): Figure out what happens when a source image specifies env variables.
+        let mut cmd = match img_config {
+            Some(ContainerConfig {
+                cmd: Some(ref cmd), ..
+            }) => cmd.clone(),
+            _ => vec![],
+        };
+
+        let mut entrypoint = match img_config {
+            Some(ContainerConfig {
+                entrypoint: Some(ref entrypoint),
+                ..
+            }) => entrypoint.clone(),
+            _ => vec![],
+        };
+
+        let mut odyn_command = vec![
+            String::from(ENCLAVE_ODYN_PATH),
+            String::from("--config-dir"),
+            String::from("/etc/enclaver"),
+        ];
+
+        odyn_command.append(&mut entrypoint);
+        odyn_command.append(&mut cmd);
+
+        debug!("appending layer to source image");
         let amended_image = self
             .image_manager
             .append_layer(
                 source_img,
-                LayerBuilder::new().append_file(FileBuilder {
-                    path: PathBuf::from(ENCLAVE_POLICY_PATH),
-                    source: FileSource::Local {
-                        path: PathBuf::from(policy_path),
-                    },
-                    chown: ENCLAVE_POLICY_CHOWN.to_string(),
-                }),
+                LayerBuilder::new()
+                    .append_file(FileBuilder {
+                        path: PathBuf::from(ENCLAVE_CONFIG_DIR).join(CONFIG_FILE_NAME),
+                        source: FileSource::Local {
+                            path: PathBuf::from(policy_path),
+                        },
+                        chown: ENCLAVE_OVERLAY_CHOWN.to_string(),
+                        chmod: ENCLAVE_POLICY_PERMS.into(),
+                    })
+                    .append_file(FileBuilder {
+                        path: PathBuf::from(ENCLAVE_ODYN_PATH),
+                        source: FileSource::Image {
+                            name: ODYN_IMAGE.into(),
+                            path: ODYN_IMAGE_BINARY_PATH.into(),
+                        },
+                        chown: ENCLAVE_OVERLAY_CHOWN.to_string(),
+                        chmod: ENCLAVE_ODYN_PERMS.into(),
+                    })
+                    .set_entrypoint(odyn_command),
             )
             .await?;
 
@@ -108,7 +165,9 @@ impl EnclaveArtifactBuilder {
     /// doesn't match our current requirements, and the exact intended format is still
     /// TBD.
     async fn package_eif(&self, eif_path: PathBuf, policy_path: &str) -> Result<ImageRef> {
-        let base_img = self.image_manager.image(RELEASE_BASE_IMAGE).await?;
+        let base_img = self.pull_image(RELEASE_BASE_IMAGE).await?;
+
+        debug!("packaging EIF file: {}", eif_path.to_string_lossy());
 
         let packaged_img = self
             .image_manager
@@ -116,16 +175,18 @@ impl EnclaveArtifactBuilder {
                 &base_img,
                 LayerBuilder::new()
                     .append_file(FileBuilder {
-                        path: PathBuf::from(RELEASE_POLICY_PATH),
+                        path: PathBuf::from(RELEASE_BUNDLE_DIR).join(CONFIG_FILE_NAME),
                         source: FileSource::Local {
                             path: PathBuf::from(policy_path),
                         },
-                        chown: ENCLAVE_POLICY_CHOWN.to_string(),
+                        chown: RELEASE_OVERLAY_CHOWN.to_string(),
+                        chmod: RELEASE_OVERLAY_PERMS.into(),
                     })
                     .append_file(FileBuilder {
-                        path: PathBuf::from(RELEASE_EIF_PATH),
+                        path: PathBuf::from(RELEASE_BUNDLE_DIR).join(EIF_FILE_NAME),
                         source: FileSource::Local { path: eif_path },
-                        chown: ENCLAVE_POLICY_CHOWN.to_string(),
+                        chown: RELEASE_OVERLAY_CHOWN.to_string(),
+                        chmod: RELEASE_OVERLAY_PERMS.into(),
                     }),
             )
             .await?;
@@ -154,33 +215,16 @@ impl EnclaveArtifactBuilder {
         let img_tag = Uuid::new_v4().to_string();
         self.image_manager.tag_image(source_img, &img_tag).await?;
 
-        let mut fetch_stream = self.docker.create_image(
-            Some(CreateImageOptions {
-                from_image: NITRO_CLI_IMAGE,
-                ..Default::default()
-            }),
-            None,
-            None,
-        );
+        debug!("tagged intermediate image: {}", img_tag);
 
-        while let Some(item) = fetch_stream.next().await {
-            let create_image_info = item?;
-            if let CreateImageInfo {
-                id: Some(id),
-                status: Some(status),
-                ..
-            } = create_image_info
-            {
-                println!("{}: {}", id, status);
-            }
-        }
+        let nitro_cli = self.pull_image(NITRO_CLI_IMAGE).await?;
 
         let build_container_id = self
             .docker
             .create_container::<&str, &str>(
                 None,
                 Config {
-                    image: Some(NITRO_CLI_IMAGE),
+                    image: Some(nitro_cli.to_str()),
                     cmd: Some(vec![
                         "build-enclave",
                         "--docker-uri",
@@ -212,6 +256,8 @@ impl EnclaveArtifactBuilder {
             )
             .await?
             .id;
+
+        info!("starting nitro-cli build-eif in container: {}", build_container_id);
 
         self.docker
             .start_container::<String>(&build_container_id, None)
@@ -262,5 +308,33 @@ impl EnclaveArtifactBuilder {
         }
 
         Ok(serde_json::from_slice(&json_buf)?)
+    }
+
+    /// Pull an image from a remote registry, if it is not already present, while streaming
+    /// output to the terminal.
+    async fn pull_image(&self, image_name: &str) -> Result<ImageRef> {
+        debug!("fetching image: {}", image_name);
+        let mut fetch_stream = self.docker.create_image(
+            Some(CreateImageOptions {
+                from_image: image_name,
+                ..Default::default()
+            }),
+            None,
+            None,
+        );
+
+        while let Some(item) = fetch_stream.next().await {
+            let create_image_info = item?;
+            if let CreateImageInfo {
+                id: Some(id),
+                status: Some(status),
+                ..
+            } = create_image_info
+            {
+                println!("{}: {}", id, status);
+            }
+        }
+
+        self.image_manager.image(image_name).await
     }
 }

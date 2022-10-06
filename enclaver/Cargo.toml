@@ -3,13 +3,20 @@ name = "enclaver"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "odyn"
+required-features = ["odyn"]
+
+[[bin]]
+name = "enclaver"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 anyhow = { version = "1.0", features = ["std"] }
 tokio = { version = "1.20", features = ["full"] }
 tokio-pipe = "0.2"
-tokio-vsock = { git = "https://github.com/eyakubovich/tokio-vsock.git", rev = "8abc3b5c18d866a2d7f6c2f1fe0d835b49c85bd5" }
+tokio-vsock = { git = "https://github.com/eyakubovich/tokio-vsock.git", rev = "8abc3b5c18d866a2d7f6c2f1fe0d835b49c85bd5", optional = true }
 tokio-rustls = { version = "0.23", features = ["dangerous_configuration"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 tokio-tar = "0.3"
@@ -32,12 +39,19 @@ http-body = "0.4"
 hyper = { version = "0.14", features = ["http1"] }
 uuid = { version = "1.0", features = ["v4"] }
 aws-nitro-enclaves-nsm-api = "0.2.1"
-rtnetlink = "0.11"
+rtnetlink = { version = "0.11", optional = true }
 circbuf = "0.2"
 async-trait = "0.1"
+bytes = "1.0"
 
 [dev-dependencies]
 assert2 = "0.3"
 json = "0.12"
 tls-listener = { version = "0.5", features = ["rustls", "hyper-h1"] }
 reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"] }
+
+[features]
+run_enclave = ["proxy"]
+odyn = ["vsock"]
+proxy = ["vsock"]
+vsock = ["dep:tokio-vsock", "dep:rtnetlink"]

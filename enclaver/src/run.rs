@@ -1,14 +1,23 @@
-use crate::nitro_cli::{NitroCLI, RunEnclaveArgs};
-use anyhow::{anyhow, Result};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration};
+
+use anyhow::{anyhow, Result};
+use bytes::Bytes;
+use futures_util::stream::{Stream, TryStreamExt};
+use tokio_util::codec::{BytesCodec, FramedRead};
+use tokio_vsock::VsockStream;
+use crate::constants::APP_LOG_PORT;
+
+use crate::nitro_cli::{EnclaveInfo, NitroCLI, RunEnclaveArgs};
+
+const LOG_VSOCK_RETRY_INTERVAL: Duration = Duration::from_millis(250);
 
 pub struct Enclave {
     cli: NitroCLI,
     eif_path: PathBuf,
     cpu_count: i32,
     memory_mb: i32,
-    enclave_id: Option<String>,
+    enclave_info: Option<EnclaveInfo>,
 }
 
 #[derive(Debug)]
@@ -28,12 +37,12 @@ impl Enclave {
             eif_path: eif_path.as_ref().to_path_buf(),
             cpu_count,
             memory_mb,
-            enclave_id: None,
+            enclave_info: None,
         }
     }
 
     pub async fn start(&mut self) -> Result<EnclaveState> {
-        if self.enclave_id.is_some() {
+        if self.enclave_info.is_some() {
             return Err(anyhow!("Enclave already started"));
         }
 
@@ -47,11 +56,11 @@ impl Enclave {
             })
             .await?;
 
-        println!("Enclave: {:#?}", enclave_info);
+        let enclave_id = enclave_info.id.clone();
 
-        self.enclave_id = Some(enclave_info.id.clone());
+        self.enclave_info = Some(enclave_info);
 
-        Ok(EnclaveState::Running(enclave_info.id))
+        Ok(EnclaveState::Running(enclave_id))
     }
 
     pub async fn run_with_debug(&self) -> Result<()> {
@@ -66,8 +75,8 @@ impl Enclave {
     }
 
     pub async fn state(&self) -> Result<EnclaveState> {
-        match self.enclave_id {
-            Some(ref id) => {
+        match &self.enclave_info {
+            Some(EnclaveInfo { id, .. }) => {
                 let exists = self
                     .cli
                     .describe_enclaves()
@@ -85,11 +94,8 @@ impl Enclave {
     }
 
     pub async fn stop(&self) -> Result<()> {
-        match self.enclave_id {
-            Some(ref id) => {
-                self.cli.terminate_enclave(id).await?;
-                Ok(())
-            }
+        match &self.enclave_info {
+            Some(info) => self.cli.terminate_enclave(&info.id).await,
             None => Err(anyhow!("Enclave not started")),
         }
     }
@@ -108,5 +114,30 @@ impl Enclave {
                 }
             }
         }
+    }
+
+    pub async fn wait_logs(&self) -> Result<impl Stream<Item = std::io::Result<Bytes>>> {
+        let cid = self
+            .enclave_info
+            .as_ref()
+            .ok_or_else(|| anyhow!("Enclave not started"))?
+            .cid;
+
+        // Loop until we manage to connect to the vsock.
+        let conn = loop {
+            match VsockStream::connect(cid, APP_LOG_PORT).await {
+                Ok(conn) => break conn,
+
+                // TODO: improve the polling frequency / backoff / timeout
+                Err(_) => {
+                    tokio::time::sleep(LOG_VSOCK_RETRY_INTERVAL).await;
+                }
+            }
+        };
+
+        let framed = FramedRead::new(conn, BytesCodec::new())
+            .map_ok(|bm| bm.freeze());
+
+        Ok(framed)
     }
 }
