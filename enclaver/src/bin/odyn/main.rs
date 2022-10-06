@@ -4,6 +4,7 @@ pub mod nsm;
 pub mod console;
 pub mod launcher;
 pub mod ingress;
+pub mod egress;
 
 use log::{info, error};
 use std::ffi::OsString;
@@ -13,6 +14,7 @@ use anyhow::{Result};
 use console::{AppLog, AppStatus};
 use config::Configuration;
 use ingress::IngressService;
+use egress::EgressService;
 
 // start "internal" ports above the 16-bit boundary (reserved for proxying TCP)
 const STATUS_PORT: u32 = 17000;
@@ -50,6 +52,9 @@ async fn run(args: &CliArgs) -> Result<()> {
         info!("Enclave initialized");
     }
 
+    info!("Startng egress");
+    let egress = EgressService::start(&config).await?;
+    info!("Startng ingress");
     let ingress = IngressService::start(&config)?;
 
     let creds = launcher::Credentials{
@@ -63,6 +68,8 @@ async fn run(args: &CliArgs) -> Result<()> {
 
     info!("Stopping ingress");
     ingress.stop().await;
+    info!("Stopping egress");
+    egress.stop().await;
 
     app_status.exited(exit_status);
 

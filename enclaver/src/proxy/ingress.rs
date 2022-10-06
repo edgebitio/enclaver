@@ -96,7 +96,6 @@ mod tests {
     use std::collections::hash_map::DefaultHasher;
     use std::sync::Arc;
     use std::hash::Hasher;
-    use std::path::PathBuf;
     use rand::RngCore;
     use tokio::net::{TcpListener, TcpStream};
     use tokio::io::{AsyncWrite, AsyncRead, AsyncWriteExt, AsyncReadExt};
@@ -174,21 +173,11 @@ mod tests {
         })
     }
 
-    fn data_file(name: &str) -> Result<PathBuf> {
-        let mut path = PathBuf::from(file!()).canonicalize()?;
-        path.pop(); // pop the filename of the .rs file
-        path.push(name);
-        Ok(path)
-    }
-
     #[tokio::test]
     async fn test_enclave_proxy() {
         const PORT: u16 = 7777;
 
-        let server_config = crate::tls::load_server_config(
-                data_file("test.key").unwrap(),
-                data_file("test.crt").unwrap())
-            .unwrap();
+        let server_config = crate::tls::test_server_config().unwrap();
         let proxy_task = start_enclave_proxy(PORT, server_config);
 
         // start a simple TCP echo server
@@ -214,7 +203,7 @@ mod tests {
         _ = proxy_task.await;
     }
 
-    type TlsServerStream = tokio_rustls::server::TlsStream<TcpStream>;
+    //type TlsServerStream = tokio_rustls::server::TlsStream<TcpStream>;
     type TlsClientStream = tokio_rustls::client::TlsStream<TcpStream>;
 
     async fn tls_connect(host: Ipv4Addr, port: u16, name: ServerName, cfg: Arc<ClientConfig>) -> Result<TlsClientStream> {
@@ -229,10 +218,7 @@ mod tests {
     async fn test_full_proxy() {
         const PORT: u16 = 7787;
 
-        let server_config = crate::tls::load_server_config(
-                data_file("test.key").unwrap(),
-                data_file("test.crt").unwrap())
-            .unwrap();
+        let server_config = crate::tls::test_server_config().unwrap();
         let enclave_proxy_task = start_enclave_proxy(PORT+1, server_config);
         let host_proxy_task = start_host_proxy(PORT, (PORT+1) as u32).await;
 

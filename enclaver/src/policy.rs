@@ -10,6 +10,7 @@ pub struct Policy {
     pub name: String,
     pub image: String,
     pub ingress: Option<Vec<Ingress>>,
+    pub egress: Option<Egress>,
 }
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -22,6 +23,13 @@ pub struct Ingress {
 pub struct ServerTls {
     pub key_file: String,
     pub cert_file: String,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct Egress {
+    pub enabled: Option<bool>,
+    pub proxy_port: Option<u16>,
+    pub allow: Option<Vec<String>>,
 }
 
 pub async fn load_policy(path: &str) -> Result<Policy> {
