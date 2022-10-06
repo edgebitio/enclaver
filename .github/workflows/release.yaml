@@ -19,7 +19,7 @@ jobs:
         uses: ./.github/actions/cargo-zigbuild
         with:
           target: ${{ matrix.build-target }}
-          args: '--manifest-path enclaver/Cargo.toml --release'
+          args: '--manifest-path enclaver/Cargo.toml --release --all-features'
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
@@ -29,6 +29,7 @@ jobs:
             enclaver/target/${{ matrix.build-target }}/release/odyn
 
   publish-images:
+    if: github.repository == 'edgebitio/enclaver' && github.ref == 'refs/head/main'
     needs: build-release-binaries
     runs-on: ubuntu-latest
 

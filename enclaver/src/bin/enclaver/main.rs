@@ -1,8 +1,15 @@
-use anyhow::Result;
+use std::future::Future;
+use anyhow::{anyhow, Result};
 use clap::{Parser, Subcommand};
-use enclaver::build::EnclaveArtifactBuilder;
-use enclaver::run::Enclave;
+use futures_util::sink::SinkExt;
+use futures_util::TryFutureExt;
+use tokio::io::stderr;
 use tokio::signal::unix::{signal, SignalKind};
+use tokio_util::codec::{BytesCodec, FramedWrite};
+
+use enclaver::build::EnclaveArtifactBuilder;
+#[cfg(feature = "run_enclave")]
+use enclaver::run::Enclave;
 
 #[derive(Debug, Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -69,30 +76,47 @@ async fn run(args: Cli) -> Result<()> {
         }
 
         // run-eif without --debug-mode
+        #[cfg(feature = "run_enclave")]
         Commands::RunEIF {
             eif_file,
             cpu_count,
             memory_mb,
             debug_mode: false,
         } => {
+            let mut stderr = FramedWrite::new(stderr(), BytesCodec::new());
             let mut enclave = Enclave::new(&eif_file, cpu_count, memory_mb);
+            let shutdown_signal = register_shutdown_signal_handler().await?;
 
             enclave.start().await?;
 
+            // Asynchronously wait for the enclave to come up, then then stream its logs to stderr
+            // until the log stream ends. Don't poll this Future now, instead we do so down below
+            // in the select, in order to handle any signals as soon as possible.
+            // TODO(russell_h): Use the enclave status socket in parallel to more conclusively
+            // determine when the enclave has exited.
+            let stream_logs = enclave.wait_logs()
+                .and_then(|mut log_stream| async move {
+                    match stderr.send_all(&mut log_stream).await {
+                        Ok(_) => Ok(()),
+                        Err(e) => Err(anyhow!(e)),
+                    }
+                });
+
             tokio::select! {
-                _ = await_shutdown_signal() => {
+                _ = shutdown_signal => {
                     println!("Terminating Enclave...");
                     enclave.stop().await?;
                 },
-                _ = enclave.wait() => {
+                _ = stream_logs => {
                     println!("Enclave exited");
                 },
-            };
+            }
 
             Ok(())
         }
 
         // run-eif with --debug-mode
+        #[cfg(feature = "run_enclave")]
         Commands::RunEIF {
             eif_file,
             cpu_count,
@@ -100,36 +124,46 @@ async fn run(args: Cli) -> Result<()> {
             debug_mode: true,
         } => {
             let enclave = Enclave::new(&eif_file, cpu_count, memory_mb);
+            let shutdown_signal = register_shutdown_signal_handler().await?;
 
             tokio::select! {
-                _ = await_shutdown_signal() => {
+                _ = shutdown_signal => {
                     println!("Terminating Enclave...");
                     enclave.stop().await?;
                 },
                 _ =  enclave.run_with_debug() => {
                     println!("Enclave exited");
                 },
-            };
+            }
 
             Ok(())
         }
+
+        // run-eif on unsupported platform
+        #[cfg(not(feature = "run_enclave"))]
+        Commands::RunEIF { .. } => Err(anyhow!(
+            "Running enclaves is not supported on this platform"
+        )),
     }
 }
 
-async fn await_shutdown_signal() -> Result<()> {
+async fn register_shutdown_signal_handler() -> Result<impl Future> {
     let mut sigint = signal(SignalKind::interrupt())?;
     let mut sigterm = signal(SignalKind::terminate())?;
 
-    tokio::select! {
-        _ = sigint.recv() => {},
-        _ = sigterm.recv() => {},
-    }
+    let f = tokio::task::spawn(async move {
+        tokio::select! {
+            _ = sigint.recv() => (),
+            _ = sigterm.recv() => (),
+        }
+    });
 
-    Ok(())
+    Ok(f)
 }
 
 #[tokio::main]
 async fn main() {
+    pretty_env_logger::init();
     let args = Cli::parse();
 
     if let Err(err) = run(args).await {

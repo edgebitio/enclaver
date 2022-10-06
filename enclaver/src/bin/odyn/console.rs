@@ -381,6 +381,7 @@ mod tests {
     use tokio::io::{BufReader, Lines, AsyncBufRead, AsyncBufReadExt};
     use tokio_vsock::VsockStream;
     use anyhow::{Result, anyhow};
+    use enclaver::constants::STATUS_PORT;
 
     use super::{ByteLog, LogCursor};
     use crate::launcher::ExitStatus;
@@ -502,7 +503,7 @@ mod tests {
     }
 
     async fn app_status_lines() -> Result<Lines<impl AsyncBufRead + Unpin>> {
-        let sock = VsockStream::connect(enclaver::vsock::VMADDR_CID_HOST, 17000).await?;
+        let sock = VsockStream::connect(enclaver::vsock::VMADDR_CID_HOST, STATUS_PORT).await?;
         // bug in VsockStream::connect: it can return Ok even if connect failed
         _ = sock.peer_addr()?;
         Ok(BufReader::new(sock).lines())
@@ -511,7 +512,7 @@ mod tests {
     #[tokio::test]
     async fn test_app_status() {
         let app_status = super::AppStatus::new();
-        let status_task = app_status.start_serving(17000);
+        let status_task = app_status.start_serving(STATUS_PORT);
 
         let mut client1 = app_status_lines().await.unwrap();
         let mut client2 = app_status_lines().await.unwrap();

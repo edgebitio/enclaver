@@ -261,6 +261,7 @@ dependencies = [
  "async-trait",
  "aws-nitro-enclaves-nsm-api",
  "bollard",
+ "bytes 1.2.1",
  "circbuf",
  "clap",
  "futures",

@@ -13,12 +13,9 @@ use anyhow::{Result};
 
 use console::{AppLog, AppStatus};
 use config::Configuration;
+use enclaver::constants::{APP_LOG_PORT, STATUS_PORT};
 use ingress::IngressService;
 use egress::EgressService;
-
-// start "internal" ports above the 16-bit boundary (reserved for proxying TCP)
-const STATUS_PORT: u32 = 17000;
-const APP_LOG_PORT: u32 = 17001;
 
 #[derive(Parser)]
 struct CliArgs {
