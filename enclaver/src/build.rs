@@ -124,6 +124,7 @@ impl EnclaveArtifactBuilder {
             String::from(ENCLAVE_ODYN_PATH),
             String::from("--config-dir"),
             String::from("/etc/enclaver"),
+            String::from("--"),
         ];
 
         odyn_command.append(&mut entrypoint);
