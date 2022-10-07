@@ -1,6 +1,6 @@
 
 // Path and filename constants
-pub const CONFIG_FILE_NAME: &str = "policy.yaml";
+pub const CONFIG_FILE_NAME: &str = "enclaver.yaml";
 pub const ENCLAVE_CONFIG_DIR: &str = "/etc/enclaver";
 pub const ENCLAVE_ODYN_PATH: &str = "/sbin/odyn";
 

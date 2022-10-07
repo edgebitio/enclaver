@@ -1,0 +1,5 @@
+version: v1
+name: "example-enclave"
+images:
+  source: "no-fly-list:latest"
+  target: "no-fly-list:enclave-latest"
