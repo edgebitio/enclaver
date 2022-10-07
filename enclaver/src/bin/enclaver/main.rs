@@ -53,9 +53,9 @@ async fn run(args: Cli) -> Result<()> {
         } => {
             let builder = EnclaveArtifactBuilder::new()?;
 
-            let (eif_info, release_img) = builder.build_release(&policy_file).await?;
+            let (eif_info, release_img, tag) = builder.build_release(&policy_file).await?;
 
-            println!("Built Release Image: {}", release_img);
+            println!("Built Release Image: {release_img} ({tag})");
             println!("EIF Info: {:#?}", eif_info);
 
             Ok(())

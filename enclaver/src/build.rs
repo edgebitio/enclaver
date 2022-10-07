@@ -49,12 +49,14 @@ impl EnclaveArtifactBuilder {
     }
 
     /// Build a release image based on the referenced policy.
-    pub async fn build_release(&self, policy_path: &str) -> Result<(EIFInfo, ImageRef)> {
-        let (_policy, build_dir, eif_info) = self.common_build(policy_path).await?;
+    pub async fn build_release(&self, policy_path: &str) -> Result<(EIFInfo, ImageRef, String)> {
+        let (policy, build_dir, eif_info) = self.common_build(policy_path).await?;
         let eif_path = build_dir.path().join(EIF_FILE_NAME);
         let release_img = self.package_eif(eif_path, policy_path).await?;
 
-        Ok((eif_info, release_img))
+        self.image_manager.tag_image(&release_img, &policy.name).await?;
+
+        Ok((eif_info, release_img, policy.name.to_string()))
     }
 
     /// Build an EIF, as would be included in a release image, based on the referenced policy.
