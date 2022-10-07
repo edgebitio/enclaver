@@ -7,7 +7,7 @@ mod images;
 pub mod constants;
 
 mod nitro_cli;
-
+pub mod manifest;
 pub mod policy;
 
 #[cfg(feature = "run_enclave")]
