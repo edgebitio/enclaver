@@ -49,12 +49,16 @@ impl EnclaveArtifactBuilder {
     }
 
     /// Build a release image based on the referenced manifest.
-    pub async fn build_release(&self, manifest_path: &str) -> Result<(EIFInfo, ImageRef)> {
-        let (_manifest, build_dir, eif_info) = self.common_build(manifest_path).await?;
+    pub async fn build_release(&self, manifest_path: &str) -> Result<(EIFInfo, ImageRef, String)> {
+        let (manifest, build_dir, eif_info) = self.common_build(manifest_path).await?;
         let eif_path = build_dir.path().join(EIF_FILE_NAME);
         let release_img = self.package_eif(eif_path, manifest_path).await?;
 
-        Ok((eif_info, release_img))
+        let release_tag = &manifest.images.target;
+
+        self.image_manager.tag_image(&release_img, release_tag).await?;
+
+        Ok((eif_info, release_img, release_tag.to_string()))
     }
 
     /// Build an EIF, as would be included in a release image, based on the referenced manifest.
@@ -74,7 +78,7 @@ impl EnclaveArtifactBuilder {
     /// an enclave, then convert the resulting image to an EIF.
     pub async fn common_build(&self, manifest_path: &str) -> Result<(Manifest, TempDir, EIFInfo)> {
         let manifest = load_manifest(manifest_path).await?;
-        let source_img = self.image_manager.image(&manifest.image).await?;
+        let source_img = self.image_manager.image(&manifest.images.source).await?;
         let amended_img = self.amend_source_image(&source_img, manifest_path).await?;
 
         info!("built intermediate image: {}", amended_img);
