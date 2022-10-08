@@ -32,6 +32,9 @@ Resources:
             #!/bin/bash
             amazon-linux-extras install aws-nitro-enclaves-cli
             yum install aws-nitro-enclaves-cli-devel -y
+            usermod -aG ne ec2-user
+            usermod -aG docker ec2-user
+            sed -i 's/memory_mib: 512/memory_mib: 4096/g' /etc/nitro_enclaves/allocator.yaml
             systemctl start nitro-enclaves-allocator.service && sudo systemctl enable nitro-enclaves-allocator.service
             systemctl start docker && sudo systemctl enable docker
   DemoSecurityGroup:
