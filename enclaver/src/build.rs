@@ -3,13 +3,12 @@ use crate::nitro_cli::EIFInfo;
 use crate::manifest::{load_manifest, Manifest};
 use anyhow::{anyhow, Result};
 use bollard::container::{Config, LogOutput, LogsOptions, WaitContainerOptions};
-use bollard::image::CreateImageOptions;
-use bollard::models::{ContainerConfig, CreateImageInfo, HostConfig, Mount, MountTypeEnum};
+use bollard::models::{ContainerConfig, HostConfig, Mount, MountTypeEnum};
 use bollard::Docker;
 use futures_util::stream::{StreamExt, TryStreamExt};
 use std::path::PathBuf;
 use std::sync::Arc;
-use log::{debug, info};
+use log::{debug, error, info};
 use tempfile::TempDir;
 use tokio::fs::{canonicalize, rename};
 use tokio::io::{stderr, AsyncWriteExt};
@@ -81,7 +80,7 @@ impl EnclaveArtifactBuilder {
 
         self.analyze_manifest(&manifest);
 
-        let source_img = self.image_manager.image(&manifest.images.source).await?;
+        let source_img = self.image_manager.find_or_pull(&manifest.images.source).await?;
         let amended_img = self.amend_source_image(&source_img, manifest_path).await?;
 
         info!("built intermediate image: {}", amended_img);
@@ -173,7 +172,7 @@ impl EnclaveArtifactBuilder {
     /// doesn't match our current requirements, and the exact intended format is still
     /// TBD.
     async fn package_eif(&self, eif_path: PathBuf, manifest_path: &str) -> Result<ImageRef> {
-        let base_img = self.pull_image(format!("{RELEASE_BASE_IMAGE}:latest").as_str()).await?;
+        let base_img = self.image_manager.pull_image(format!("{RELEASE_BASE_IMAGE}:latest").as_str()).await?;
 
         debug!("packaging EIF file: {}", eif_path.to_string_lossy());
 
@@ -225,7 +224,7 @@ impl EnclaveArtifactBuilder {
 
         debug!("tagged intermediate image: {}", img_tag);
 
-        let nitro_cli = self.pull_image(NITRO_CLI_IMAGE).await?;
+        let nitro_cli = self.image_manager.pull_image(NITRO_CLI_IMAGE).await?;
 
         let build_container_id = self
             .docker
@@ -316,34 +315,6 @@ impl EnclaveArtifactBuilder {
         }
 
         Ok(serde_json::from_slice(&json_buf)?)
-    }
-
-    /// Pull an image from a remote registry, if it is not already present, while streaming
-    /// output to the terminal.
-    async fn pull_image(&self, image_name: &str) -> Result<ImageRef> {
-        debug!("fetching image: {}", image_name);
-        let mut fetch_stream = self.docker.create_image(
-            Some(CreateImageOptions {
-                from_image: image_name,
-                ..Default::default()
-            }),
-            None,
-            None,
-        );
-
-        while let Some(item) = fetch_stream.next().await {
-            let create_image_info = item?;
-            if let CreateImageInfo {
-                id: Some(id),
-                status: Some(status),
-                ..
-            } = create_image_info
-            {
-                println!("{}: {}", id, status);
-            }
-        }
-
-        self.image_manager.image(image_name).await
     }
 
     fn analyze_manifest(&self, manifest: &Manifest) {

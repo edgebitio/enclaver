@@ -1,14 +1,13 @@
-use anyhow::anyhow;
-use anyhow::Result;
-use bollard::image::{BuildImageOptions, TagImageOptions};
-use bollard::models::{BuildInfo, ImageId};
+use anyhow::{anyhow, Result, Context};
+use bollard::image::{BuildImageOptions, CreateImageOptions, TagImageOptions};
+use bollard::models::{BuildInfo, CreateImageInfo, ImageId};
 use bollard::Docker;
 use futures_util::stream::{StreamExt, TryStreamExt};
 use std::fmt;
 use std::fmt::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
-use log::trace;
+use log::{debug, trace};
 use tokio::fs::{create_dir, File};
 use tokio::io::{duplex, AsyncWrite, AsyncWriteExt, BufWriter};
 use tokio_util::codec;
@@ -54,12 +53,67 @@ impl ImageManager {
 
     /// Resolves a name-like string to an ImageRef referencing a specific immutable image.
     pub async fn image(&self, name: &str) -> Result<ImageRef> {
-        let img = self.docker.inspect_image(name).await?;
+        debug!("attempting to resolve image: {name}");
+        let img = self.docker.inspect_image(name)
+            .await
+            .with_context(|| format!("inspecting image {}", name))?;
 
         match img.id {
             Some(id) => Ok(ImageRef { id }),
-            None => Err(anyhow!("missing image ID in image_inspect result",)),
+            None => Err(anyhow!("missing image ID in image_inspect result")),
         }
+    }
+
+    /// Look for a local image with the specified name. If it exists, return it. Otherwise, attempt
+    /// to pull the specified name from a remote registry.
+    pub async fn find_or_pull(&self, image_name: &str) -> Result<ImageRef> {
+        debug!("looking for image {image_name}");
+        let img = match self.image(image_name).await {
+            Ok(img) => Ok(Some(img)),
+            Err(e) => match e.downcast_ref::<bollard::errors::Error>() {
+                Some(bollard::errors::Error::DockerResponseServerError{ status_code: 404, .. }) => Ok(None),
+                _ => Err(e),
+            }
+        }?;
+
+        match img {
+            Some(img) => {
+                debug!("found local image {image_name}");
+                Ok(img)
+            },
+            None => {
+                debug!("local image not found, attempting to pull {image_name}");
+                self.pull_image(image_name).await
+            }
+        }
+    }
+
+    /// Pull an image from a remote registry, if it is not already present, while streaming
+    /// output to the terminal.
+    pub async fn pull_image(&self, image_name: &str) -> Result<ImageRef> {
+        debug!("fetching image: {}", image_name);
+        let mut fetch_stream = self.docker.create_image(
+            Some(CreateImageOptions {
+                from_image: image_name,
+                ..Default::default()
+            }),
+            None,
+            None,
+        );
+
+        while let Some(item) = fetch_stream.next().await {
+            let create_image_info = item?;
+            if let CreateImageInfo {
+                id: Some(id),
+                status: Some(status),
+                ..
+            } = create_image_info
+            {
+                println!("{}: {}", id, status);
+            }
+        }
+
+        self.image(image_name).await
     }
 
     /// Build and append a new layer to an image.
