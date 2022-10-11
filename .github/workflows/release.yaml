@@ -50,6 +50,7 @@ jobs:
         run: |
           mv x86_64-unknown-linux-musl amd64
           mv aarch64-unknown-linux-musl arm64
+          chmod 755 amd64/odyn amd64/enclaver arm64/odyn arm64/enclaver
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
