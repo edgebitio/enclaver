@@ -1,23 +1,28 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration};
-
 use anyhow::{anyhow, Result};
-use bytes::Bytes;
-use futures_util::stream::{Stream, TryStreamExt};
-use tokio_util::codec::{BytesCodec, FramedRead};
+use futures_util::StreamExt;
+use log::{info};
+use tokio_util::codec::{FramedRead, LinesCodec};
 use tokio_vsock::VsockStream;
-use crate::constants::APP_LOG_PORT;
+use crate::constants::{APP_LOG_PORT, HTTP_EGRESS_VSOCK_PORT};
+use crate::manifest::{load_manifest, Manifest};
 
 use crate::nitro_cli::{EnclaveInfo, NitroCLI, RunEnclaveArgs};
+use crate::proxy::egress_http::HostHttpProxy;
+use crate::proxy::ingress::HostProxy;
 
 const LOG_VSOCK_RETRY_INTERVAL: Duration = Duration::from_millis(250);
 
 pub struct Enclave {
     cli: NitroCLI,
     eif_path: PathBuf,
+    manifest: Manifest,
     cpu_count: i32,
     memory_mb: i32,
+    debug_mode: bool,
     enclave_info: Option<EnclaveInfo>,
+    proxy_handles: Vec<tokio::task::JoinHandle<()>>,
 }
 
 #[derive(Debug)]
@@ -28,17 +33,21 @@ pub enum EnclaveState {
 }
 
 impl Enclave {
-    pub fn new<P>(eif_path: P, cpu_count: i32, memory_mb: i32) -> Self
+    pub async fn new<P>(eif_path: P, manifest_path: String, cpu_count: i32, memory_mb: i32, debug_mode: bool) -> Result<Self>
     where
         P: AsRef<Path>,
     {
-        Self {
+
+        Ok(Self {
             cli: NitroCLI::new(),
             eif_path: eif_path.as_ref().to_path_buf(),
+            manifest: load_manifest(&manifest_path).await?,
             cpu_count,
             memory_mb,
+            debug_mode,
             enclave_info: None,
-        }
+            proxy_handles: Vec::new(),
+        })
     }
 
     pub async fn start(&mut self) -> Result<EnclaveState> {
@@ -46,6 +55,11 @@ impl Enclave {
             return Err(anyhow!("Enclave already started"));
         }
 
+        // Start the egress proxy before starting the enclave, to avoid (unlikely) race conditions
+        // where something inside the enclave attempts egress before the proxy is ready.
+        self.start_egress_proxy().await?;
+
+        info!("starting enclave");
         let enclave_info = self
             .cli
             .run_enclave(RunEnclaveArgs {
@@ -53,77 +67,63 @@ impl Enclave {
                 memory_mb: self.memory_mb,
                 eif_path: self.eif_path.clone(),
                 cid: None,
+                debug_mode: self.debug_mode,
             })
             .await?;
 
-        let enclave_id = enclave_info.id.clone();
+        self.enclave_info = Some(enclave_info.clone());
 
-        self.enclave_info = Some(enclave_info);
+        print!("started enclave {}", enclave_info.id);
 
-        Ok(EnclaveState::Running(enclave_id))
+        self.start_odyn_log_stream(enclave_info.cid).await?;
+
+        self.start_ingress_proxies(enclave_info.cid).await?;
+
+        Ok(EnclaveState::Running(enclave_info.id))
     }
 
-    pub async fn run_with_debug(&self) -> Result<()> {
-        self.cli
-            .run_enclave_with_debug(RunEnclaveArgs {
-                cpu_count: self.cpu_count,
-                memory_mb: self.memory_mb,
-                eif_path: self.eif_path.clone(),
-                cid: None,
-            })
-            .await
-    }
+    async fn start_ingress_proxies(&mut self, cid: u32) -> Result<()> {
+        let ingress = match &self.manifest.ingress {
+            Some(ref ingress) => ingress,
+            None => {
+                info!("no ingress defined, no ingress proxies will be started");
+                return Ok(())
+            },
+        };
 
-    pub async fn state(&self) -> Result<EnclaveState> {
-        match &self.enclave_info {
-            Some(EnclaveInfo { id, .. }) => {
-                let exists = self
-                    .cli
-                    .describe_enclaves()
-                    .await?
-                    .into_iter()
-                    .any(|e| e.id == *id);
-
-                match exists {
-                    true => Ok(EnclaveState::Running(id.clone())),
-                    false => Ok(EnclaveState::Stopped(id.clone())),
-                }
-            }
-            None => Ok(EnclaveState::None),
+        for item in ingress {
+            let listen_port = item.listen_port;
+            let proxy = HostProxy::bind(listen_port).await?;
+            self.proxy_handles.push(tokio::task::spawn(async move {
+                proxy.serve(cid, listen_port.into()).await;
+            }))
         }
+
+        Ok(())
     }
 
-    pub async fn stop(&self) -> Result<()> {
-        match &self.enclave_info {
-            Some(info) => self.cli.terminate_enclave(&info.id).await,
-            None => Err(anyhow!("Enclave not started")),
-        }
+    async fn start_egress_proxy(&mut self) -> Result<()> {
+        // Note: we _could_ start the egress proxy no matter what, but there is no sense in it,
+        // and skipping it seems (barely) safer - so we may as well.
+        let _ = match &self.manifest.egress {
+            Some(egress) => egress,
+            None => {
+                info!("no egress defined, no egress proxy will be started");
+                return Ok(())
+            },
+        };
+
+        info!("starting egress proxy on vsock port {HTTP_EGRESS_VSOCK_PORT}");
+        let proxy = HostHttpProxy::bind(HTTP_EGRESS_VSOCK_PORT)?;
+        self.proxy_handles.push(tokio::task::spawn(async move {
+            proxy.serve().await;
+        }));
+
+        Ok(())
     }
 
-    pub async fn wait(&self) -> Result<()> {
-        loop {
-            match self.state().await? {
-                EnclaveState::Running(_) => {
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                }
-                EnclaveState::Stopped(_) => {
-                    return Ok(());
-                }
-                EnclaveState::None => {
-                    return Err(anyhow!("Enclave not started"));
-                }
-            }
-        }
-    }
-
-    pub async fn wait_logs(&self) -> Result<impl Stream<Item = std::io::Result<Bytes>>> {
-        let cid = self
-            .enclave_info
-            .as_ref()
-            .ok_or_else(|| anyhow!("Enclave not started"))?
-            .cid;
-
-        // Loop until we manage to connect to the vsock.
+    async fn start_odyn_log_stream(&mut self, cid: u32) -> Result<()> {
+        info!("waiting for enclave to boot");
         let conn = loop {
             match VsockStream::connect(cid, APP_LOG_PORT).await {
                 Ok(conn) => break conn,
@@ -135,9 +135,26 @@ impl Enclave {
             }
         };
 
-        let framed = FramedRead::new(conn, BytesCodec::new())
-            .map_ok(|bm| bm.freeze());
+        info!("connected to enclave, starting log stream");
 
-        Ok(framed)
+        let mut framed = FramedRead::new(conn, LinesCodec::new_with_max_length(1024 * 4));
+
+        self.proxy_handles.push(tokio::task::spawn(async move {
+            while let Some(line_res) = framed.next().await {
+                match line_res {
+                    Ok(line) => info!(target: "enclave", "{line}"),
+                    Err(e) => info!("error reading log stream: {e}"),
+                }
+            }
+        }));
+
+        Ok(())
+    }
+
+    pub async fn stop(&self) -> Result<()> {
+        match &self.enclave_info {
+            Some(info) => self.cli.terminate_enclave(&info.id).await,
+            None => Err(anyhow!("Enclave not started")),
+        }
     }
 }

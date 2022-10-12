@@ -48,24 +48,6 @@ impl NitroCLI {
         self.run_and_deserialize_output(args).await
     }
 
-    pub async fn run_enclave_with_debug(&self, args: RunEnclaveArgs) -> Result<()> {
-        let mut cmd_args = args.to_args()?;
-        cmd_args.push("--debug-mode".into());
-        cmd_args.push("--attach-console".into());
-
-        let exit_status = Command::new(&self.program)
-            .args(cmd_args)
-            .spawn()
-            .map_err(|err| anyhow!("failed to execute nitro-cli: {}", err))?
-            .wait()
-            .await?;
-
-        match exit_status.success() {
-            true => Ok(()),
-            false => Err(anyhow!("nitro-cli failed")),
-        }
-    }
-
     pub async fn describe_enclaves(&self) -> Result<Vec<EnclaveInfo>> {
         self.run_and_deserialize_output(DescribeEnclavesArgs {})
             .await
@@ -103,7 +85,7 @@ pub struct EIFMeasurements {
     pcr2: String,
 }
 
-#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
 pub struct EnclaveInfo {
     #[serde(rename = "EnclaveName")]
     pub name: String,
@@ -136,6 +118,7 @@ pub struct RunEnclaveArgs {
     pub memory_mb: i32,
     pub eif_path: PathBuf,
     pub cid: Option<u32>,
+    pub debug_mode: bool,
 }
 
 impl NitroCLIArgs for RunEnclaveArgs {
@@ -168,6 +151,10 @@ impl NitroCLIArgs for RunEnclaveArgs {
         if let Some(cid) = self.cid {
             args.push("--enclave-cid".into());
             args.push(format!("{}", cid).into());
+        }
+
+        if self.debug_mode {
+            args.push("--debug-mode".into());
         }
 
         Ok(args)

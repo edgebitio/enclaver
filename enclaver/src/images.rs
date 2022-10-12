@@ -86,6 +86,7 @@ impl ImageManager {
                 .build_image(
                     BuildImageOptions {
                         dockerfile: "Dockerfile",
+                        rm: true,
                         ..Default::default()
                     },
                     None,

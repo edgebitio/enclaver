@@ -78,6 +78,9 @@ impl EnclaveArtifactBuilder {
     /// an enclave, then convert the resulting image to an EIF.
     pub async fn common_build(&self, manifest_path: &str) -> Result<(Manifest, TempDir, EIFInfo)> {
         let manifest = load_manifest(manifest_path).await?;
+
+        self.analyze_manifest(&manifest);
+
         let source_img = self.image_manager.image(&manifest.images.source).await?;
         let amended_img = self.amend_source_image(&source_img, manifest_path).await?;
 
@@ -105,7 +108,7 @@ impl EnclaveArtifactBuilder {
         // Docker seems to convert it to "exec form" as an actual shell invocation, so we can simply
         // ignore that possibility.
         //
-        // Since the enclave image cannot take any arguments (which whould normally override a CMD),
+        // Since the enclave image cannot take any arguments (which would normally override a CMD),
         // we can simply take everything from CMD and append it to the ENTRYPOINT, then append that
         // whole thing to the odyn invocation.
         // TODO(russell_h): Figure out what happens when a source image specifies env variables.
@@ -151,7 +154,7 @@ impl EnclaveArtifactBuilder {
                     .append_file(FileBuilder {
                         path: PathBuf::from(ENCLAVE_ODYN_PATH),
                         source: FileSource::Image {
-                            name: ODYN_IMAGE.into(),
+                            name: format!("{ODYN_IMAGE}:latest").into(),
                             path: ODYN_IMAGE_BINARY_PATH.into(),
                         },
                         chown: ENCLAVE_OVERLAY_CHOWN.to_string(),
@@ -170,7 +173,7 @@ impl EnclaveArtifactBuilder {
     /// doesn't match our current requirements, and the exact intended format is still
     /// TBD.
     async fn package_eif(&self, eif_path: PathBuf, manifest_path: &str) -> Result<ImageRef> {
-        let base_img = self.pull_image(RELEASE_BASE_IMAGE).await?;
+        let base_img = self.pull_image(format!("{RELEASE_BASE_IMAGE}:latest").as_str()).await?;
 
         debug!("packaging EIF file: {}", eif_path.to_string_lossy());
 
@@ -341,5 +344,15 @@ impl EnclaveArtifactBuilder {
         }
 
         self.image_manager.image(image_name).await
+    }
+
+    fn analyze_manifest(&self, manifest: &Manifest) {
+        if manifest.ingress.is_none() {
+            info!("no ingress specified in manifest; there will be no way to connect to this enclave");
+        }
+
+        if manifest.egress.is_none() {
+            info!("no egress specified in manifest; this enclave will have no network access");
+        }
     }
 }
