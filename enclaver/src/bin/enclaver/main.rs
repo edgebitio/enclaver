@@ -1,5 +1,5 @@
 use std::future::Future;
-use anyhow::{Result};
+use anyhow::{Result, anyhow};
 use clap::{Parser, Subcommand};
 use log::info;
 use tokio::signal::unix::{signal, SignalKind};
