@@ -2,13 +2,11 @@ use std::sync::Arc;
 
 use tokio::task::JoinHandle;
 use anyhow::Result;
+use enclaver::constants::{HTTP_EGRESS_PROXY_PORT, HTTP_EGRESS_VSOCK_PORT};
 
 use enclaver::proxy::egress_http::EnclaveHttpProxy;
 use enclaver::policy::EgressPolicy;
 use crate::config::Configuration;
-
-const HTTP_EGRESS_PROXY_PORT: u16 = 9000;
-const HTTP_EGRESS_VSOCK_PORT: u32 = 17002;
 
 pub struct EgressService {
     proxy: Option<JoinHandle<()>>,

@@ -12,11 +12,8 @@ pub const ENCLAVE_ODYN_PATH: &str = "/sbin/odyn";
 // start "internal" ports above the 16-bit boundary (reserved for proxying TCP)
 pub const STATUS_PORT: u32 = 17000;
 pub const APP_LOG_PORT: u32 = 17001;
+pub const HTTP_EGRESS_VSOCK_PORT: u32 = 17002;
 
-
-
-
-
-
-
-
+// Default TCP Port that the egress proxy listens on inside the enclave, if not
+// specified in the manifest.
+pub const HTTP_EGRESS_PROXY_PORT: u16 = 9000;
