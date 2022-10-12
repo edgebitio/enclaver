@@ -52,6 +52,7 @@ Runs the given EIF file as an enclave without starting the outside components. U
 | Flag | Type | Description |
 |:-----|:-----|:------------|
 | `--eif-file` | String | Path on disk to EIF file to run. |
+| `--manifest-file` | String | Path on disk to the manifest file used to generate the EIF. |
 | `--cpu-count` | Int | Number of CPUs dedicated to the enclave. |
 | `--memory-mb` | Int | Megabytes of memory dedicated to the enclave. |
 | `--debug-mode` | Boolean (Default=false) | Enable debug mode on the enclave, which grants access to streaming logs from within. |
