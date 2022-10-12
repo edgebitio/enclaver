@@ -73,7 +73,7 @@ impl Enclave {
 
         self.enclave_info = Some(enclave_info.clone());
 
-        print!("started enclave {}", enclave_info.id);
+        info!("started enclave {}", enclave_info.id);
 
         self.start_odyn_log_stream(enclave_info.cid).await?;
 
@@ -105,13 +105,10 @@ impl Enclave {
     async fn start_egress_proxy(&mut self) -> Result<()> {
         // Note: we _could_ start the egress proxy no matter what, but there is no sense in it,
         // and skipping it seems (barely) safer - so we may as well.
-        let _ = match &self.manifest.egress {
-            Some(egress) => egress,
-            None => {
-                info!("no egress defined, no egress proxy will be started");
-                return Ok(())
-            },
-        };
+        if self.manifest.egress.is_none() {
+            info!("no egress defined, no egress proxy will be started");
+            return Ok(());
+        }
 
         info!("starting egress proxy on vsock port {HTTP_EGRESS_VSOCK_PORT}");
         let proxy = HostHttpProxy::bind(HTTP_EGRESS_VSOCK_PORT)?;
