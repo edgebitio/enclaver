@@ -11,7 +11,13 @@ use enclaver::tls;
 pub struct Configuration {
     pub config_dir: PathBuf,
     pub manifest: Manifest,
-    pub tls_server_configs: HashMap<u16, Arc<rustls::ServerConfig>>,
+    pub listener_configs: HashMap<u16, ListenerConfig>,
+}
+
+#[derive(Clone)]
+pub enum ListenerConfig {
+    TCP,
+    TLS(Arc<rustls::ServerConfig>),
 }
 
 impl Configuration {
@@ -24,19 +30,26 @@ impl Configuration {
         let mut tls_path = config_dir.as_ref().to_path_buf();
         tls_path.extend(["tls", "server"]);
 
-        let mut tls_server_configs = HashMap::new();
+        let mut listener_configs = HashMap::new();
 
         if let Some(ref ingress) = manifest.ingress {
             for item in ingress {
-                let cfg = Configuration::load_tls_server_config(&tls_path, item)?;
-                tls_server_configs.insert(item.listen_port, cfg);
+                let cfg = match item.tls {
+                    Some(_) => {
+                        let tls_config = Configuration::load_tls_server_config(&tls_path, item)?;
+                        ListenerConfig::TLS(tls_config)
+                    },
+                    None => ListenerConfig::TCP,
+                };
+
+                listener_configs.insert(item.listen_port, cfg);
             }
         }
 
         Ok(Self{
             config_dir: config_dir.as_ref().to_path_buf(),
             manifest: manifest,
-            tls_server_configs: tls_server_configs,
+            listener_configs,
         })
     }
 

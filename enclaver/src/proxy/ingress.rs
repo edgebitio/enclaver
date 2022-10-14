@@ -7,6 +7,8 @@ use rustls::ServerConfig;
 use tokio::net::{TcpStream, TcpListener};
 use tokio_vsock::VsockStream;
 use futures::{Stream, StreamExt};
+use tokio::io::{AsyncRead, AsyncWrite};
+use crate::vsock;
 
 use crate::vsock::TlsServerStream;
 
@@ -14,33 +16,47 @@ use crate::vsock::TlsServerStream;
 // connects over the localhost to the app. The connection
 // over vsock is over the TLS. EnclaveProxy terminates the
 // TLS and connects out to the app over plain TCP.
-pub struct EnclaveProxy {
-    incoming: Box<dyn Stream<Item=TlsServerStream> + Send>,
+pub struct EnclaveProxy<S> {
+    incoming: Box<dyn Stream<Item=S> + Send>,
     port: u16,
 }
 
-impl EnclaveProxy {
-    pub fn bind(port: u16, tls_config: Arc<ServerConfig>) -> Result<Self> {
-        let incoming = crate::vsock::tls_serve(port as u32, tls_config)?;
-        Ok(Self{
+impl EnclaveProxy<VsockStream> {
+    pub fn bind(port: u16) -> Result<EnclaveProxy<VsockStream>> {
+        let incoming = vsock::serve(port as u32)?;
+        Ok(Self {
             incoming: Box::new(incoming),
-            port: port,
+            port,
         })
     }
+}
 
+impl EnclaveProxy<TlsServerStream> {
+    pub fn bind_tls(port: u16, tls_config: Arc<ServerConfig>) -> Result<EnclaveProxy<TlsServerStream>> {
+        let incoming = vsock::tls_serve(port as u32, tls_config)?;
+        Ok(Self {
+            incoming: Box::new(incoming),
+            port,
+        })
+    }
+}
+
+impl<S> EnclaveProxy<S>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static
+{
     pub async fn serve(self) {
         let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, self.port);
         let mut incoming = Box::into_pin(self.incoming);
 
         while let Some(stream) = incoming.next().await {
-            let addr = addr.clone();
             tokio::task::spawn(async move {
                 EnclaveProxy::service_conn(stream, addr).await;
             });
         }
     }
 
-    async fn service_conn(mut vsock: TlsServerStream, target: SocketAddrV4) {
+    async fn service_conn(mut vsock: S, target: SocketAddrV4) {
         debug!("Connecting to {target}");
         match TcpStream::connect(&target).await {
             Ok(mut tcp) => {

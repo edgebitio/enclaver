@@ -27,7 +27,7 @@ pub struct Sources {
 #[serde(deny_unknown_fields)]
 pub struct Ingress {
     pub listen_port: u16,
-    pub tls: ServerTls,
+    pub tls: Option<ServerTls>,
 }
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
