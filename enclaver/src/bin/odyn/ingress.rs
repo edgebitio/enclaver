@@ -2,7 +2,7 @@ use tokio::task::JoinHandle;
 use anyhow::Result;
 
 use enclaver::proxy::ingress::EnclaveProxy;
-use crate::config::Configuration;
+use crate::config::{Configuration, ListenerConfig};
 
 pub struct IngressService {
     proxies: Vec<JoinHandle<()>>,
@@ -10,15 +10,19 @@ pub struct IngressService {
 
 impl IngressService {
     pub fn start(config: &Configuration) -> Result<Self> {
-        let mut proxies = Vec::new();
-
-        for (port, cfg) in &config.tls_server_configs {
-            proxies.push(EnclaveProxy::bind(*port, (*cfg).clone())?);
-        }
-
         let mut tasks = Vec::new();
-        for proxy in proxies {
-            tasks.push(tokio::task::spawn(proxy.serve()));
+
+        for (port, cfg) in &config.listener_configs {
+            match cfg {
+                ListenerConfig::TCP => {
+                    let proxy = EnclaveProxy::bind(*port)?;
+                    tasks.push(tokio::spawn(proxy.serve()));
+                },
+                ListenerConfig::TLS(tls_cfg) => {
+                    let proxy = EnclaveProxy::bind_tls(*port, tls_cfg.clone())?;
+                    tasks.push(tokio::spawn(proxy.serve()));
+                },
+            }
         }
 
         Ok(Self{
