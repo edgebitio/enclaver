@@ -16,6 +16,8 @@ Only certain [EC2 instance types][instance-req] can run Nitro Enclaves. Since de
 
 Due to Amazon restrictions, each EC2 machine can only run a single enclave at a time.
 
+The example CloudFormation increases the allowed hops for the Instance Metadata Service v2 from 1 to 2 to account for the `docker0` bridge. Reflect this change in any customized CloudFormation that you might use.
+
 ## Run via Systemd Unit
 
 On the EC2 machine, add this systemd unit which runs the Enclaver tool in a container, then runs your specified enclave image:
@@ -61,7 +63,7 @@ The example app answers web requests on port 443 of the EC2 machine:
 
 ```sh
 $ curl localhost:443
-"https://edgebit.com/enclaver/docs/0.x/guide-app/"
+"https://edgebit.io/enclaver/docs/0.x/guide-app/"
 ```
 
 Jump over to the [simple Python app][app] guide (the output URL above) that explains our sample application in more detail.
@@ -83,7 +85,21 @@ KiB Swap:        0 total,        0 free,        0 used.  7046532 avail Mem
 
 ## Troubleshooting
 
-TODO: add troubleshooting
+### Trouble connecting to Instance Metadata Service v2 via KMS proxy
+
+The example CloudFormation refereneced in [Instance Requirements][#instance-requirements] increases the allowed hops for the Instance Metadata Service v2 (IMDSv2) from 1 to 2 to account for the `docker0` bridge. If your enclave startup hangs at the error below, it indicates that you did not reflect the hop change in a customized CloudFormation template, Terraform module or other tool used to launch your instances.
+
+```
+Fetching credentials from IMDSv2
+```
+
+Once successfully changed/fixed, you should see the following pair of log lines:
+
+```
+Fetching credentials from IMDSv2
+...
+Credentials fetched
+```
 
 [cloudformation]: https://us-east-1.console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://enclaver-cloudformation.s3.amazonaws.com/enclaver.cloudformation.yaml&stackName=Enclaver-Demo
 [app]: guide-app.md
