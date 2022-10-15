@@ -8,7 +8,7 @@ use bollard::Docker;
 use futures_util::stream::{StreamExt, TryStreamExt};
 use std::path::PathBuf;
 use std::sync::Arc;
-use log::{debug, error, info};
+use log::{debug, info};
 use tempfile::TempDir;
 use tokio::fs::{canonicalize, rename};
 use tokio::io::{stderr, AsyncWriteExt};
@@ -25,23 +25,25 @@ const RELEASE_BUNDLE_DIR: &str = "/enclave";
 const RELEASE_OVERLAY_PERMS: &str = "444";
 const RELEASE_OVERLAY_CHOWN: &str = "0:0";
 
-const NITRO_CLI_IMAGE: &str = "us-docker.pkg.dev/edgebit-containers/containers/nitro-cli";
-const ODYN_IMAGE: &str = "us-docker.pkg.dev/edgebit-containers/containers/odyn";
+const NITRO_CLI_IMAGE: &str = "us-docker.pkg.dev/edgebit-containers/containers/nitro-cli:latest";
+const ODYN_IMAGE: &str = "us-docker.pkg.dev/edgebit-containers/containers/odyn:latest";
 const ODYN_IMAGE_BINARY_PATH: &str = "/usr/local/bin/odyn";
 const RELEASE_BASE_IMAGE: &str =
-    "us-docker.pkg.dev/edgebit-containers/containers/enclaver-wrapper-base";
+    "us-docker.pkg.dev/edgebit-containers/containers/enclaver-wrapper-base:latest";
 
 pub struct EnclaveArtifactBuilder {
     docker: Arc<Docker>,
     image_manager: ImageManager,
+    pull_tags: bool,
 }
 
 impl EnclaveArtifactBuilder {
-    pub fn new() -> Result<Self> {
+    pub fn new(pull_tags: bool) -> Result<Self> {
         let docker_client = Arc::new(Docker::connect_with_local_defaults()
             .map_err(|e| anyhow!("connecting to docker: {}", e))?);
 
         Ok(Self {
+            pull_tags,
             docker: docker_client.clone(),
             image_manager: ImageManager::new_with_docker(docker_client)?,
         })
@@ -49,15 +51,15 @@ impl EnclaveArtifactBuilder {
 
     /// Build a release image based on the referenced manifest.
     pub async fn build_release(&self, manifest_path: &str) -> Result<(EIFInfo, ImageRef, String)> {
-        let (manifest, build_dir, eif_info) = self.common_build(manifest_path).await?;
-        let eif_path = build_dir.path().join(EIF_FILE_NAME);
-        let release_img = self.package_eif(eif_path, manifest_path).await?;
+        let ibr = self.common_build(manifest_path).await?;
+        let eif_path = ibr.build_dir.path().join(EIF_FILE_NAME);
+        let release_img = self.package_eif(eif_path, manifest_path, &ibr.resolved_sources).await?;
 
-        let release_tag = &manifest.images.target;
+        let release_tag = &ibr.manifest.target;
 
         self.image_manager.tag_image(&release_img, release_tag).await?;
 
-        Ok((eif_info, release_img, release_tag.to_string()))
+        Ok((ibr.eif_info, release_img, release_tag.to_string()))
     }
 
     /// Build an EIF, as would be included in a release image, based on the referenced manifest.
@@ -66,22 +68,23 @@ impl EnclaveArtifactBuilder {
         manifest_path: &str,
         dst_path: &str,
     ) -> Result<(EIFInfo, PathBuf)> {
-        let (_manifest, build_dir, eif_info) = self.common_build(manifest_path).await?;
-        let eif_path = build_dir.path().join(EIF_FILE_NAME);
+        let ibr = self.common_build(manifest_path).await?;
+        let eif_path = ibr.build_dir.path().join(EIF_FILE_NAME);
         rename(&eif_path, dst_path).await?;
 
-        Ok((eif_info, canonicalize(dst_path).await?))
+        Ok((ibr.eif_info, canonicalize(dst_path).await?))
     }
 
     /// Load the referenced manifest, amend the image it references to match what we expect in
     /// an enclave, then convert the resulting image to an EIF.
-    pub async fn common_build(&self, manifest_path: &str) -> Result<(Manifest, TempDir, EIFInfo)> {
+    async fn common_build(&self, manifest_path: &str) -> Result<IntermediateBuildResult> {
         let manifest = load_manifest(manifest_path).await?;
 
         self.analyze_manifest(&manifest);
 
-        let source_img = self.image_manager.find_or_pull(&manifest.images.source).await?;
-        let amended_img = self.amend_source_image(&source_img, manifest_path).await?;
+        let resolved_sources = self.resolve_sources(&manifest).await?;
+
+        let amended_img = self.amend_source_image(&resolved_sources, manifest_path).await?;
 
         info!("built intermediate image: {}", amended_img);
 
@@ -91,17 +94,22 @@ impl EnclaveArtifactBuilder {
             .image_to_eif(&amended_img, &build_dir, EIF_FILE_NAME)
             .await?;
 
-        Ok((manifest, build_dir, eif_info))
+        Ok(IntermediateBuildResult {
+            manifest,
+            resolved_sources,
+            build_dir,
+            eif_info,
+        })
     }
 
     /// Amend a source image by adding one or more layers containing the files we expect
     /// to have within the enclave.
     async fn amend_source_image(
         &self,
-        source_img: &ImageRef,
+        sources: &ResolvedSources,
         manifest_path: &str,
     ) -> Result<ImageRef> {
-        let img_config = self.docker.inspect_image(source_img.to_str()).await?.config;
+        let img_config = self.docker.inspect_image(sources.app.to_str()).await?.config;
 
         // Find the CMD and ENTRYPOINT from the source image. If either was specified in "shell form"
         // Docker seems to convert it to "exec form" as an actual shell invocation, so we can simply
@@ -140,7 +148,7 @@ impl EnclaveArtifactBuilder {
         let amended_image = self
             .image_manager
             .append_layer(
-                source_img,
+                &sources.app,
                 LayerBuilder::new()
                     .append_file(FileBuilder {
                         path: PathBuf::from(ENCLAVE_CONFIG_DIR).join(CONFIG_FILE_NAME),
@@ -153,7 +161,7 @@ impl EnclaveArtifactBuilder {
                     .append_file(FileBuilder {
                         path: PathBuf::from(ENCLAVE_ODYN_PATH),
                         source: FileSource::Image {
-                            name: format!("{ODYN_IMAGE}:latest").into(),
+                            name: sources.odyn.to_string(),
                             path: ODYN_IMAGE_BINARY_PATH.into(),
                         },
                         chown: ENCLAVE_OVERLAY_CHOWN.to_string(),
@@ -171,15 +179,13 @@ impl EnclaveArtifactBuilder {
     /// TODO: this currently is incomplete; file permissions are wrong, the base image
     /// doesn't match our current requirements, and the exact intended format is still
     /// TBD.
-    async fn package_eif(&self, eif_path: PathBuf, manifest_path: &str) -> Result<ImageRef> {
-        let base_img = self.image_manager.pull_image(format!("{RELEASE_BASE_IMAGE}:latest").as_str()).await?;
-
+    async fn package_eif(&self, eif_path: PathBuf, manifest_path: &str, sources: &ResolvedSources) -> Result<ImageRef> {
         debug!("packaging EIF file: {}", eif_path.to_string_lossy());
 
         let packaged_img = self
             .image_manager
             .append_layer(
-                &base_img,
+                &sources.release_base,
                 LayerBuilder::new()
                     .append_file(FileBuilder {
                         path: PathBuf::from(RELEASE_BUNDLE_DIR).join(CONFIG_FILE_NAME),
@@ -224,7 +230,15 @@ impl EnclaveArtifactBuilder {
 
         debug!("tagged intermediate image: {}", img_tag);
 
-        let nitro_cli = self.image_manager.pull_image(NITRO_CLI_IMAGE).await?;
+        // Note: we're deliberately not modeling nitro-cli as part of ResolvedSources.
+        // I might be overthinking this, but it doesn't directly end up as part of the
+        // final artifact, and it is very likely that two different versions of nitro-cli
+        // would output an identical EIF, so this seems like it should be modeled as more
+        // of a toolchain than a source. In any case there isn't much use-case for overriding
+        // it right now (perhaps pinning though), so deferring that problem for later.
+        let nitro_cli = self.resolve_image(NITRO_CLI_IMAGE).await?;
+
+        debug!("using nitro-cli image: {nitro_cli}");
 
         let build_container_id = self
             .docker
@@ -326,4 +340,63 @@ impl EnclaveArtifactBuilder {
             info!("no egress specified in manifest; this enclave will have no network access");
         }
     }
+
+    async fn resolve_image(&self, image_name: &str) -> Result<ImageRef> {
+        if self.pull_tags {
+            self.image_manager.pull_image(image_name).await
+        } else {
+            self.image_manager.find_or_pull(image_name).await
+        }
+    }
+
+    async fn resolve_sources(&self, manifest: &Manifest) -> Result<ResolvedSources> {
+        let app = self.image_manager.find_or_pull(&manifest.sources.app).await?;
+
+        info!("using app image: {app}");
+
+        let odyn = match &manifest.sources.supervisor {
+            Some(odyn_image) => self.image_manager.find_or_pull(&odyn_image).await?,
+            None => self.image_manager.find_or_pull(ODYN_IMAGE).await?,
+        };
+
+        if manifest.sources.supervisor.is_none() {
+            debug!("no supervisor image specified in manifest; using default: {odyn}");
+        } else {
+            info!("using supervisor image: {odyn}");
+        }
+
+        let release_base = match &manifest.sources.wrapper {
+            Some(wrapper_base_image) => self.resolve_image(&wrapper_base_image).await?,
+            None => self.resolve_image(RELEASE_BASE_IMAGE).await?,
+        };
+
+        if manifest.sources.wrapper.is_none() {
+            debug!("no wrapper base image specified in manifest; using default: {release_base}");
+        } else {
+            info!("using wrapper base image: {release_base}");
+        }
+
+        let sources = ResolvedSources {
+            app,
+            odyn,
+            release_base,
+        };
+
+        Ok(sources)
+    }
+}
+
+
+struct IntermediateBuildResult {
+    manifest: Manifest,
+    resolved_sources: ResolvedSources,
+    build_dir: TempDir,
+    eif_info: EIFInfo,
+}
+
+
+struct ResolvedSources {
+    app: ImageRef,
+    odyn: ImageRef,
+    release_base: ImageRef,
 }

@@ -9,16 +9,18 @@ use tokio::io::AsyncReadExt;
 pub struct Manifest {
     pub version: String,
     pub name: String,
-    pub images: Images,
+    pub target: String,
+    pub sources: Sources,
     pub ingress: Option<Vec<Ingress>>,
     pub egress: Option<Egress>,
 }
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Images {
-    pub source: String,
-    pub target: String,
+pub struct Sources {
+    pub app: String,
+    pub supervisor: Option<String>,
+    pub wrapper: Option<String>,
 }
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -67,6 +69,24 @@ mod tests {
 
     #[test]
     fn test_parse_manifest_with_unknown_fields() {
-        assert!(parse_manifest(br#"{"foo": "bar"}"#).is_err());
+        assert!(parse_manifest(br#"foo: "bar""#).is_err());
+    }
+
+    #[test]
+    fn test_parse_minimal_manifest() {
+        let raw_manifest = br#"
+version: v1
+name: "test"
+target: "target-image:latest"
+sources:
+  app: "app-image:latest"
+#r"#;
+
+        let manifest = parse_manifest(raw_manifest).unwrap();
+
+        assert_eq!(manifest.version, "v1");
+        assert_eq!(manifest.name, "test");
+        assert_eq!(manifest.target, "target-image:latest");
+        assert_eq!(manifest.sources.app, "app-image:latest");
     }
 }
