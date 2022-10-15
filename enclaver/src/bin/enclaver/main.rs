@@ -23,6 +23,9 @@ enum Commands {
 
         #[clap(long = "eif-only")]
         eif_file: Option<String>,
+
+        #[clap(long = "--pull")]
+        force_pull: bool,
     },
 
     #[clap(name = "run-eif")]
@@ -49,8 +52,9 @@ async fn run(args: Cli) -> Result<()> {
         Commands::Build {
             manifest_file,
             eif_file: None,
+            force_pull,
         } => {
-            let builder = EnclaveArtifactBuilder::new()?;
+            let builder = EnclaveArtifactBuilder::new(force_pull)?;
             let (eif_info, release_img, tag) = builder.build_release(&manifest_file).await?;
 
             println!("Built Release Image: {release_img} ({tag})");
@@ -62,8 +66,9 @@ async fn run(args: Cli) -> Result<()> {
         Commands::Build {
             manifest_file,
             eif_file: Some(eif_file),
+            force_pull,
         } => {
-            let builder = EnclaveArtifactBuilder::new()?;
+            let builder = EnclaveArtifactBuilder::new(force_pull)?;
 
             let (eif_info, eif_path) = builder.build_eif_only(&manifest_file, &eif_file).await?;
 

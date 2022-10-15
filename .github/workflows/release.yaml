@@ -68,7 +68,7 @@ jobs:
       - name: Build Odyn Image
         uses: docker/build-push-action@v3
         with:
-          context: "{{defaultContext}}:builder/dockerfiles"
+          context: "{{defaultContext}}:build/dockerfiles"
           build-contexts: artifacts=.
           file: odyn-release.dockerfile
           platforms: linux/amd64,linux/arm64
@@ -78,7 +78,7 @@ jobs:
       - name: Build Runtime Base Image
         uses: docker/build-push-action@v3
         with:
-          context: "{{defaultContext}}:builder/dockerfiles"
+          context: "{{defaultContext}}:build/dockerfiles"
           build-contexts: artifacts=.
           file: runtimebase.dockerfile
           platforms: linux/amd64,linux/arm64

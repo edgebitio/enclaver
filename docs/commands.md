@@ -30,6 +30,7 @@ Builds an OCI container image in [Enclaver image format][format] containing the 
 |:-----|:-----|:------------|
 | `-f`, `--file` | String (Default=enclaver.yaml) | Path on disk to your enclave configuration file. |
 | `--eif-only` | String | If set, build only the components that run inside of the enclave. EIF is written to the provided path on disk and the containing directory must exist. |
+| `--pull` | Boolean (Default=false) | Force a pull of source images. By default, if a local image matching a specified source is found, it will be used without pulling. |
 
 ## Run
 
