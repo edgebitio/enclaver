@@ -12,7 +12,7 @@ Enclaver is an open source toolkit created to enable easy adoption of software e
 
 Enclaves provide several critical features for operating software which processes sensitive data, including isolation, attestation and network restrictions.
 
-<img src="img/diagram-enclaver-components.svg" width="800" />
+![Enclaver Architecture Diagram](img/diagram-enclaver-components.svg)
 
 Refer to [the architecture](architecture.md) for a complete understanding of Enclaver components.
 
