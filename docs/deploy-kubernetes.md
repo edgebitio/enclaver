@@ -91,7 +91,7 @@ Then send a request to the forward port, which will be answered from within the 
 
 ```sh
 $ curl localhost:8000
-"https://edgebit.com/enclaver/docs/0.x/guide-app/"
+"https://edgebit.io/enclaver/docs/0.x/guide-app/"
 ```
 
 Jump over to the [simple Python app][app] guide (the output URL above) that explains our sample application in more detail.

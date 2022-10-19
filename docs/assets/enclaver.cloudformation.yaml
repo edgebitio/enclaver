@@ -22,6 +22,8 @@ Resources:
       ImageId: !Ref ImageId
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyName
+      MetadataOptions:
+        HttpPutResponseHopLimit: 2 # Increase by 1 from default of 1 due to docker0 hop
       SecurityGroupIds: 
         - !Ref DemoSecurityGroup
       EnclaveOptions:
