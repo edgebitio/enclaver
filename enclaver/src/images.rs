@@ -1,13 +1,14 @@
-use anyhow::{anyhow, Result, Context};
+use crate::utils::StringablePathExt;
+use anyhow::{anyhow, Context, Result};
 use bollard::image::{BuildImageOptions, CreateImageOptions, TagImageOptions};
 use bollard::models::{BuildInfo, CreateImageInfo, ImageId};
 use bollard::Docker;
 use futures_util::stream::{StreamExt, TryStreamExt};
+use log::{debug, info, trace};
 use std::fmt;
 use std::fmt::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
-use log::{debug, trace};
 use tokio::fs::{create_dir, File};
 use tokio::io::{duplex, AsyncWrite, AsyncWriteExt, BufWriter};
 use tokio_util::codec;
@@ -38,8 +39,10 @@ impl ImageManager {
     /// Constructs a new ImageManager pointing to a local Docker daemon.
     #[allow(dead_code)]
     pub fn new() -> Result<Self> {
-        let docker_client = Arc::new(Docker::connect_with_local_defaults()
-            .map_err(|e| anyhow!("connecting to docker: {}", e))?);
+        let docker_client = Arc::new(
+            Docker::connect_with_local_defaults()
+                .map_err(|e| anyhow!("connecting to docker: {}", e))?,
+        );
 
         Ok(Self {
             docker: docker_client,
@@ -54,7 +57,9 @@ impl ImageManager {
     /// Resolves a name-like string to an ImageRef referencing a specific immutable image.
     pub async fn image(&self, name: &str) -> Result<ImageRef> {
         debug!("attempting to resolve image: {name}");
-        let img = self.docker.inspect_image(name)
+        let img = self
+            .docker
+            .inspect_image(name)
             .await
             .with_context(|| format!("inspecting image {}", name))?;
 
@@ -71,16 +76,19 @@ impl ImageManager {
         let img = match self.image(image_name).await {
             Ok(img) => Ok(Some(img)),
             Err(e) => match e.downcast_ref::<bollard::errors::Error>() {
-                Some(bollard::errors::Error::DockerResponseServerError{ status_code: 404, .. }) => Ok(None),
+                Some(bollard::errors::Error::DockerResponseServerError {
+                    status_code: 404,
+                    ..
+                }) => Ok(None),
                 _ => Err(e),
-            }
+            },
         }?;
 
         match img {
             Some(img) => {
                 debug!("found local image {image_name}");
                 Ok(img)
-            },
+            }
             None => {
                 debug!("local image not found, attempting to pull {image_name}");
                 self.pull_image(image_name).await
@@ -109,7 +117,7 @@ impl ImageManager {
                 ..
             } = create_image_info
             {
-                println!("{}: {}", id, status);
+                info!("{}: {}", id, status);
             }
         }
 
@@ -219,16 +227,9 @@ pub struct FileBuilder {
 impl FileBuilder {
     fn realize(&self) -> Result<String> {
         let mut line = String::from("COPY");
-        let local_path = self
-            .path
-            .strip_prefix("/")?
-            .to_str()
-            .ok_or_else(|| anyhow!("filename contains non-UTF-8 characters"))?;
+        let local_path = self.path.must_to_str()?;
 
-        let dst_path = self
-            .path
-            .to_str()
-            .ok_or_else(|| anyhow!("filename contains non-UTF-8 characters"))?;
+        let dst_path = self.path.must_to_str()?;
 
         write!(&mut line, " --chown={}", self.chown)?;
 
@@ -240,10 +241,7 @@ impl FileBuilder {
                 name: image_name,
                 path,
             } => {
-                let src_path = path
-                    .to_str()
-                    .ok_or_else(|| anyhow!("filename contains non-UTF-8 characters"))?;
-
+                let src_path = path.must_to_str()?;
                 write!(&mut line, " --from={} {}", image_name, src_path)?;
             }
         }
@@ -295,7 +293,10 @@ impl LayerBuilder {
     ) -> Result<()> {
         // Create a temporary directory in which to construct a Docker context.
         let tempdir = tempfile::TempDir::new()?;
-        trace!("realizing Docker build env to temp directory: {}", tempdir.path().to_string_lossy());
+        trace!(
+            "realizing Docker build env to temp directory: {}",
+            tempdir.path().to_string_lossy()
+        );
 
         // Create a "files" subdirectory. Within "files" we will hardlink any
         // local files to be copied to the image.

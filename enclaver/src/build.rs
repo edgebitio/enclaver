@@ -1,27 +1,25 @@
+use crate::constants::{
+    EIF_FILE_NAME, ENCLAVE_CONFIG_DIR, ENCLAVE_ODYN_PATH, MANIFEST_FILE_NAME, RELEASE_BUNDLE_DIR,
+};
 use crate::images::{FileBuilder, FileSource, ImageManager, ImageRef, LayerBuilder};
-use crate::nitro_cli::EIFInfo;
 use crate::manifest::{load_manifest, Manifest};
+use crate::nitro_cli::EIFInfo;
 use anyhow::{anyhow, Result};
 use bollard::container::{Config, LogOutput, LogsOptions, WaitContainerOptions};
 use bollard::models::{ContainerConfig, HostConfig, Mount, MountTypeEnum};
 use bollard::Docker;
 use futures_util::stream::{StreamExt, TryStreamExt};
+use log::{debug, info};
 use std::path::PathBuf;
 use std::sync::Arc;
-use log::{debug, info};
 use tempfile::TempDir;
 use tokio::fs::{canonicalize, rename};
-use tokio::io::{stderr, AsyncWriteExt};
 use uuid::Uuid;
-use crate::constants::{ENCLAVE_CONFIG_DIR, CONFIG_FILE_NAME, ENCLAVE_ODYN_PATH};
-
-const EIF_FILE_NAME: &str = "application.eif";
 
 const ENCLAVE_MANIFEST_PERMS: &str = "440";
 const ENCLAVE_ODYN_PERMS: &str = "550";
 const ENCLAVE_OVERLAY_CHOWN: &str = "0:0";
 
-const RELEASE_BUNDLE_DIR: &str = "/enclave";
 const RELEASE_OVERLAY_PERMS: &str = "444";
 const RELEASE_OVERLAY_CHOWN: &str = "0:0";
 
@@ -39,8 +37,10 @@ pub struct EnclaveArtifactBuilder {
 
 impl EnclaveArtifactBuilder {
     pub fn new(pull_tags: bool) -> Result<Self> {
-        let docker_client = Arc::new(Docker::connect_with_local_defaults()
-            .map_err(|e| anyhow!("connecting to docker: {}", e))?);
+        let docker_client = Arc::new(
+            Docker::connect_with_local_defaults()
+                .map_err(|e| anyhow!("connecting to docker: {}", e))?,
+        );
 
         Ok(Self {
             pull_tags,
@@ -53,11 +53,15 @@ impl EnclaveArtifactBuilder {
     pub async fn build_release(&self, manifest_path: &str) -> Result<(EIFInfo, ImageRef, String)> {
         let ibr = self.common_build(manifest_path).await?;
         let eif_path = ibr.build_dir.path().join(EIF_FILE_NAME);
-        let release_img = self.package_eif(eif_path, manifest_path, &ibr.resolved_sources).await?;
+        let release_img = self
+            .package_eif(eif_path, manifest_path, &ibr.resolved_sources)
+            .await?;
 
         let release_tag = &ibr.manifest.target;
 
-        self.image_manager.tag_image(&release_img, release_tag).await?;
+        self.image_manager
+            .tag_image(&release_img, release_tag)
+            .await?;
 
         Ok((ibr.eif_info, release_img, release_tag.to_string()))
     }
@@ -84,7 +88,9 @@ impl EnclaveArtifactBuilder {
 
         let resolved_sources = self.resolve_sources(&manifest).await?;
 
-        let amended_img = self.amend_source_image(&resolved_sources, manifest_path).await?;
+        let amended_img = self
+            .amend_source_image(&resolved_sources, manifest_path)
+            .await?;
 
         info!("built intermediate image: {}", amended_img);
 
@@ -109,7 +115,11 @@ impl EnclaveArtifactBuilder {
         sources: &ResolvedSources,
         manifest_path: &str,
     ) -> Result<ImageRef> {
-        let img_config = self.docker.inspect_image(sources.app.to_str()).await?.config;
+        let img_config = self
+            .docker
+            .inspect_image(sources.app.to_str())
+            .await?
+            .config;
 
         // Find the CMD and ENTRYPOINT from the source image. If either was specified in "shell form"
         // Docker seems to convert it to "exec form" as an actual shell invocation, so we can simply
@@ -151,7 +161,7 @@ impl EnclaveArtifactBuilder {
                 &sources.app,
                 LayerBuilder::new()
                     .append_file(FileBuilder {
-                        path: PathBuf::from(ENCLAVE_CONFIG_DIR).join(CONFIG_FILE_NAME),
+                        path: PathBuf::from(ENCLAVE_CONFIG_DIR).join(MANIFEST_FILE_NAME),
                         source: FileSource::Local {
                             path: PathBuf::from(manifest_path),
                         },
@@ -179,8 +189,14 @@ impl EnclaveArtifactBuilder {
     /// TODO: this currently is incomplete; file permissions are wrong, the base image
     /// doesn't match our current requirements, and the exact intended format is still
     /// TBD.
-    async fn package_eif(&self, eif_path: PathBuf, manifest_path: &str, sources: &ResolvedSources) -> Result<ImageRef> {
-        debug!("packaging EIF file: {}", eif_path.to_string_lossy());
+    async fn package_eif(
+        &self,
+        eif_path: PathBuf,
+        manifest_path: &str,
+        sources: &ResolvedSources,
+    ) -> Result<ImageRef> {
+        info!("packaging EIF into release image");
+        debug!("EIF file: {}", eif_path.to_string_lossy());
 
         let packaged_img = self
             .image_manager
@@ -188,7 +204,7 @@ impl EnclaveArtifactBuilder {
                 &sources.release_base,
                 LayerBuilder::new()
                     .append_file(FileBuilder {
-                        path: PathBuf::from(RELEASE_BUNDLE_DIR).join(CONFIG_FILE_NAME),
+                        path: PathBuf::from(RELEASE_BUNDLE_DIR).join(MANIFEST_FILE_NAME),
                         source: FileSource::Local {
                             path: PathBuf::from(manifest_path),
                         },
@@ -218,8 +234,6 @@ impl EnclaveArtifactBuilder {
         build_dir: &TempDir,
         eif_name: &str,
     ) -> Result<EIFInfo> {
-        let mut stderr = stderr();
-
         let build_dir_path = build_dir.path().to_str().unwrap();
 
         // There is currently no way to point nitro-cli to a local image ID; it insists
@@ -278,7 +292,10 @@ impl EnclaveArtifactBuilder {
             .await?
             .id;
 
-        info!("starting nitro-cli build-eif in container: {}", build_container_id);
+        info!(
+            "starting nitro-cli build-eif in container: {}",
+            build_container_id
+        );
 
         self.docker
             .start_container::<String>(&build_container_id, None)
@@ -298,8 +315,10 @@ impl EnclaveArtifactBuilder {
             }),
         );
 
-        while let Some(Ok(LogOutput::StdErr { message })) = log_stream.next().await {
-            stderr.write_all(message.as_ref()).await?;
+        while let Some(Ok(LogOutput::StdErr { message: line })) = log_stream.next().await {
+            // Convert lines of text from nitro-cli into log messages. Note that these come with trailing
+            // newlines, which we trim off.
+            info!(target: "nitro-cli::build-eif", "{}", String::from_utf8_lossy(&line).trim_end());
         }
 
         let status_code = self
@@ -333,7 +352,9 @@ impl EnclaveArtifactBuilder {
 
     fn analyze_manifest(&self, manifest: &Manifest) {
         if manifest.ingress.is_none() {
-            info!("no ingress specified in manifest; there will be no way to connect to this enclave");
+            info!(
+                "no ingress specified in manifest; there will be no way to connect to this enclave"
+            );
         }
 
         if manifest.egress.is_none() {
@@ -350,12 +371,15 @@ impl EnclaveArtifactBuilder {
     }
 
     async fn resolve_sources(&self, manifest: &Manifest) -> Result<ResolvedSources> {
-        let app = self.image_manager.find_or_pull(&manifest.sources.app).await?;
+        let app = self
+            .image_manager
+            .find_or_pull(&manifest.sources.app)
+            .await?;
 
         info!("using app image: {app}");
 
         let odyn = match &manifest.sources.supervisor {
-            Some(odyn_image) => self.image_manager.find_or_pull(&odyn_image).await?,
+            Some(odyn_image) => self.image_manager.find_or_pull(odyn_image).await?,
             None => self.image_manager.find_or_pull(ODYN_IMAGE).await?,
         };
 
@@ -366,7 +390,7 @@ impl EnclaveArtifactBuilder {
         }
 
         let release_base = match &manifest.sources.wrapper {
-            Some(wrapper_base_image) => self.resolve_image(&wrapper_base_image).await?,
+            Some(wrapper_base_image) => self.resolve_image(wrapper_base_image).await?,
             None => self.resolve_image(RELEASE_BASE_IMAGE).await?,
         };
 
@@ -386,14 +410,12 @@ impl EnclaveArtifactBuilder {
     }
 }
 
-
 struct IntermediateBuildResult {
     manifest: Manifest,
     resolved_sources: ResolvedSources,
     build_dir: TempDir,
     eif_info: EIFInfo,
 }
-
 
 struct ResolvedSources {
     app: ImageRef,

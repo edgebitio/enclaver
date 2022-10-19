@@ -1,18 +1,37 @@
-use std::path::{Path, PathBuf};
-use std::time::{Duration};
+use crate::constants::{
+    APP_LOG_PORT, EIF_FILE_NAME, HTTP_EGRESS_VSOCK_PORT, MANIFEST_FILE_NAME, RELEASE_BUNDLE_DIR,
+    STATUS_PORT,
+};
+use crate::manifest::{load_manifest, Defaults, Manifest};
+use crate::utils;
 use anyhow::{anyhow, Result};
-use futures_util::StreamExt;
-use log::{info};
+use futures_util::stream::StreamExt;
+use log::{debug, error, info};
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use std::time::Duration;
+use tokio::fs::File;
 use tokio_util::codec::{FramedRead, LinesCodec};
 use tokio_vsock::VsockStream;
-use crate::constants::{APP_LOG_PORT, HTTP_EGRESS_VSOCK_PORT};
-use crate::manifest::{load_manifest, Manifest};
 
 use crate::nitro_cli::{EnclaveInfo, NitroCLI, RunEnclaveArgs};
 use crate::proxy::egress_http::HostHttpProxy;
 use crate::proxy::ingress::HostProxy;
 
 const LOG_VSOCK_RETRY_INTERVAL: Duration = Duration::from_millis(250);
+const STATUS_VSOCK_RETRY_INTERVAL: Duration = Duration::from_millis(250);
+const STATUS_VSOCK_RETRY_LIMIT: i32 = 10;
+
+const DEFAULT_CPU_COUNT: i32 = 2;
+const DEFAULT_MEMORY_MB: i32 = 4096;
+
+pub struct EnclaveOpts {
+    pub eif_path: Option<PathBuf>,
+    pub manifest_path: Option<PathBuf>,
+    pub cpu_count: Option<i32>,
+    pub memory_mb: Option<i32>,
+    pub debug_mode: bool,
+}
 
 pub struct Enclave {
     cli: NitroCLI,
@@ -22,35 +41,77 @@ pub struct Enclave {
     memory_mb: i32,
     debug_mode: bool,
     enclave_info: Option<EnclaveInfo>,
-    proxy_handles: Vec<tokio::task::JoinHandle<()>>,
-}
-
-#[derive(Debug)]
-pub enum EnclaveState {
-    None,
-    Running(String),
-    Stopped(String),
+    tasks: Vec<tokio::task::JoinHandle<()>>,
 }
 
 impl Enclave {
-    pub async fn new<P>(eif_path: P, manifest_path: String, cpu_count: i32, memory_mb: i32, debug_mode: bool) -> Result<Self>
-    where
-        P: AsRef<Path>,
-    {
+    pub async fn new(opts: EnclaveOpts) -> Result<Self> {
+        let eif_path = match opts.eif_path {
+            Some(eif_path) => eif_path,
+            None => PathBuf::from(RELEASE_BUNDLE_DIR).join(EIF_FILE_NAME),
+        };
+
+        // Test that the EIF exists
+        let _ = File::open(&eif_path)
+            .await
+            .map_err(|e| anyhow!("failed to open EIF file at {}: {e}", eif_path.display()))?;
+
+        let manifest_path = match opts.manifest_path {
+            Some(manifest_path) => manifest_path,
+            None => PathBuf::from(RELEASE_BUNDLE_DIR).join(MANIFEST_FILE_NAME),
+        };
+
+        let manifest = load_manifest(&manifest_path).await?;
+
+        let cpu_count = match (opts.cpu_count, &manifest.defaults) {
+            (Some(cpu_count), _) => cpu_count,
+            (
+                None,
+                Some(Defaults {
+                    cpu_count: Some(cpu_count),
+                    ..
+                }),
+            ) => {
+                debug!("using cpu_count = {cpu_count} based on defaults from manifest");
+                *cpu_count
+            }
+            _ => {
+                debug!("no cpu_count specified, defaulting to {DEFAULT_CPU_COUNT}");
+                DEFAULT_CPU_COUNT
+            }
+        };
+
+        let memory_mb = match (opts.memory_mb, &manifest.defaults) {
+            (Some(memory_mb), _) => memory_mb,
+            (
+                None,
+                Some(Defaults {
+                    memory_mb: Some(memory_mb),
+                    ..
+                }),
+            ) => {
+                debug!("using memory_mb = {memory_mb} based on defaults from manifest");
+                *memory_mb
+            }
+            _ => {
+                debug!("no memory_mb specified, defaulting to {DEFAULT_MEMORY_MB}");
+                DEFAULT_MEMORY_MB
+            }
+        };
 
         Ok(Self {
             cli: NitroCLI::new(),
-            eif_path: eif_path.as_ref().to_path_buf(),
+            eif_path: eif_path.to_path_buf(),
             manifest: load_manifest(&manifest_path).await?,
             cpu_count,
             memory_mb,
-            debug_mode,
+            debug_mode: opts.debug_mode,
             enclave_info: None,
-            proxy_handles: Vec::new(),
+            tasks: Vec::new(),
         })
     }
 
-    pub async fn start(&mut self) -> Result<EnclaveState> {
+    pub async fn run(&mut self) -> Result<()> {
         if self.enclave_info.is_some() {
             return Err(anyhow!("Enclave already started"));
         }
@@ -75,11 +136,17 @@ impl Enclave {
 
         info!("started enclave {}", enclave_info.id);
 
+        if self.debug_mode {
+            self.attach_debug_console(&enclave_info.id).await?;
+        }
+
         self.start_odyn_log_stream(enclave_info.cid).await?;
 
         self.start_ingress_proxies(enclave_info.cid).await?;
 
-        Ok(EnclaveState::Running(enclave_info.id))
+        self.await_completion(enclave_info.cid).await?;
+
+        Ok(())
     }
 
     async fn start_ingress_proxies(&mut self, cid: u32) -> Result<()> {
@@ -87,14 +154,14 @@ impl Enclave {
             Some(ref ingress) => ingress,
             None => {
                 info!("no ingress defined, no ingress proxies will be started");
-                return Ok(())
-            },
+                return Ok(());
+            }
         };
 
         for item in ingress {
             let listen_port = item.listen_port;
             let proxy = HostProxy::bind(listen_port).await?;
-            self.proxy_handles.push(tokio::task::spawn(async move {
+            self.tasks.push(tokio::task::spawn(async move {
                 proxy.serve(cid, listen_port.into()).await;
             }))
         }
@@ -112,7 +179,7 @@ impl Enclave {
 
         info!("starting egress proxy on vsock port {HTTP_EGRESS_VSOCK_PORT}");
         let proxy = HostHttpProxy::bind(HTTP_EGRESS_VSOCK_PORT)?;
-        self.proxy_handles.push(tokio::task::spawn(async move {
+        self.tasks.push(tokio::task::spawn(async move {
             proxy.serve().await;
         }));
 
@@ -134,14 +201,82 @@ impl Enclave {
 
         info!("connected to enclave, starting log stream");
 
-        let mut framed = FramedRead::new(conn, LinesCodec::new_with_max_length(1024 * 4));
+        self.tasks.push(tokio::task::spawn(async move {
+            if let Err(e) = utils::log_lines_from_stream("enclave", conn).await {
+                error!("error reading log lines from enclave: {e}");
+            }
+        }));
 
-        self.proxy_handles.push(tokio::task::spawn(async move {
-            while let Some(line_res) = framed.next().await {
-                match line_res {
-                    Ok(line) => info!(target: "enclave", "{line}"),
-                    Err(e) => info!("error reading log stream: {e}"),
+        Ok(())
+    }
+
+    async fn await_completion(&mut self, cid: u32) -> Result<()> {
+        let mut failed_attempts = 0;
+
+        loop {
+            let conn = match VsockStream::connect(cid, STATUS_PORT).await {
+                Ok(conn) => conn,
+
+                Err(_) => {
+                    failed_attempts += 1;
+                    if failed_attempts >= STATUS_VSOCK_RETRY_LIMIT {
+                        return Err(anyhow!(
+                            "failed to connect to enclave status port after {STATUS_VSOCK_RETRY_LIMIT} attempts"
+                        ));
+                    }
+                    tokio::time::sleep(STATUS_VSOCK_RETRY_INTERVAL).await;
+                    continue;
                 }
+            };
+
+            debug!("connected to enclave status port");
+
+            let mut framed = FramedRead::new(conn, LinesCodec::new_with_max_length(1024));
+
+            while let Some(line_res) = framed.next().await {
+                let line = match line_res {
+                    Ok(line) => line,
+                    Err(e) => {
+                        error!("error reading from status port: {e}");
+                        continue;
+                    }
+                };
+
+                let status: OdynStatus = match serde_json::from_str(&line) {
+                    Ok(status) => status,
+                    Err(e) => {
+                        error!("error parsing status line: {e}");
+                        continue;
+                    }
+                };
+
+                debug!("enclave status: {status:#?}");
+
+                match status {
+                    OdynStatus::Running => {}
+                    OdynStatus::Exited { code } => {
+                        info!("enclave exited with code {code}");
+                        return Ok(());
+                    }
+                    OdynStatus::Signaled { signal } => {
+                        info!("enclave stopped due to signal {signal}");
+                        return Ok(());
+                    }
+                }
+            }
+
+            error!("enclave status port closed unexpectedly");
+        }
+    }
+
+    async fn attach_debug_console(&mut self, enclave_id: &str) -> Result<()> {
+        info!("attaching to debug console");
+
+        let stdout = self.cli.console(enclave_id).await?;
+
+        self.tasks.push(tokio::task::spawn(async move {
+            if let Err(e) = utils::log_lines_from_stream("nitro-cli::console", stdout).await {
+                error!("error reading log lines from debug console: {e}");
             }
         }));
 
@@ -149,9 +284,28 @@ impl Enclave {
     }
 
     pub async fn stop(&self) -> Result<()> {
-        match &self.enclave_info {
-            Some(info) => self.cli.terminate_enclave(&info.id).await,
-            None => Err(anyhow!("Enclave not started")),
+        if let Some(enclave_info) = &self.enclave_info {
+            info!("stopping enclave {}", enclave_info.id);
+            self.cli.terminate_enclave(&enclave_info.id).await?;
+        } else {
+            debug!("no enclave to stop");
         }
+
+        // TODO: stop other tasks
+
+        Ok(())
     }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "status")]
+enum OdynStatus {
+    #[serde(rename = "running")]
+    Running,
+
+    #[serde(rename = "exited")]
+    Exited { code: i32 },
+
+    #[serde(rename = "signaled")]
+    Signaled { signal: i32 },
 }

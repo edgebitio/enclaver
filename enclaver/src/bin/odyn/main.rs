@@ -82,12 +82,12 @@ async fn run(args: &CliArgs) -> Result<()> {
 
 #[tokio::main]
 async fn main() {
-    pretty_env_logger::init();
+    enclaver::utils::init_logging();
 
     let args = CliArgs::parse();
 
     if let Err(err) = run(&args).await {
-        error!("Error: {}", err);
+        error!("Error: {err:#}");
         std::process::exit(1);
     }
 }
