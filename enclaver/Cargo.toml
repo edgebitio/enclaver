@@ -23,7 +23,7 @@ tokio-tar = "0.3"
 rustls = "0.20"
 rustls-pemfile = "1.0"
 log = "0.4"
-pretty_env_logger = "0.4"
+env_logger = "0.9"
 nix = "0.24"
 futures = "0.3"
 rand = { version = "0.8", features = ["std", "std_rng"] }
@@ -31,25 +31,41 @@ futures-util = "0.3"
 clap = { version = "3.0", features = ["derive"] }
 serde_yaml = "0.9"
 serde_json = "1.0"
+serde_bytes = "0.11"
 serde = { version = "1.0", features = ["derive"] }
+json = "0.12"
+base64 = "0.13"
 bollard = "0.13"
 tempfile = "3.0"
 http = "0.2"
 http-body = "0.4"
 hyper = { version = "0.14", features = ["http1"] }
+hyper-proxy = { version = "0.9", default-features = false, features = ["rustls-webpki"] }
 uuid = { version = "1.0", features = ["v4"] }
-aws-nitro-enclaves-nsm-api = "0.2.1"
 rtnetlink = { version = "0.11", optional = true }
 circbuf = "0.2"
 async-trait = "0.1"
 bytes = "1.0"
 ipnetwork = "0.20"
+aws-nitro-enclaves-nsm-api = "0.2.1"
+aws-types = "0.49"
+aws-config = "0.49"
+aws-smithy-http = "0.49"
+aws-smithy-client = { version = "0.49", features = ["rustls"] }
+aws-sigv4 = "0.49"
+rsa = "0.7"
+pkcs8 = { version = "0.9", features = ["pem"] }
+zeroize = "1.5.7"
+asn1-rs = { git = "https://github.com/rusticata/asn1-rs.git", rev = "bc877237161cde337bfa442b5654af8701fb1d59", features = ["std"] }
+cbc = { version = "0.1", features = [ "std", "block-padding" ] }
+aes = "0.8"
+sha2 = "0.10"
+
 
 [dev-dependencies]
 assert2 = "0.3"
-json = "0.12"
 tls-listener = { version = "0.5", features = ["rustls", "hyper-h1"] }
-reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"] }
+reqwest = { version = "=0.11.6", default-features = false, features = ["rustls-tls-webpki-roots"] }
 
 [features]
 run_enclave = ["proxy"]

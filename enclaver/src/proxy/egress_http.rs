@@ -341,6 +341,7 @@ mod tests {
     use std::net::{Ipv4Addr, SocketAddr};
     use std::convert::Infallible;
     use std::sync::Arc;
+    use std::future::Future;
     use hyper::{Request, Response, Body, Server};
     use hyper::server::conn::AddrIncoming;
     use http::{Method, Version, uri::PathAndQuery};
@@ -359,7 +360,7 @@ mod tests {
         Ok(Response::new(full_body.into()))
     }
 
-    async fn echo_server(port: u16) {
+    fn echo_server(port: u16) -> impl Future<Output=Result<(), hyper::Error>> {
         let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
 
         // A `Service` is needed for every connection, so this
@@ -369,13 +370,10 @@ mod tests {
             Ok::<_, Infallible>(hyper::service::service_fn(echo))
         });
 
-        let server = Server::bind(&addr).serve(make_svc);
-
-        // Run this server for... forever!
-        server.await.unwrap();
+        Server::bind(&addr).serve(make_svc)
     }
 
-    async fn tls_echo_server(port: u16) {
+    fn tls_echo_server(port: u16) -> impl Future<Output=Result<(), hyper::Error>> {
         let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
 
         // A `Service` is needed for every connection, so this
@@ -389,20 +387,15 @@ mod tests {
         let acceptor: tokio_rustls::TlsAcceptor = server_config.into();
         let incoming = TlsListener::new(acceptor, AddrIncoming::bind(&addr).unwrap());
 
-        let server = Server::builder(incoming).serve(make_svc);
-
-        // Run this server for... forever!
-        server.await.unwrap();
+        Server::builder(incoming).serve(make_svc)
     }
 
-    fn start_echo_server(port: u16, use_tls: bool) -> JoinHandle<()> {
-        tokio::task::spawn(async move {
-            if !use_tls {
-                echo_server(port).await;
-            } else {
-                tls_echo_server(port).await;
-            }
-        })
+    fn start_echo_server(port: u16, use_tls: bool) -> JoinHandle<Result<(), hyper::Error>> {
+        if !use_tls {
+            tokio::task::spawn(echo_server(port))
+        } else {
+            tokio::task::spawn(tls_echo_server(port))
+        }
     }
 
     async fn start_enclave_proxy(proxy_port: u16, egress_port: u32) -> JoinHandle<()> {
@@ -420,12 +413,12 @@ mod tests {
         base_port: u16,
         host_proxy_task: JoinHandle<()>,
         enclave_proxy_task: JoinHandle<()>,
-        echo_task: JoinHandle<()>,
+        echo_task: JoinHandle<Result<(), hyper::Error>>,
     }
 
     impl HttpProxyFixture {
         async fn start(base_port: u16, use_tls: bool) -> Self {
-            _ = pretty_env_logger::try_init();
+            _ = env_logger::try_init();
 
             return Self{
                 base_port: base_port,
@@ -435,8 +428,10 @@ mod tests {
             }
         }
 
-        fn proxy_port(&self) -> u16 {
-            self.base_port
+        fn proxy_uri(&self) -> http::Uri {
+            format!("http://127.0.0.1:{}", self.base_port)
+                .parse()
+                .unwrap()
         }
 
         fn webserver_port(&self) -> u16 {
@@ -466,7 +461,7 @@ mod tests {
         let fixture = HttpProxyFixture::start(3000, false).await;
 
         let client = reqwest::Client::builder()
-            .proxy(reqwest::Proxy::http(format!("http://127.0.0.1:{}", fixture.proxy_port())).unwrap())
+            .proxy(reqwest::Proxy::http(fixture.proxy_uri().to_string()).unwrap())
             .build()
             .unwrap();
 
@@ -496,7 +491,7 @@ mod tests {
         let fixture = HttpProxyFixture::start(4000, true).await;
 
         let client = reqwest::Client::builder()
-            .proxy(reqwest::Proxy::https(format!("http://127.0.0.1:{}", fixture.proxy_port())).unwrap())
+            .proxy(reqwest::Proxy::http(fixture.proxy_uri().to_string()).unwrap())
             .danger_accept_invalid_certs(true)
             .build()
             .unwrap();

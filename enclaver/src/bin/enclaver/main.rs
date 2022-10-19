@@ -144,6 +144,11 @@ async fn register_shutdown_signal_handler() -> Result<impl Future> {
 async fn main() {
     enclaver::utils::init_logging();
 
+    // This is kind of a hack...
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "info");
+    }
+
     let args = Cli::parse();
 
     if let Err(err) = run(args).await {

@@ -15,6 +15,7 @@ pub struct Manifest {
     pub ingress: Option<Vec<Ingress>>,
     pub egress: Option<Egress>,
     pub defaults: Option<Defaults>,
+    pub kms_proxy: Option<KmsProxy>,
 }
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -52,6 +53,12 @@ pub struct Egress {
 pub struct Defaults {
     pub cpu_count: Option<i32>,
     pub memory_mb: Option<i32>,
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct KmsProxy {
+    pub listen_port: u16,
 }
 
 fn parse_manifest(buf: &[u8]) -> Result<Manifest> {

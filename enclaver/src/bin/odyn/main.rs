@@ -1,21 +1,25 @@
 pub mod config;
 pub mod enclave;
-pub mod nsm;
 pub mod console;
 pub mod launcher;
 pub mod ingress;
 pub mod egress;
+pub mod kms_proxy;
 
 use log::{info, error};
 use std::ffi::OsString;
+use std::sync::Arc;
 use clap::{Parser};
 use anyhow::{Result};
 
+use enclaver::constants::{APP_LOG_PORT, STATUS_PORT};
+use enclaver::nsm::Nsm;
+
 use console::{AppLog, AppStatus};
 use config::Configuration;
-use enclaver::constants::{APP_LOG_PORT, STATUS_PORT};
 use ingress::IngressService;
 use egress::EgressService;
+use kms_proxy::KmsProxyService;
 
 #[derive(Parser)]
 struct CliArgs {
@@ -41,11 +45,13 @@ async fn run(args: &CliArgs) -> Result<()> {
         console_task = Some(app_log.start_serving(APP_LOG_PORT));
     }
 
+    let nsm = Arc::new(Nsm::new());
+
     let app_status = AppStatus::new();
     let app_status_task = app_status.start_serving(STATUS_PORT);
 
     if !args.no_bootstrap {
-        enclave::bootstrap().await?;
+        enclave::bootstrap(nsm.clone()).await?;
         info!("Enclave initialized");
     }
 
@@ -53,6 +59,8 @@ async fn run(args: &CliArgs) -> Result<()> {
     let egress = EgressService::start(&config).await?;
     info!("Startng ingress");
     let ingress = IngressService::start(&config)?;
+    info!("Starting KMS proxy");
+    let kms_proxy = KmsProxyService::start(&config, nsm.clone()).await?;
 
     let creds = launcher::Credentials{
         uid: 100,
@@ -62,6 +70,9 @@ async fn run(args: &CliArgs) -> Result<()> {
     info!("Starting {:?}", args.entrypoint);
     let exit_status = launcher::start_child(args.entrypoint.clone(), creds).await??;
     info!("Entrypoint {}", exit_status);
+
+    info!("Stopping kms proxy");
+    kms_proxy.stop().await;
 
     info!("Stopping ingress");
     ingress.stop().await;

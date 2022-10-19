@@ -1,4 +1,5 @@
 use anyhow::{Result, anyhow};
+use serde_bytes::ByteBuf;
 
 pub use aws_nitro_enclaves_nsm_api::api::{Request, Response};
 
@@ -20,6 +21,19 @@ impl Nsm {
             },
 
             _ => Err(anyhow!("unexpected response for GetRandom"))
+        }
+    }
+
+    pub fn attestation(&self, public_key: Option<Vec<u8>>) -> Result<Vec<u8>> {
+        let req = Request::Attestation{
+            nonce: None,
+            user_data: None,
+            public_key: public_key.map(ByteBuf::from),
+        };
+
+        match self.process_request(req)? {
+            Response::Attestation{ document } => Ok(document),
+            _ => Err(anyhow!("unexpected response for Attestation")),
         }
     }
 

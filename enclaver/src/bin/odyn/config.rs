@@ -1,10 +1,11 @@
 use anyhow::Result;
-use enclaver::constants::MANIFEST_FILE_NAME;
 use log::debug;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use http::Uri;
 
+use enclaver::constants::{MANIFEST_FILE_NAME, HTTP_EGRESS_PROXY_PORT};
 use enclaver::manifest::{self, Manifest};
 use enclaver::tls;
 
@@ -69,5 +70,39 @@ impl Configuration {
         debug!("Loading key_file: {}", key_path.to_string_lossy());
         debug!("Loading cert_file: {}", cert_path.to_string_lossy());
         tls::load_server_config(key_path, cert_path)
+    }
+
+    pub fn egress_proxy_uri(&self) -> Option<Uri> {
+        let enabled = if let Some(ref egress) = self.manifest.egress {
+            if let Some(ref allow) = egress.allow {
+                !allow.is_empty()
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        if enabled {
+            let port = self.manifest
+                .egress
+                .as_ref()
+                .unwrap()
+                .proxy_port
+                .unwrap_or(HTTP_EGRESS_PROXY_PORT);
+
+            Some(Uri::builder()
+                .scheme("http")
+                .authority(format!("127.0.0.1:{port}"))
+                .path_and_query("")
+                .build()
+                .unwrap())
+        } else {
+            None
+        }
+    }
+
+    pub fn kms_proxy_port(&self) -> Option<u16> {
+        self.manifest.kms_proxy.as_ref().map(|kp| kp.listen_port)
     }
 }

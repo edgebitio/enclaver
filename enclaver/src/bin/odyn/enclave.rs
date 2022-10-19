@@ -1,17 +1,19 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use rtnetlink::LinkHandle;
 use log::info;
 
-use crate::nsm::Nsm;
+use enclaver::nsm::Nsm;
 
 const DEV_RANDOM: &str = "/dev/random";
 
-pub async fn bootstrap() -> Result<()> {
+pub async fn bootstrap(nsm: Arc<Nsm>) -> Result<()> {
     info!("Bringing up loopback interface");
     lo_up().await?;
 
     info!("Seeding {} with entropy from nsm device", DEV_RANDOM);
-    seed_rng()?;
+    seed_rng(&nsm)?;
 
     Ok(())
 }
@@ -37,8 +39,7 @@ async fn lo_up() -> Result<()> {
 }
 
 
-fn seed_rng() -> Result<()> {
-    let nsm = Nsm::new();
+fn seed_rng(nsm: &Nsm) -> Result<()> {
     let seed = nsm.get_random()?;
     std::fs::write(&DEV_RANDOM, seed)?;
     Ok(())
