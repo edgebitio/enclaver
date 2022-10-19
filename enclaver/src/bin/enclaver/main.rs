@@ -1,11 +1,11 @@
-use std::future::Future;
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use clap::{Parser, Subcommand};
-use log::info;
-use tokio::signal::unix::{signal, SignalKind};
-use enclaver::build::EnclaveArtifactBuilder;
 #[cfg(feature = "run_enclave")]
-use enclaver::run::Enclave;
+use enclaver::run::{Enclave, EnclaveOpts};
+use enclaver::build::EnclaveArtifactBuilder;
+use log::{debug, error, info};
+use std::{future::Future, path::PathBuf};
+use tokio::signal::unix::{signal, SignalKind};
 
 #[derive(Debug, Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -30,17 +30,17 @@ enum Commands {
 
     #[clap(name = "run-eif")]
     RunEIF {
-        #[clap(long)]
-        eif_file: String,
+        #[clap(long, parse(from_os_str))]
+        eif_file: Option<PathBuf>,
+
+        #[clap(long, parse(from_os_str))]
+        manifest_file: Option<PathBuf>,
 
         #[clap(long)]
-        manifest_file: String,
+        cpu_count: Option<i32>,
 
         #[clap(long)]
-        cpu_count: i32,
-
-        #[clap(long)]
-        memory_mb: i32,
+        memory_mb: Option<i32>,
 
         #[clap(long)]
         debug_mode: bool,
@@ -86,14 +86,29 @@ async fn run(args: Cli) -> Result<()> {
             memory_mb,
             debug_mode,
         } => {
-            let mut enclave = Enclave::new(&eif_file, manifest_file, cpu_count, memory_mb, debug_mode).await?;
             let shutdown_signal = register_shutdown_signal_handler().await?;
 
-            enclave.start().await?;
+            let mut enclave = Enclave::new(EnclaveOpts {
+                eif_path: eif_file,
+                manifest_path: manifest_file,
+                cpu_count,
+                memory_mb,
+                debug_mode,
+            })
+            .await?;
 
-            shutdown_signal.await;
+            tokio::select! {
+                _ = shutdown_signal => {
+                    info!("shutdown signal received, terminating enclave");
+                },
+                enclave_res = enclave.run() => {
+                    match enclave_res {
+                        Ok(_) => debug!("enclave exited successfully"),
+                        Err(e) => error!("error running enclave: {e:#}"),
+                    }
+                },
+            }
 
-            info!("shutdown signal received, terminating enclave");
             enclave.stop().await?;
 
             Ok(())
@@ -101,9 +116,13 @@ async fn run(args: Cli) -> Result<()> {
 
         // run-eif on unsupported platform
         #[cfg(not(feature = "run_enclave"))]
-        Commands::RunEIF { .. } => Err(anyhow!(
-            "Running enclaves is not supported on this platform"
-        )),
+        Commands::RunEIF { .. } => {
+            use anyhow::anyhow;
+
+            Err(anyhow!(
+                "Running enclaves is not supported on this platform"
+            ))
+        }
     }
 }
 
@@ -123,15 +142,12 @@ async fn register_shutdown_signal_handler() -> Result<impl Future> {
 
 #[tokio::main]
 async fn main() {
-    // This is kind of a hack...
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info");
-    }
-    pretty_env_logger::init();
+    enclaver::utils::init_logging();
+
     let args = Cli::parse();
 
     if let Err(err) = run(args).await {
-        println!("error: {err:#}");
+        error!("error: {err:#}");
         std::process::exit(1);
     }
 }

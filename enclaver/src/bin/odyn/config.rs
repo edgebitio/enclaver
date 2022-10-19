@@ -1,9 +1,9 @@
-use std::path::{PathBuf, Path};
-use std::sync::Arc;
-use std::collections::HashMap;
-use log::{debug};
 use anyhow::Result;
-use enclaver::constants::CONFIG_FILE_NAME;
+use enclaver::constants::MANIFEST_FILE_NAME;
+use log::debug;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use enclaver::manifest::{self, Manifest};
 use enclaver::tls;
@@ -23,7 +23,7 @@ pub enum ListenerConfig {
 impl Configuration {
     pub async fn load<P: AsRef<Path>>(config_dir: P) -> Result<Self> {
         let mut manifest_path = config_dir.as_ref().to_path_buf();
-        manifest_path.push(CONFIG_FILE_NAME);
+        manifest_path.push(MANIFEST_FILE_NAME);
 
         let manifest = enclaver::manifest::load_manifest(manifest_path.to_str().unwrap()).await?;
 
@@ -46,14 +46,17 @@ impl Configuration {
             }
         }
 
-        Ok(Self{
+        Ok(Self {
             config_dir: config_dir.as_ref().to_path_buf(),
             manifest: manifest,
             listener_configs,
         })
     }
 
-    fn load_tls_server_config(tls_path: &Path, ingress: &manifest::Ingress) -> Result<Arc<rustls::ServerConfig>> {
+    fn load_tls_server_config(
+        tls_path: &Path,
+        ingress: &manifest::Ingress,
+    ) -> Result<Arc<rustls::ServerConfig>> {
         let mut ingress_path = tls_path.to_path_buf();
         ingress_path.push(&ingress.listen_port.to_string());
 

@@ -1,10 +1,10 @@
 use anyhow::{anyhow, Result};
+use log::debug;
 use serde::{Deserialize, Serialize};
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::Stdio;
-use tokio::process::Command;
-use log::{debug};
+use tokio::process::{ChildStdout, Command};
 
 pub struct NitroCLI {
     program: String,
@@ -48,6 +48,7 @@ impl NitroCLI {
         self.run_and_deserialize_output(args).await
     }
 
+    #[allow(dead_code)]
     pub async fn describe_enclaves(&self) -> Result<Vec<EnclaveInfo>> {
         self.run_and_deserialize_output(DescribeEnclavesArgs {})
             .await
@@ -64,6 +65,24 @@ impl NitroCLI {
             true => Ok(()),
             false => Err(anyhow!("nitro-cli failed to terminate enclave")),
         }
+    }
+
+    pub async fn console(&self, enclave_id: &str) -> Result<ChildStdout> {
+        let cmd_args = AttachConsoleArgs {
+            enclave_id: enclave_id.to_string(),
+        }
+        .to_args()?;
+
+        debug!("executing nitro-cli with args: {cmd_args:#?}");
+
+        let child = Command::new(&self.program)
+            .args(cmd_args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|err| anyhow!("failed to execute nitro-cli: {err}"))?;
+
+        Ok(child.stdout.unwrap())
     }
 }
 
@@ -177,6 +196,20 @@ impl NitroCLIArgs for TerminateEnclaveArgs {
     fn to_args(&self) -> Result<Vec<OsString>> {
         Ok(vec![
             OsString::from("terminate-enclave"),
+            OsString::from("--enclave-id"),
+            OsString::from(&self.enclave_id),
+        ])
+    }
+}
+
+pub struct AttachConsoleArgs {
+    pub enclave_id: String,
+}
+
+impl NitroCLIArgs for AttachConsoleArgs {
+    fn to_args(&self) -> Result<Vec<OsString>> {
+        Ok(vec![
+            OsString::from("console"),
             OsString::from("--enclave-id"),
             OsString::from(&self.enclave_id),
         ])

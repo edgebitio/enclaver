@@ -23,3 +23,5 @@ pub mod vsock;
 
 #[cfg(feature = "proxy")]
 pub mod tls;
+
+pub mod utils;

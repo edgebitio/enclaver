@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 use tokio::fs::File;
 
 use tokio::io::AsyncReadExt;
@@ -13,6 +14,7 @@ pub struct Manifest {
     pub sources: Sources,
     pub ingress: Option<Vec<Ingress>>,
     pub egress: Option<Egress>,
+    pub defaults: Option<Defaults>,
 }
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -45,22 +47,35 @@ pub struct Egress {
     pub deny: Option<Vec<String>>,
 }
 
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Defaults {
+    pub cpu_count: Option<i32>,
+    pub memory_mb: Option<i32>,
+}
+
 fn parse_manifest(buf: &[u8]) -> Result<Manifest> {
     let manifest: Manifest = serde_yaml::from_slice(buf)?;
 
     Ok(manifest)
 }
 
-pub async fn load_manifest(path: &str) -> Result<Manifest> {
-    let mut file = match File::open(path).await {
+pub async fn load_manifest<P: AsRef<Path>>(path: P) -> Result<Manifest> {
+    let mut file = match File::open(&path).await {
         Ok(file) => file,
-        Err(err) => return Err(anyhow::anyhow!("failed to open {path}: {err}")),
+        Err(err) => {
+            return Err(anyhow::anyhow!(
+                "failed to open {}: {err}",
+                path.as_ref().display()
+            ))
+        }
     };
 
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).await?;
 
-    parse_manifest(&buf).map_err(|e| anyhow!("invalid configuration in {path}: {e}"))
+    parse_manifest(&buf)
+        .map_err(|e| anyhow!("invalid configuration in {}: {e}", path.as_ref().display()))
 }
 
 #[cfg(test)]

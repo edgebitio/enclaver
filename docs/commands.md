@@ -52,11 +52,11 @@ Runs the given EIF file as an enclave without starting the outside components. U
 
 | Flag | Type | Description |
 |:-----|:-----|:------------|
-| `--eif-file` | String | Path on disk to EIF file to run. |
-| `--manifest-file` | String | Path on disk to the manifest file used to generate the EIF. |
-| `--cpu-count` | Int | Number of CPUs dedicated to the enclave. |
-| `--memory-mb` | Int | Megabytes of memory dedicated to the enclave. |
-| `--debug-mode` | Boolean (Default=false) | Enable debug mode on the enclave, which grants access to streaming logs from within. |
+| `--eif-file` | String (Default="/enclave/application.eif") | Path on disk to EIF file to run. |
+| `--manifest-file` | String (Default="/enclave/enclaver.yaml") | Path on disk to the manifest file used to generate the EIF. |
+| `--cpu-count` | Int (Default=2) | Number of CPUs dedicated to the enclave. Defaults to 2, unless another default is specified in the manifest. |
+| `--memory-mb` | Int (Default=4096) | Megabytes of memory dedicated to the enclave. Defaults to 4096, unless another default is specified in the manifest. |
+| `--debug-mode` | Boolean (Default=false) | Enable debug mode on the enclave, and translate its console output to log lines. |
 
 
 [format]: architecture.md#enclaver-image-format

@@ -1,11 +1,11 @@
-
 // Path and filename constants
-pub const CONFIG_FILE_NAME: &str = "enclaver.yaml";
+pub const EIF_FILE_NAME: &str = "application.eif";
+pub const MANIFEST_FILE_NAME: &str = "enclaver.yaml";
+
 pub const ENCLAVE_CONFIG_DIR: &str = "/etc/enclaver";
 pub const ENCLAVE_ODYN_PATH: &str = "/sbin/odyn";
 
-
-
+pub const RELEASE_BUNDLE_DIR: &str = "/enclave";
 
 // Port Constants
 
