@@ -134,10 +134,9 @@ $ docker run \
     --rm \
     --detach \
     --name enclave \
-    --volume /var/run/docker.sock:/var/run/docker.sock \
     --device=/dev/nitro_enclaves:/dev/nitro_enclaves:rw \
-    --port 443:443 \
-    us-docker.pkg.dev/edgebit-containers/containers/no-fly-list-enclave:latest
+    --port 8001:8001 \
+    us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:enclave-latest
 ```
 
 Check to see that the enclave was run successfully:

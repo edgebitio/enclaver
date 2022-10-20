@@ -22,8 +22,6 @@ The example CloudFormation increases the allowed hops for the Instance Metadata 
 
 On the EC2 machine, add this systemd unit which runs the Enclaver tool in a container, then runs your specified enclave image:
 
-TODO: this needs further testing
-TODO: update ports once final logic is in place
 ```systemd
 [Unit]
 Description=Enclaver
@@ -37,14 +35,12 @@ TimeoutStartSec=0
 Restart=always
 ExecStartPre=-/usr/bin/docker exec %n stop
 ExecStartPre=-/usr/bin/docker rm %n
-ExecStartPre=/usr/bin/docker pull us-docker.pkg.dev/edgebit-containers/containers/enclaver:v0.1.0
 ExecStart=/usr/bin/docker run \
     --rm \
     --name %n \
-    --volume /var/run/docker.sock:/var/run/docker.sock \
     --device=/dev/nitro_enclaves:/dev/nitro_enclaves:rw \
-    --port 443:443 \
-    registry.example.com/app-enclave:v1
+    -p 8001:8001 \
+    us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:enclave-latest
 
 [Install]
 WantedBy=multi-user.target
@@ -61,7 +57,7 @@ $ systemctl start enclave.service && systemctl enable enclave.service
 The example app answers web requests on port 443 of the EC2 machine:
 
 ```sh
-$ curl localhost:443
+$ curl localhost:8001
 "https://edgebit.io/enclaver/docs/0.x/guide-app/"
 ```
 
