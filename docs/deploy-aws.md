@@ -54,14 +54,14 @@ $ systemctl start enclave.service && systemctl enable enclave.service
 
 ## Testing the Enclave
 
-The example app answers web requests on port 443 of the EC2 machine:
+The example app answers web requests on port 8001 of the EC2 machine:
 
 ```sh
 $ curl localhost:8001
 "https://edgebit.io/enclaver/docs/0.x/guide-app/"
 ```
 
-Jump over to the [simple Python app][app] guide (the output URL above) that explains our sample application in more detail.
+Jump over to the [simple Python app][app] guide (the output URL above) that explains our sample application in more detail and how to build the image that was run above.
 
 ### Dedicated CPUs
 

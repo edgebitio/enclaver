@@ -42,12 +42,10 @@ spec:
            - containerPort: 80
              name: web
       - name: enclave 
-        image: us-docker.pkg.dev/edgebit-containers/containers/enclaver:v0.1.0
-        command: ["enclaver run"]
-        args: ["registry.example.com/enclave-app:latest"]
+        image: us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:enclave-latest
         ports: 
-           - containerPort: 443
-             name: enclave-proxy
+           - containerPort: 8001
+             name: enclave-app
         volumeMounts:
         - mountPath: /dev/nitro_enclaves
           name: nitro_enclaves
@@ -84,13 +82,13 @@ The example app answers web requests on port 443. You can make a Service and Loa
 
 TODO: update ports once final logic is in place
 ```sh
-$ kubectl port-forward <podname> 443:8000
+$ kubectl port-forward <podname> 8001:8001
 ```
 
 Then send a request to the forward port, which will be answered from within the enclave:
 
 ```sh
-$ curl localhost:8000
+$ curl localhost:8001
 "https://edgebit.io/enclaver/docs/0.x/guide-app/"
 ```
 
