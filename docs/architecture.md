@@ -128,7 +128,6 @@ ExecStart=/usr/bin/docker run \
     --name %n \
     --privileged \
     -p 443:443 \
-    us-docker.pkg.dev/edgebit-containers/containers/enclaver:v0.1.0 run \
     registry.example.com/app-enclave:v1
 
 [Install]

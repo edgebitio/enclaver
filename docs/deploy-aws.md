@@ -44,7 +44,6 @@ ExecStart=/usr/bin/docker run \
     --volume /var/run/docker.sock:/var/run/docker.sock \
     --device=/dev/nitro_enclaves:/dev/nitro_enclaves:rw \
     --port 443:443 \
-    us-docker.pkg.dev/edgebit-containers/containers/enclaver:v0.1.0 run \
     registry.example.com/app-enclave:v1
 
 [Install]
