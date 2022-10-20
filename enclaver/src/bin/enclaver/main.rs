@@ -1,8 +1,8 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use enclaver::build::EnclaveArtifactBuilder;
 #[cfg(feature = "run_enclave")]
 use enclaver::run::{Enclave, EnclaveOpts};
-use enclaver::build::EnclaveArtifactBuilder;
 use log::{debug, error, info};
 use std::{future::Future, path::PathBuf};
 use tokio::signal::unix::{signal, SignalKind};
@@ -18,7 +18,7 @@ struct Cli {
 enum Commands {
     #[clap(name = "build")]
     Build {
-        #[clap(long = "file", short = 'f')]
+        #[clap(long = "file", short = 'f', default_value = "enclaver.yaml")]
         manifest_file: String,
 
         #[clap(long = "eif-only")]
@@ -109,7 +109,7 @@ async fn run(args: Cli) -> Result<()> {
                 },
             }
 
-            enclave.stop().await?;
+            enclave.cleanup().await?;
 
             Ok(())
         }

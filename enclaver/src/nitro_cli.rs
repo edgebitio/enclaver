@@ -215,3 +215,63 @@ impl NitroCLIArgs for AttachConsoleArgs {
         ])
     }
 }
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum KnownIssue {
+    ImageTooLargeForRAM,
+    OutOfDiskSpace,
+}
+
+impl KnownIssue {
+    pub fn helpful_message(&self) -> &str {
+        match self {
+            KnownIssue::ImageTooLargeForRAM => {
+                r#"This often means that insufficient memory was available to convert the source
+image to an EIF. Consider shrinking the image, or re-running this command on a
+machine with more memory available."#
+            }
+            KnownIssue::OutOfDiskSpace => {
+                r#"Not enough disk space was available to convert the source image to an EIF. Note
+that enclaver output images contain EIF files, which are potentially very
+large. If you have been doing a lot of enclaver builds, consider cleaning up
+old images in your local Docker engine."#
+            },
+        }
+    }
+
+    pub fn detect(line: &str) -> Option<Self> {
+        // See: https://github.com/aws/aws-nitro-enclaves-cli/issues/282
+        if line.contains(r#"rootfs/tmp\n  cmd\n  env\nCreate outputs:\n""#) {
+            return Some(KnownIssue::ImageTooLargeForRAM);
+        }
+
+        if line.contains("no space left on device") {
+            return Some(KnownIssue::OutOfDiskSpace);
+        }
+
+        None
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_detect_known_issues() {
+        assert_eq!(KnownIssue::detect("foobar"), None);
+        assert_eq!(
+            KnownIssue::detect(
+                r#"Linuxkit reported an error while creating the customer ramfs: "Add init containers:\nProcess init image: docker.io/library/1c505109-3417-4eec-9386-413dc32d4206\ntime=\"2022-10-20T22:13:33Z\" level=fatal msg=\"Failed to build init tarball from docker.io/library/1c505109-3417-4eec-9386-413dc32d4206: write /tmp/170765991: no space left on device\"\n""#
+            ),
+            Some(KnownIssue::OutOfDiskSpace)
+        );
+        assert_eq!(
+            KnownIssue::detect(
+                r#"Linuxkit reported an error while creating the customer ramfs: "Add init containers:\nProcess init image: docker.io/library/79ac5a4b-6e92-4e83-a351-ebdb2ff97d18\nAdd files:\n  rootfs/dev\n  rootfs/run\n  rootfs/sys\n  rootfs/var\n  rootfs/proc\n  rootfs/tmp\n  cmd\n  env\nCreate outputs:\n""#
+            ),
+            Some(KnownIssue::ImageTooLargeForRAM)
+        );
+    }
+}

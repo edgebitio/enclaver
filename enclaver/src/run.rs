@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tokio::fs::File;
 use tokio_util::codec::{FramedRead, LinesCodec};
+use tokio_util::sync::CancellationToken;
 use tokio_vsock::VsockStream;
 
 use crate::nitro_cli::{EnclaveInfo, NitroCLI, RunEnclaveArgs};
@@ -20,7 +21,7 @@ use crate::proxy::ingress::HostProxy;
 
 const LOG_VSOCK_RETRY_INTERVAL: Duration = Duration::from_millis(250);
 const STATUS_VSOCK_RETRY_INTERVAL: Duration = Duration::from_millis(250);
-const STATUS_VSOCK_RETRY_LIMIT: i32 = 10;
+const STATUS_VSOCK_RETRY_LIMIT: i32 = 100;
 
 const DEFAULT_CPU_COUNT: i32 = 2;
 const DEFAULT_MEMORY_MB: i32 = 4096;
@@ -41,6 +42,7 @@ pub struct Enclave {
     memory_mb: i32,
     debug_mode: bool,
     enclave_info: Option<EnclaveInfo>,
+    status_task: Option<tokio::task::JoinHandle<Result<EnclaveExitStatus>>>,
     tasks: Vec<tokio::task::JoinHandle<()>>,
 }
 
@@ -108,6 +110,7 @@ impl Enclave {
             debug_mode: opts.debug_mode,
             enclave_info: None,
             tasks: Vec::new(),
+            status_task: None,
         })
     }
 
@@ -115,6 +118,8 @@ impl Enclave {
         if self.enclave_info.is_some() {
             return Err(anyhow!("Enclave already started"));
         }
+
+        let terminated = CancellationToken::new();
 
         // Start the egress proxy before starting the enclave, to avoid (unlikely) race conditions
         // where something inside the enclave attempts egress before the proxy is ready.
@@ -137,6 +142,7 @@ impl Enclave {
         info!("started enclave {}", enclave_info.id);
 
         if self.debug_mode {
+            // TODO: Should we let an an EOF from the console terminate run?
             self.attach_debug_console(&enclave_info.id).await?;
         }
 
@@ -144,7 +150,9 @@ impl Enclave {
 
         self.start_ingress_proxies(enclave_info.cid).await?;
 
-        self.await_completion(enclave_info.cid).await?;
+        self.start_status_task(enclave_info.cid, terminated.clone());
+
+        terminated.cancelled().await;
 
         Ok(())
     }
@@ -210,7 +218,17 @@ impl Enclave {
         Ok(())
     }
 
-    async fn await_completion(&mut self, cid: u32) -> Result<()> {
+    fn start_status_task(&mut self, cid: u32, terminate: CancellationToken) {
+        self.status_task = Some(tokio::task::spawn(async move {
+            let exit_res = Enclave::await_exit(cid).await;
+
+            terminate.cancel();
+
+            exit_res
+        }));
+    }
+
+    async fn await_exit(cid: u32) -> Result<EnclaveExitStatus> {
         let mut failed_attempts = 0;
 
         loop {
@@ -242,7 +260,7 @@ impl Enclave {
                     }
                 };
 
-                let status: OdynStatus = match serde_json::from_str(&line) {
+                let status: EnclaveProcessStatus = match serde_json::from_str(&line) {
                     Ok(status) => status,
                     Err(e) => {
                         error!("error parsing status line: {e}");
@@ -250,17 +268,17 @@ impl Enclave {
                     }
                 };
 
-                debug!("enclave status: {status:#?}");
-
                 match status {
-                    OdynStatus::Running => {}
-                    OdynStatus::Exited { code } => {
+                    EnclaveProcessStatus::Exited { code } => {
                         info!("enclave exited with code {code}");
-                        return Ok(());
+                        return Ok(EnclaveExitStatus::Exited(code));
                     }
-                    OdynStatus::Signaled { signal } => {
+                    EnclaveProcessStatus::Signaled { signal } => {
                         info!("enclave stopped due to signal {signal}");
-                        return Ok(());
+                        return Ok(EnclaveExitStatus::Signaled(signal));
+                    }
+                    _ => {
+                        debug!("enclave status: {status:#?}");
                     }
                 }
             }
@@ -283,23 +301,36 @@ impl Enclave {
         Ok(())
     }
 
-    pub async fn stop(&self) -> Result<()> {
-        if let Some(enclave_info) = &self.enclave_info {
-            info!("stopping enclave {}", enclave_info.id);
+    pub async fn cleanup(self) -> Result<Option<EnclaveExitStatus>> {
+        if let Some(enclave_info) = self.enclave_info {
+            debug!("terminating enclave");
             self.cli.terminate_enclave(&enclave_info.id).await?;
         } else {
             debug!("no enclave to stop");
         }
 
-        // TODO: stop other tasks
+        for task in self.tasks {
+            task.abort();
+            match task.await {
+                Ok(_) => {}
+                Err(e) => {
+                    debug!("task terminated with error {e}");
+                }
+            };
+        }
 
-        Ok(())
+        let exit_status = match self.status_task {
+            Some(task) => Some(task.await??),
+            None => None,
+        };
+
+        Ok(exit_status)
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "status")]
-enum OdynStatus {
+enum EnclaveProcessStatus {
     #[serde(rename = "running")]
     Running,
 
@@ -308,4 +339,10 @@ enum OdynStatus {
 
     #[serde(rename = "signaled")]
     Signaled { signal: i32 },
+}
+
+#[derive(Debug)]
+pub enum EnclaveExitStatus {
+    Exited(i32),
+    Signaled(i32),
 }

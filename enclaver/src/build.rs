@@ -3,13 +3,13 @@ use crate::constants::{
 };
 use crate::images::{FileBuilder, FileSource, ImageManager, ImageRef, LayerBuilder};
 use crate::manifest::{load_manifest, Manifest};
-use crate::nitro_cli::EIFInfo;
+use crate::nitro_cli::{EIFInfo, KnownIssue};
 use anyhow::{anyhow, Result};
 use bollard::container::{Config, LogOutput, LogsOptions, WaitContainerOptions};
 use bollard::models::{ContainerConfig, HostConfig, Mount, MountTypeEnum};
 use bollard::Docker;
 use futures_util::stream::{StreamExt, TryStreamExt};
-use log::{debug, info};
+use log::{debug, info, warn};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::TempDir;
@@ -301,11 +301,7 @@ impl EnclaveArtifactBuilder {
             .start_container::<String>(&build_container_id, None)
             .await?;
 
-        // Stream stderr logs to stderr. This is useful when debugging failures, but
-        // also provides visual feedback that something is happening when on track
-        // to succeed. It is kind of weird for this function to have a side-effect like
-        // this; perhaps the EnclaveArtifactBuilder should be passed some kind of logging
-        // facility?
+        // Convert docker output to log lines, to give the user some feedback as to what is going on.
         let mut log_stream = self.docker.logs::<String>(
             &build_container_id,
             Some(LogsOptions {
@@ -315,10 +311,25 @@ impl EnclaveArtifactBuilder {
             }),
         );
 
-        while let Some(Ok(LogOutput::StdErr { message: line })) = log_stream.next().await {
-            // Convert lines of text from nitro-cli into log messages. Note that these come with trailing
-            // newlines, which we trim off.
-            info!(target: "nitro-cli::build-eif", "{}", String::from_utf8_lossy(&line).trim_end());
+        let mut detected_nitro_cli_issue = None;
+
+        while let Some(Ok(LogOutput::StdErr { message: bytes })) = log_stream.next().await {
+            // Note that these come with trailing newlines, which we trim off.
+            let line = String::from_utf8_lossy(&bytes);
+            let trimmed = line.trim_end();
+
+            if detected_nitro_cli_issue.is_none() {
+                detected_nitro_cli_issue = KnownIssue::detect(&line);
+            }
+
+            info!(target: "nitro-cli::build-eif", "{trimmed}");
+        }
+
+        if let Some(issue) = detected_nitro_cli_issue {
+            warn!(
+                "detected known nitro-cli issue:\n{}",
+                issue.helpful_message()
+            );
         }
 
         let status_code = self
@@ -346,6 +357,13 @@ impl EnclaveArtifactBuilder {
         while let Some(Ok(LogOutput::StdOut { message })) = log_stream.next().await {
             json_buf.extend_from_slice(message.as_ref());
         }
+
+        // If we make it this far, do a little bit of cleanup
+        let _ = self
+            .docker
+            .remove_container(&build_container_id, None)
+            .await?;
+        let _ = self.docker.remove_image(&img_tag, None, None).await?;
 
         Ok(serde_json::from_slice(&json_buf)?)
     }
