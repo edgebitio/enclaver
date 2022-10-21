@@ -153,7 +153,7 @@ mod tests {
     }
 
     fn start_enclave_proxy(port: u16, cfg: Arc<ServerConfig>) -> JoinHandle<()> {
-        let proxy = EnclaveProxy::bind(port, cfg).unwrap();
+        let proxy = EnclaveProxy::bind_tls(port, cfg).unwrap();
         tokio::task::spawn(async move { proxy.serve().await; } )
     }
 

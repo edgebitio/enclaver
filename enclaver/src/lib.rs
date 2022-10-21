@@ -11,9 +11,14 @@ mod nitro_cli;
 pub mod manifest;
 
 pub mod policy;
+pub mod http_client;
+pub mod keypair;
 
 #[cfg(feature = "run_enclave")]
 pub mod run;
+
+#[cfg(feature = "odyn")]
+pub mod nsm;
 
 #[cfg(feature = "proxy")]
 pub mod proxy;

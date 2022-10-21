@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use tokio::task::JoinHandle;
 use anyhow::Result;
-use enclaver::constants::{HTTP_EGRESS_PROXY_PORT, HTTP_EGRESS_VSOCK_PORT};
+use enclaver::constants::HTTP_EGRESS_VSOCK_PORT;
 
 use enclaver::proxy::egress_http::EnclaveHttpProxy;
 use enclaver::policy::EgressPolicy;
@@ -14,13 +14,12 @@ pub struct EgressService {
 
 impl EgressService {
     pub async fn start(config: &Configuration) -> Result<Self> {
-        let task = if is_enabled(config) {
-            let proxy_port = proxy_port(config);
+        let task = if let Some(proxy_uri) = config.egress_proxy_uri() {
             let policy = Arc::new(EgressPolicy::new(config.manifest.egress.as_ref().unwrap()));
 
-            set_proxy_env_var(&format!("http://127.0.0.1:{proxy_port}"));
+            set_proxy_env_var(&proxy_uri.to_string());
 
-            let proxy = EnclaveHttpProxy::bind(proxy_port).await?;
+            let proxy = EnclaveHttpProxy::bind(proxy_uri.port_u16().unwrap()).await?;
 
             Some(tokio::task::spawn(async move {
                 proxy.serve(HTTP_EGRESS_VSOCK_PORT, policy).await;
@@ -42,25 +41,13 @@ impl EgressService {
     }
 }
 
-fn is_enabled(config: &Configuration) -> bool {
-    if let Some(ref egress) = config.manifest.egress {
-        if let Some(ref allow) = egress.allow {
-            return !allow.is_empty();
-        }
-    }
-
-    false
-}
-
-fn proxy_port(config: &Configuration) -> u16 {
-    config.manifest
-        .egress.as_ref().unwrap()
-        .proxy_port.unwrap_or(HTTP_EGRESS_PROXY_PORT)
-}
-
 fn set_proxy_env_var(value: &str) {
     std::env::set_var("http_proxy", value);
     std::env::set_var("https_proxy", value);
     std::env::set_var("HTTP_PROXY", value);
     std::env::set_var("HTTPS_PROXY", value);
+
+    const NO_PROXY: &str = "localhost,127.0.0.1";
+    std::env::set_var("no_proxy", NO_PROXY);
+    std::env::set_var("NO_PROXY", NO_PROXY);
 }
