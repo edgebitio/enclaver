@@ -16,29 +16,37 @@ Parameters:
     Description: SSH Keypair to login to the instance
     Type: AWS::EC2::KeyPair::KeyName
 Resources:
+  DemoLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: EnclaverLaunchTemplate
+      LaunchTemplateData:
+        MetadataOptions:
+          HttpPutResponseHopLimit: 2 # Increase from 1 to 2 due to docker0 hop
+        KeyName: !Ref KeyName
+        SecurityGroupIds: 
+          - !Ref DemoSecurityGroup
+        EnclaveOptions:
+          Enabled: true
+        UserData:
+          Fn::Base64: 
+            !Sub |
+              #!/bin/bash
+              amazon-linux-extras install aws-nitro-enclaves-cli
+              yum install aws-nitro-enclaves-cli-devel -y
+              usermod -aG ne ec2-user
+              usermod -aG docker ec2-user
+              sed -i 's/memory_mib: 512/memory_mib: 4096/g' /etc/nitro_enclaves/allocator.yaml
+              systemctl start nitro-enclaves-allocator.service && sudo systemctl enable nitro-enclaves-allocator.service
+              systemctl start docker && sudo systemctl enable docker
   DemoInstance:
     Type: 'AWS::EC2::Instance'
     Properties: 
       ImageId: !Ref ImageId
       InstanceType: !Ref InstanceType
-      KeyName: !Ref KeyName
-      MetadataOptions:
-        HttpPutResponseHopLimit: 2 # Increase by 1 from default of 1 due to docker0 hop
-      SecurityGroupIds: 
-        - !Ref DemoSecurityGroup
-      EnclaveOptions:
-        Enabled: true
-      UserData:
-        Fn::Base64: 
-          !Sub |
-            #!/bin/bash
-            amazon-linux-extras install aws-nitro-enclaves-cli
-            yum install aws-nitro-enclaves-cli-devel -y
-            usermod -aG ne ec2-user
-            usermod -aG docker ec2-user
-            sed -i 's/memory_mib: 512/memory_mib: 4096/g' /etc/nitro_enclaves/allocator.yaml
-            systemctl start nitro-enclaves-allocator.service && sudo systemctl enable nitro-enclaves-allocator.service
-            systemctl start docker && sudo systemctl enable docker
+      LaunchTemplate: 
+          LaunchTemplateId: !Ref DemoLaunchTemplate
+          Version: !GetAtt DemoLaunchTemplate.LatestVersionNumber
   DemoSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
