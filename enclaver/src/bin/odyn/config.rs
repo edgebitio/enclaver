@@ -8,6 +8,7 @@ use http::Uri;
 use enclaver::constants::{MANIFEST_FILE_NAME, HTTP_EGRESS_PROXY_PORT};
 use enclaver::manifest::{self, Manifest};
 use enclaver::tls;
+use enclaver::proxy::kms::KmsEndpointProvider;
 
 pub struct Configuration {
     pub config_dir: PathBuf,
@@ -104,5 +105,25 @@ impl Configuration {
 
     pub fn kms_proxy_port(&self) -> Option<u16> {
         self.manifest.kms_proxy.as_ref().map(|kp| kp.listen_port)
+    }
+}
+
+impl KmsEndpointProvider for Configuration {
+    fn endpoint(&self, region: &str) -> String {
+        let ep = self.manifest
+            .kms_proxy
+            .as_ref()
+            .map(|kp| {
+                kp.endpoints
+                    .as_ref()
+                    .map(|eps| {
+                    eps.get(region)
+                        .map(|ep| ep.clone())
+                })
+            })
+            .flatten()
+            .flatten();
+
+        ep.unwrap_or_else(|| format!("kms.{region}.amazonaws.com"))
     }
 }

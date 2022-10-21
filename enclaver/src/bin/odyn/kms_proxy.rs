@@ -17,7 +17,7 @@ pub struct KmsProxyService {
 }
 
 impl KmsProxyService {
-    pub async fn start(config: &Configuration, nsm: Arc<Nsm>) -> Result<Self> {
+    pub async fn start(config: Arc<Configuration>, nsm: Arc<Nsm>) -> Result<Self> {
         let task = if let Some(port) = config.kms_proxy_port() {
             if let Some(proxy_uri) = config.egress_proxy_uri() {
                 let attester = Box::new(NsmAttestationProvider::new(nsm));
@@ -27,10 +27,13 @@ impl KmsProxyService {
                 let keypair = Arc::new(KeyPair::generate()?);
 
                 info!("Fetching credentials from IMDSv2");
-                let kms_config = KmsProxyConfig::from_imds(proxy_uri, keypair, attester).await?;
+                let kms_config = KmsProxyConfig::from_imds(proxy_uri, keypair, attester, config.clone()).await?;
                 info!("Credentials fetched");
 
                 let proxy = KmsProxy::bind(port, kms_config)?;
+
+                // Set and env var to avoid configuring the port in two places
+                std::env::set_var("AWS_KMS_ENDPOINT", format!("http://127.0.0.1:{port}"));
 
                 Some(tokio::task::spawn(async move {
                     if let Err(err) = proxy.serve().await {

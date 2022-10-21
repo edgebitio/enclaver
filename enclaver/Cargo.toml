@@ -14,6 +14,8 @@ name = "enclaver"
 
 [dependencies]
 anyhow = { version = "1.0", features = ["std"] }
+lazy_static = "1.4"
+regex = "1.6"
 tokio = { version = "1.20", features = ["full"] }
 tokio-pipe = "0.2"
 tokio-vsock = { git = "https://github.com/eyakubovich/tokio-vsock.git", rev = "8abc3b5c18d866a2d7f6c2f1fe0d835b49c85bd5", optional = true }
@@ -23,7 +25,7 @@ tokio-tar = "0.3"
 rustls = "0.20"
 rustls-pemfile = "1.0"
 log = "0.4"
-env_logger = "0.9"
+pretty_env_logger = "0.4"
 nix = "0.24"
 futures = "0.3"
 rand = { version = "0.8", features = ["std", "std_rng"] }
@@ -39,6 +41,7 @@ bollard = "0.13"
 tempfile = "3.0"
 http = "0.2"
 http-body = "0.4"
+form_urlencoded = "1.1"
 hyper = { version = "0.14", features = ["http1"] }
 hyper-proxy = { version = "0.9", default-features = false, features = ["rustls-webpki"] }
 uuid = { version = "1.0", features = ["v4"] }

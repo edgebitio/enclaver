@@ -149,6 +149,7 @@ async fn main() {
         std::env::set_var("RUST_LOG", "info");
     }
 
+    pretty_env_logger::init();
     let args = Cli::parse();
 
     if let Err(err) = run(args).await {

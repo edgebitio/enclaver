@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -59,6 +61,7 @@ pub struct Defaults {
 #[serde(deny_unknown_fields)]
 pub struct KmsProxy {
     pub listen_port: u16,
+    pub endpoints: Option<HashMap<String, String>>,
 }
 
 fn parse_manifest(buf: &[u8]) -> Result<Manifest> {

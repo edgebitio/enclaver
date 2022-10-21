@@ -37,7 +37,7 @@ struct CliArgs {
 }
 
 async fn run(args: &CliArgs) -> Result<()> {
-    let config = Configuration::load(&args.config_dir).await?;
+    let config = Arc::new(Configuration::load(&args.config_dir).await?);
 
     let mut console_task = None;
     if !args.no_console {
@@ -60,7 +60,7 @@ async fn run(args: &CliArgs) -> Result<()> {
     info!("Startng ingress");
     let ingress = IngressService::start(&config)?;
     info!("Starting KMS proxy");
-    let kms_proxy = KmsProxyService::start(&config, nsm.clone()).await?;
+    let kms_proxy = KmsProxyService::start(config.clone(), nsm.clone()).await?;
 
     let creds = launcher::Credentials{
         uid: 100,
@@ -94,7 +94,6 @@ async fn run(args: &CliArgs) -> Result<()> {
 #[tokio::main]
 async fn main() {
     enclaver::utils::init_logging();
-
     let args = CliArgs::parse();
 
     if let Err(err) = run(&args).await {

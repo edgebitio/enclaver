@@ -418,7 +418,7 @@ mod tests {
 
     impl HttpProxyFixture {
         async fn start(base_port: u16, use_tls: bool) -> Self {
-            _ = env_logger::try_init();
+            _ = pretty_env_logger::try_init();
 
             return Self{
                 base_port: base_port,
