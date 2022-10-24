@@ -1,11 +1,13 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use enclaver::build::EnclaveArtifactBuilder;
+use enclaver::{build::EnclaveArtifactBuilder, run::EnclaveExitStatus};
 #[cfg(feature = "run_enclave")]
 use enclaver::run::{Enclave, EnclaveOpts};
 use log::{debug, error, info};
-use std::{future::Future, path::PathBuf};
+use std::{future::Future, path::PathBuf, process::{Termination, ExitCode}};
 use tokio::signal::unix::{signal, SignalKind};
+
+const ENCLAVE_SIGNALED_EXIT_CODE: u8 = 107;
 
 #[derive(Debug, Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -47,7 +49,22 @@ enum Commands {
     },
 }
 
-async fn run(args: Cli) -> Result<()> {
+enum CLISuccess {
+    Ok,
+    EnclaveStatus(enclaver::run::EnclaveExitStatus),
+}
+
+impl Termination for CLISuccess {
+    fn report(self) -> ExitCode {
+        match self {
+            CLISuccess::Ok => ExitCode::SUCCESS,
+            CLISuccess::EnclaveStatus(EnclaveExitStatus::Exited(code)) => ExitCode::from(code as u8),
+            CLISuccess::EnclaveStatus(EnclaveExitStatus::Signaled(_signal)) => ExitCode::from(ENCLAVE_SIGNALED_EXIT_CODE),
+        }
+    }
+}
+
+async fn run(args: Cli) -> Result<CLISuccess> {
     match args.subcommand {
         Commands::Build {
             manifest_file,
@@ -60,7 +77,7 @@ async fn run(args: Cli) -> Result<()> {
             println!("Built Release Image: {release_img} ({tag})");
             println!("EIF Info: {:#?}", eif_info);
 
-            Ok(())
+            Ok(CLISuccess::Ok)
         }
 
         Commands::Build {
@@ -75,7 +92,7 @@ async fn run(args: Cli) -> Result<()> {
             println!("Built EIF: {}", eif_path.display());
             println!("EIF Info: {:#?}", eif_info);
 
-            Ok(())
+            Ok(CLISuccess::Ok)
         }
 
         #[cfg(feature = "run_enclave")]
@@ -103,15 +120,17 @@ async fn run(args: Cli) -> Result<()> {
                 },
                 enclave_res = enclave.run() => {
                     match enclave_res {
-                        Ok(_) => debug!("enclave exited successfully"),
+                        Ok(()) => debug!("enclave exited successfully"),
                         Err(e) => error!("error running enclave: {e:#}"),
                     }
                 },
             }
 
-            enclave.cleanup().await?;
-
-            Ok(())
+            if let Some(status) = enclave.cleanup().await? {
+                Ok(CLISuccess::EnclaveStatus(status))
+            } else {
+                Ok(CLISuccess::Ok)
+            }
         }
 
         // run-eif on unsupported platform
@@ -141,13 +160,10 @@ async fn register_shutdown_signal_handler() -> Result<impl Future> {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<CLISuccess> {
     enclaver::utils::init_logging();
 
     let args = Cli::parse();
 
-    if let Err(err) = run(args).await {
-        error!("error: {err:#}");
-        std::process::exit(1);
-    }
+    run(args).await
 }
