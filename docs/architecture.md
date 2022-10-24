@@ -116,20 +116,20 @@ Description=Enclaver
 Documentation=https://edgebit.io/enclaver/docs/
 After=docker.service
 Requires=docker.service
+Requires=nitro-enclaves-allocator.service
 
 [Service]
 TimeoutStartSec=0
 Restart=always
 ExecStartPre=-/usr/bin/docker exec %n stop
 ExecStartPre=-/usr/bin/docker rm %n
-ExecStartPre=/usr/bin/docker pull us-docker.pkg.dev/edgebit-containers/containers/enclaver:v0.1.0
+ExecStartPre=/usr/bin/docker pull us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:enclave-latest
 ExecStart=/usr/bin/docker run \
     --rm \
     --name %n \
-    --privileged \
-    -p 443:443 \
-    us-docker.pkg.dev/edgebit-containers/containers/enclaver:v0.1.0 run \
-    registry.example.com/app-enclave:v1
+    --device=/dev/nitro_enclaves:/dev/nitro_enclaves:rw \
+    -p 8001:8001 \
+    us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:enclave-latest
 
 [Install]
 WantedBy=multi-user.target

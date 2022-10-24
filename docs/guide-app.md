@@ -25,7 +25,7 @@ Here's an example of an attestation:
 
 TODO: add real container image
 ```sh
-$ enclave trust us-docker.pkg.dev/edgebit-containers/containers/no-fly-list-enclave:latest
+$ enclave trust us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:enclave-latest
 TODO: add real attestation
 ```
 </details>
@@ -127,18 +127,14 @@ After the image is fetched, it is broken apart into [the outside][outside] and [
 
 We will start it manually using Docker, but you can also set up a [systemd unit][unit].
 
-TODO: update ports once final logic is in place
-TODO: add real container image
 ```sh
 $ docker run \
     --rm \
     --detach \
     --name enclave \
-    --volume /var/run/docker.sock:/var/run/docker.sock \
     --device=/dev/nitro_enclaves:/dev/nitro_enclaves:rw \
-    --port 443:443 \
-    us-docker.pkg.dev/edgebit-containers/containers/enclaver:v0.1.0 run \
-    us-docker.pkg.dev/edgebit-containers/containers/no-fly-list-enclave:latest
+    --port 8001:8001 \
+    us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:enclave-latest
 ```
 
 Check to see that the enclave was run successfully:
@@ -158,7 +154,6 @@ Now the fun part. Let's see who can fly and who can't. Remember, a key part of t
 
 We know that members of Sesame Street might not be allowed to fly. Test it out for yourself from the EC2 machine:
 
-TODO: update ports once final logic is in place
 ```sh
 $ curl localhost:8001/enclave/passenger?name=foo
 foo is cleared to fly. Enjoy your flight!
