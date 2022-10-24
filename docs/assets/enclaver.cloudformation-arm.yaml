@@ -1,0 +1,87 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Test Enclaver on a single EC2 machine with Nitro Enclaves enabled
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Existing VPC to place the machine
+  InstanceType:
+    Type: String
+    Description: Cheapest Gravitron2 instance that supports Nitro Enclaves
+    Default: c6g.large
+  KeyName:
+    Description: SSH Keypair to login to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+  LatestAmiId:
+    Description: Amazon Linux 2 Arm AMI for us-east1 Region
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-arm64-gp2'
+Resources:
+  DemoLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: EnclaverLaunchTemplate
+      LaunchTemplateData:
+        MetadataOptions:
+          HttpPutResponseHopLimit: 2 # Increase from 1 to 2 due to docker0 hop
+        KeyName: !Ref KeyName
+        SecurityGroupIds: 
+          - !Ref DemoSecurityGroup
+        EnclaveOptions:
+          Enabled: true
+        UserData:
+          Fn::Base64: 
+            !Sub |
+              #!/bin/bash
+              amazon-linux-extras install aws-nitro-enclaves-cli
+              yum install aws-nitro-enclaves-cli-devel -y
+              usermod -aG ne ec2-user
+              usermod -aG docker ec2-user
+              sed -i 's/cpu_count: 2/cpu_count: 1/g' /etc/nitro_enclaves/allocator.yaml
+              sed -i 's/memory_mib: 512/memory_mib: 3072/g' /etc/nitro_enclaves/allocator.yaml
+              systemctl start nitro-enclaves-allocator.service && sudo systemctl enable nitro-enclaves-allocator.service
+              systemctl start docker && sudo systemctl enable docker
+  DemoInstance:
+    Type: 'AWS::EC2::Instance'
+    Properties: 
+      ImageId: !Ref LatestAmiId
+      InstanceType: !Ref InstanceType
+      LaunchTemplate: 
+          LaunchTemplateId: !Ref DemoLaunchTemplate
+          Version: !GetAtt DemoLaunchTemplate.LatestVersionNumber
+      IamInstanceProfile: !Ref DemoInstanceProfile
+  DemoSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !Ref VpcId
+      GroupDescription: Allow SSH access via port 22
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: '0.0.0.0/0'
+      Tags:
+        - Key: Name
+          Value: Enclaver-Security-Group
+  DemoIAMRole:
+    # This role intentionally doesn't grant any allowed actions
+    # It's only needed to obtain IMDS credentials to pull our publicly accessible objects
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+  DemoInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Roles:
+        - !Ref DemoIAMRole
+Outputs:
+  DemoInstanceId:
+    Description: Instance Id 
+    Value: !Ref DemoInstance

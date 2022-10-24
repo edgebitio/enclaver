@@ -10,9 +10,10 @@ Enclaver can be used with EC2 machines that are enabled to run Nitro Enclaves. T
 
 ## Instance Requirements
 
-Only certain [EC2 instance types][instance-req] can run Nitro Enclaves. Since dedicated CPUs are carved off for the enclave, the larger x86 types with 4+ vCPUs are ok, with `c6a.xlarge` being the cheapest. Your machines must be booted with the Nitro Enclave option enabled.
+Only certain [EC2 instance types][instance-req] can run Nitro Enclaves. Since dedicated CPUs are carved off for the enclave, the larger x86 types with 4+ vCPUs are ok, with `c6a.xlarge` being the cheapest. Gravitron2/Arm instances have a lower 2+ vCPU requirement, with `c6g.large` being the cheapest. Your machines must be booted with the Nitro Enclave option enabled.
 
-[![CloudFormation](img/launch-stack.svg)][cloudformation]
+[![CloudFormation](img/launch-stack-x86.svg)][cloudformation-x86]
+[![CloudFormation](img/launch-stack-arm.svg)][cloudformation-arm]
 
 Due to Amazon restrictions, each EC2 machine can only run a single enclave at a time.
 
@@ -101,6 +102,7 @@ Fetching credentials from IMDSv2
 Credentials fetched
 ```
 
-[cloudformation]: https://us-east-1.console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://enclaver-cloudformation.s3.amazonaws.com/enclaver.cloudformation.yaml&stackName=Enclaver-Demo
+[cloudformation-x86]: https://us-east-1.console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://enclaver-cloudformation.s3.amazonaws.com/enclaver.cloudformation-x86.yaml&stackName=Enclaver-Demo
+[cloudformation-arm]: https://us-east-1.console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://enclaver-cloudformation.s3.amazonaws.com/enclaver.cloudformation-arm.yaml&stackName=Enclaver-Demo
 [app]: guide-app.md
 [instance-req]: https://docs.aws.amazon.com/enclaves/latest/user/nitro-enclave.html#nitro-enclave-reqs
