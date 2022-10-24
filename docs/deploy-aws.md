@@ -35,6 +35,7 @@ TimeoutStartSec=0
 Restart=always
 ExecStartPre=-/usr/bin/docker exec %n stop
 ExecStartPre=-/usr/bin/docker rm %n
+ExecStartPre=/usr/bin/docker pull us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:enclave-latest
 ExecStart=/usr/bin/docker run \
     --rm \
     --name %n \
