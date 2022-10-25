@@ -47,7 +47,7 @@ ExecStart=/usr/bin/docker run \
 WantedBy=multi-user.target
 ```
 
-Be sure to swap out `registry.example.com/app-enclave:v1` for your image location. Afterwards, start the unit and enable the unit so it starts again after a reboot:
+Be sure to swap out `us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:enclave-latest` for your image location. Afterwards, start the unit and enable the unit so it starts again after a reboot:
 
 ```sh
 $ systemctl start enclave.service && systemctl enable enclave.service
