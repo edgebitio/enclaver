@@ -23,9 +23,10 @@ The enclave has a code identity, called an attestation, that unqiuely identifies
 
 Here's an example of an attestation:
 
-TODO: add real container image
+TODO: Implement trust command. See [issue #38](https://github.com/edgebitio/enclaver/issues/38).
+
 ```sh
-$ enclave trust us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:enclave-latest
+$ enclaver trust us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:enclave-latest
 TODO: add real attestation
 ```
 </details>
@@ -94,13 +95,28 @@ Hope you learned something! Let's jump into deploying our app.
 Enclaver builds enclave images based on a configuration file, which specifies the container that holds the app code, the network policy for egress, and a few other details.
 This policy is packaged into the image because it is distributed with the image and included in its [cryptographic attestation][attestation].
 
-Here's the configuration for the No-Fly list app.
+Here's the configuration for the No-Fly list app:
 
 ```yaml
-TODO: add configuration
+version: v1
+name: "test"
+target: "no-fly-list:enclave-latest"
+sources:
+  app: "us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:latest"
+defaults:
+  memory_mb: 4096
+kms_proxy:
+  listen_port: 9999
+egress:
+  allow:
+    - kms.*.amazonaws.com
+    - s3.amazonaws.com
+    - 169.254.169.254
+ingress:
+  - listen_port: 8001
 ```
 
-It's pretty straightforward. The `from` parameter specifies the source container for our code. Since we're using AWS KMS for crypotgraphy and S3 for fetching our encrypted no-fly list, those addresses are allowed.
+It's pretty straightforward. The `sources.app` parameter specifies the source container for our code. Since we're using AWS KMS for crypotgraphy and S3 for fetching our encrypted no-fly list, those addresses are allowed. The IP address is the AWS istance metadata service, where we get a dynamic set of credentials to use for the KMS and S3 requests.
 
 [attestation]: architecture.md#calculating-cryptographic-attestations
 
@@ -108,11 +124,26 @@ It's pretty straightforward. The `from` parameter specifies the source container
 
 `enclaver build` takes an existing container image of your application code and builds it into a new container image with enclave-specific components added in. This is what we'll run on our EC2 machine. This image can be pushed to a registry like any other container.
 
-We're passing in our configuration file from above to the build:
+We're passing in our manifest file from above to the build:
 
 ```
-$ enclaver build us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:latest --policy-file policy.yaml
-TODO: add output
+$ enclaver build --file enclaver.yaml
+ INFO  enclaver::images > latest: Pulling from edgebit-containers/containers/no-fly-list
+ INFO  enclaver::images > latest: Pulling from edgebit-containers/containers/odyn
+ INFO  enclaver::images > latest: Pulling from edgebit-containers/containers/nitro-cli
+ INFO  enclaver::build  > starting nitro-cli build-eif in container: 40bcc4af5c0581c5fb6fc04e2aef4458b326738c7938e08df19244ec3c847972
+ INFO  nitro-cli::build-eif > Start building the Enclave Image...
+ INFO  nitro-cli::build-eif > Using the locally available Docker image...
+ INFO  nitro-cli::build-eif > Enclave Image successfully created.
+ INFO  enclaver::build      > packaging EIF into release image
+Built Release Image: sha256:da0dea2c7024ba6f8f2cb993981b3c4456ab8b2d397de483d8df1b300aba7b55 (no-fly-list:enclave-latest)
+EIF Info: EIFInfo {
+    measurements: EIFMeasurements {
+        pcr0: "b3c972c441189bd081765cb044dfcf69da0f57050474fb29e8f4f3d4b497cd66567f3f39935dee75d83ea0c9e9483d5a",
+        pcr1: "bcdf05fefccaa8e55bf2c8d6dee9e79bbff31e34bf28a99aa19e6b29c37ee80b214a414b7607236edf26fcb78654e63f",
+        pcr2: "40bf9153c43454574fa8ff2d65407b43b26995112db4e1457ba7f152b3620d2a947b0e595d513cb07f965b38bf33e5df",
+    },
+}
 ```
 
 ## Run the Enclave
@@ -133,7 +164,7 @@ $ docker run \
     --detach \
     --name enclave \
     --device=/dev/nitro_enclaves:/dev/nitro_enclaves:rw \
-    --port 8001:8001 \
+    -p 8001:8001 \
     us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:enclave-latest
 ```
 
@@ -141,7 +172,29 @@ Check to see that the enclave was run successfully:
 
 ```sh
 $ docker logs enclave
-TODO: add log output
+ INFO  enclaver::run   > starting egress proxy on vsock port 17002
+ INFO  enclaver::vsock > Listening on vsock port 17002
+ INFO  enclaver::run   > starting enclave
+ INFO  enclaver::run   > started enclave i-00e43bfc030dd8469-enc1840fa584262e1a
+ INFO  enclaver::run   > waiting for enclave to boot
+ INFO  enclaver::run   > connected to enclave, starting log stream
+ INFO  enclave         >  INFO  enclaver::vsock > Listening on vsock port 17001
+ INFO  enclave         >  INFO  enclaver::vsock > Listening on vsock port 17000
+ INFO  enclave         >  INFO  odyn::enclave   > Bringing up loopback interface
+ INFO  enclave         >  INFO  odyn::enclave   > Seeding /dev/random with entropy from nsm device
+ INFO  enclave         >  INFO  odyn            > Enclave initialized
+ INFO  enclave         >  INFO  odyn            > Startng egress
+ INFO  enclave         >  INFO  odyn            > Startng ingress
+ INFO  enclave         >  INFO  enclaver::vsock > Listening on vsock port 8001
+ INFO  enclave         >  INFO  odyn            > Starting KMS proxy
+ INFO  enclave         >  INFO  odyn::kms_proxy > Generating public/private keypair
+ INFO  enclave         >  INFO  enclaver::vsock > Connection accepted
+ INFO  enclave         >  INFO  enclaver::vsock > Connection accepted
+ INFO  enclave         >  INFO  odyn::kms_proxy > Fetching credentials from IMDSv2
+ INFO  enclave         >  INFO  odyn::kms_proxy > Credentials fetched
+ INFO  enclave         >  INFO  odyn            > Starting ["python", "-m", "flask", "run", "--host=0.0.0.0", "--port=8001"]
+ INFO  enclave         >  * Serving Flask app "/opt/app/server.py"
+ ...app logs...
 ```
 
 [unit]: deploy-aws.md#run-via-systemd-unit
