@@ -12,14 +12,13 @@ use http::uri::{Scheme, Authority};
 use http::header::{HeaderName, HeaderValue};
 use anyhow::{anyhow, Result, Error};
 use json::{JsonValue, object};
-use aws_types::SdkConfig;
-use aws_types::credentials::{ProvideCredentials, Credentials};
+use aws_types::credentials::Credentials;
 use aws_sigv4::http_request::{SigningSettings, SignableRequest, SignableBody};
 use aws_sigv4::SigningParams;
 use lazy_static::lazy_static;
 use regex::Regex;
+use async_trait::async_trait;
 
-use crate::http_client::HttpProxyClient;
 use crate::keypair::KeyPair;
 use crate::nsm::Nsm;
 
@@ -221,51 +220,14 @@ pub trait KmsEndpointProvider {
 }
 
 pub struct KmsProxyConfig {
-    client: HttpProxyClient<Body>,
-    credentials: Credentials,
-    keypair: Arc<KeyPair>,
-    attester: Box<dyn AttestationProvider + Send + Sync>,
-    endpoints: Arc<dyn KmsEndpointProvider + Send + Sync>,
+    pub client: Box<dyn HttpClient + Send + Sync>,
+    pub credentials: Credentials,
+    pub keypair: Arc<KeyPair>,
+    pub attester: Box<dyn AttestationProvider + Send + Sync>,
+    pub endpoints: Arc<dyn KmsEndpointProvider + Send + Sync>,
 }
 
 impl KmsProxyConfig {
-    pub async fn new(
-        config: SdkConfig,
-        proxy_uri: Uri,
-        keypair: Arc<KeyPair>,
-        attester: Box<dyn AttestationProvider + Send + Sync>,
-        endpoints: Arc<dyn KmsEndpointProvider + Send + Sync>)-> Result<Self> {
-
-        let credentials = config.credentials_provider()
-            .ok_or(anyhow!("credentials provider is missing"))?
-            .provide_credentials()
-            .await?;
-
-        trace!("Credentials: {}, {}, {}", credentials.access_key_id(), credentials.secret_access_key(), credentials.session_token().unwrap_or(""));
-
-        let client = crate::http_client::new_http_proxy_client::<Body>(proxy_uri);
-
-        Ok(Self{
-            client,
-            credentials,
-            keypair,
-            attester,
-            endpoints,
-        })
-    }
-
-    pub async fn from_imds(
-        proxy_uri: Uri,
-        keypair: Arc<KeyPair>,
-        attester: Box<dyn AttestationProvider + Send + Sync>,
-        endpoints: Arc<dyn KmsEndpointProvider + Send + Sync>) -> Result<Self> {
-
-        let imds = super::aws_util::imds_client_with_proxy(proxy_uri.clone()).await?;
-        let config = super::aws_util::load_config_from_imds(imds).await?;
-
-        KmsProxyConfig::new(config, proxy_uri, keypair, attester, endpoints).await
-    }
-
     pub fn get_authority(&self, region: &str) -> Authority {
         let endpoint = self.endpoints.endpoint(region);
         Authority::from_maybe_shared(endpoint).unwrap()
@@ -420,6 +382,23 @@ impl KmsProxyHandler {
     }
 }
 
+// hyper::client::Client implements tower::Service and would make a perfect
+// trait but it uses `&mut self` and would require a needless mutex.
+#[async_trait]
+pub trait HttpClient {
+    async fn request(&self, req: Request<Body>) -> std::result::Result<Response<Body>, hyper::Error>;
+}
+
+#[async_trait]
+impl<C> HttpClient for hyper::client::Client<C>
+where
+    C: hyper::client::connect::Connect + Clone + Send + Sync + 'static
+{
+    async fn request(&self, req: Request<Body>) -> std::result::Result<Response<Body>, hyper::Error> {
+        hyper::client::Client::request(self, req).await
+    }
+}
+
 pub trait AttestationProvider {
     fn attestation(&self, public_key: Vec<u8>) -> Result<Vec<u8>>;
 }
@@ -441,9 +420,12 @@ impl AttestationProvider for NsmAttestationProvider {
 }
 
 fn body_from_slice(bytes: &[u8]) -> Body {
-    let bytes = Bytes::copy_from_slice(&bytes);
-    let stream = futures_util::stream::once(async move { Result::<_, std::io::Error>::Ok(bytes) } );
-    Body::wrap_stream(stream)
+    Body::from(Bytes::copy_from_slice(&bytes))
+}
+
+fn json_body(json_val: JsonValue) -> Body {
+    let body = json::stringify(json_val);
+    body_from_slice(&body.into_bytes())
 }
 
 fn bytes_response(head: http::response::Parts, body: &[u8]) -> Response<Body> {
@@ -451,8 +433,7 @@ fn bytes_response(head: http::response::Parts, body: &[u8]) -> Response<Body> {
 }
 
 fn json_response(head: http::response::Parts, json_val: JsonValue) -> Response<Body> {
-    let body = json::stringify(json_val);
-    bytes_response(head, &body.into_bytes())
+    Response::from_parts(head, json_body(json_val))
 }
 
 fn internal_srv_err(msg: String) -> Response<Body> {
@@ -475,30 +456,193 @@ fn amz_credential_query(uri: &Uri) -> Option<String> {
     None
 }
 
-#[test]
-fn test_credential_scope() {
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rsa::RsaPrivateKey;
+    use pkcs8::DecodePrivateKey;
     use assert2::assert;
 
-    let req1 = Request::builder()
-        .uri("http://kms.us-east-1.amazonaws.com")
-        .header(http::header::AUTHORIZATION, "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/kms/aws4_request, ")
-        .body(())
-        .unwrap();
+    // Attestation document is passed through verbatim so can test with just random bytes
+    const ATTESTATION_DOC: &[u8] = &[245, 174, 153, 213, 192, 166, 9, 203, 152, 176, 158, 67, 233, 45, 229, 228];
+    const KEY_ID: &str = "e6ed9116-53d7-11ed-8eee-5b6905c751a7";
 
-    let (head1, _) = req1.into_parts();
+    lazy_static! {
+        static ref KEYS: JsonValue = object!{
+            "Keys": [
+                {
+                    "KeyArn": "arn:aws:kms:us-east-1:072396882261:key/e6ed9116-53d7-11ed-8eee-5b6905c751a7",
+                    "KeyId": KEY_ID,
+                }
+            ]
+        };
+    }
 
-    let cred1 = CredentialScope::from_request(&head1).unwrap();
-    assert!(cred1.region == "us-east-1");
-    assert!(cred1.service == "kms");
+    struct Mock;
 
-    let req2 = Request::builder()
-        .uri("http://kms.us-east-1.amazonaws.com?X-Amz-Credential=AKIDEXAMPLE%2F20150830%2Fus-east-1%2Fkms%2Faws4_request")
-        .body(())
-        .unwrap();
+    #[async_trait]
+    impl HttpClient for Mock {
+        async fn request(&self, req: Request<Body>) -> std::result::Result<Response<Body>, hyper::Error> {
+            let action = req.headers()
+                .get(X_AMZ_TARGET)
+                .unwrap()
+                .to_str()
+                .unwrap();
 
-    let (head2, _) = req2.into_parts();
+            let authz = req.headers()
+                .get(hyper::header::AUTHORIZATION)
+                .unwrap()
+                .to_str()
+                .unwrap();
 
-    let cred2 = CredentialScope::from_request(&head2).unwrap();
-    assert!(cred2.region == "us-east-1");
-    assert!(cred2.service == "kms");
+            // Don't validate the signature, just care that it was put it and that it looks like it
+            // came from the AWS signing process
+            assert!(authz.starts_with("AWS4-HMAC-SHA256 Credential="));
+
+            match action {
+                "TrentService.ListKeys" => self.list_keys(req).await,
+                "TrentService.Decrypt" => self.decrypt(req).await,
+                _ => panic!("unexpected action"),
+            }
+        }
+    }
+
+    impl Mock {
+        async fn list_keys(&self, _req: Request<Body>) -> std::result::Result<Response<Body>, hyper::Error> {
+            Ok(kms_response(KEYS.clone()))
+        }
+
+        async fn decrypt(&self, req: Request<Body>) -> std::result::Result<Response<Body>, hyper::Error> {
+            let body = body_as_json(req.into_body()).await.unwrap();
+
+            // make sure the attestation document has been attached
+            let att_doc = body["Recipient"]["AttestationDocument"].as_str().unwrap();
+            assert!(att_doc == base64::encode(ATTESTATION_DOC));
+
+            let resp = kms_response(object!{
+                "EncryptionAlgorithm": "SYMMETRIC_DEFAULT",
+                "KeyId": KEY_ID,
+                "CiphertextForRecipient": crate::proxy::pkcs7::tests::INPUT,
+            });
+
+            Ok(resp)
+        }
+    }
+
+    impl AttestationProvider for Mock {
+        fn attestation(&self, _public_key: Vec<u8>) -> Result<Vec<u8>> {
+            Ok(ATTESTATION_DOC.to_vec())
+        }
+    }
+
+    impl KmsEndpointProvider for Mock {
+        fn endpoint(&self, _region: &str) -> String {
+            "test.local".to_string()
+        }
+    }
+
+    fn kms_request(action: &str, body: JsonValue) -> Request<Body> {
+        let body_bytes = Bytes::copy_from_slice(json::stringify(body).as_bytes());
+
+        Request::builder()
+            .method(Method::POST)
+            .uri("/")
+            .header(X_AMZ_TARGET, action)
+            .header(hyper::header::CONTENT_TYPE, &X_AMZ_JSON)
+            .header(hyper::header::AUTHORIZATION, "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/kms/aws4_request, ")
+            .body(Body::from(body_bytes))
+            .unwrap()
+    }
+
+    fn kms_response(body: JsonValue) -> Response<Body> {
+        Response::builder()
+            .status(hyper::StatusCode::OK)
+            .body(json_body(body))
+            .unwrap()
+    }
+
+    async fn body_as_json(body: Body) -> Result<JsonValue> {
+        let bytes = hyper::body::to_bytes(body).await?;
+        Ok(json::parse(std::str::from_utf8(&bytes)?)?)
+    }
+
+    fn new_test_handler() -> KmsProxyHandler {
+        let key_der = base64::decode(crate::proxy::pkcs7::tests::PRIVATE_KEY).unwrap();
+        let priv_key = RsaPrivateKey::from_pkcs8_der(&key_der).unwrap();
+
+        let config = KmsProxyConfig {
+            client: Box::new(Mock),
+            credentials: Credentials::from_keys("TESTKEY", "TESTSECRET", None),
+            keypair: Arc::new(KeyPair::from_private(priv_key)),
+            attester: Box::new(Mock{}),
+            endpoints: Arc::new(Mock{}),
+
+        };
+
+        KmsProxyHandler{ config }
+    }
+
+    #[test]
+    fn test_credential_scope() {
+        let req1 = Request::builder()
+            .uri("http://kms.us-east-1.amazonaws.com")
+            .header(http::header::AUTHORIZATION, "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/kms/aws4_request, ")
+            .body(())
+            .unwrap();
+
+        let (head1, _) = req1.into_parts();
+
+        let cred1 = CredentialScope::from_request(&head1).unwrap();
+        assert!(cred1.region == "us-east-1");
+        assert!(cred1.service == "kms");
+
+        let req2 = Request::builder()
+            .uri("http://kms.us-east-1.amazonaws.com?X-Amz-Credential=AKIDEXAMPLE%2F20150830%2Fus-east-1%2Fkms%2Faws4_request")
+            .body(())
+            .unwrap();
+
+        let (head2, _) = req2.into_parts();
+
+        let cred2 = CredentialScope::from_request(&head2).unwrap();
+        assert!(cred2.region == "us-east-1");
+        assert!(cred2.service == "kms");
+    }
+
+    #[tokio::test]
+    async fn test_forwarding_action() {
+        let handler = new_test_handler();
+
+        let req = kms_request("TrentService.ListKeys", object!{});
+        let resp = handler.handle(req).await.unwrap();
+
+        let (head, body) = resp.into_parts();
+
+        assert!(head.status == hyper::StatusCode::OK);
+
+        let keys = body_as_json(body).await.unwrap();
+        assert!(keys == *KEYS);
+    }
+
+    #[tokio::test]
+    async fn test_attesting_action() {
+        let handler = new_test_handler();
+
+        let req = kms_request("TrentService.Decrypt", object!{
+           "CiphertextBlob": base64::encode("~~~ ENCRYPTED Hello, World ~~~"),
+        });
+
+        let resp = handler.handle(req).await.unwrap();
+
+        let (head, body) = resp.into_parts();
+
+        if head.status == hyper::StatusCode::OK {
+            let body = body_as_json(body).await.unwrap();
+            assert!(body["Plaintext"].as_str().unwrap() == base64::encode("Hello, World"));
+            assert!(body["KeyId"].as_str().unwrap() == KEY_ID);
+        } else {
+            let bytes = hyper::body::to_bytes(body).await.unwrap();
+            let msg = std::str::from_utf8(&bytes).unwrap();
+            assert!("DUMMY" == msg);
+        }
+    }
 }

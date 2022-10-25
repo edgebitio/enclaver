@@ -386,3 +386,66 @@ pub struct Attribute<'a> {
     pub attr_type: Oid<'a>,
     pub attr_values: SetOf<Any<'a>>,
 }
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::ContentInfo;
+    use rsa::RsaPrivateKey;
+    use pkcs8::DecodePrivateKey;
+    use assert2::assert;
+
+    pub(crate) const INPUT: &str = "\
+MIAGCSqGSIb3DQEHA6CAMIACAQIxggFrMIIBZwIBAoAg+wnprylA3c8NK79jWMmDr0b8X9ztv\
+KJR1UzqtNBpzYkwPAYJKoZIhvcNAQEHMC+gDzANBglghkgBZQMEAgEFAKEcMBoGCSqGSIb3DQ\
+EBCDANBglghkgBZQMEAgEFAASCAQBtKYAuknZaRt5SOgmPmzvmelJ/gFx6tetIhN9u5FSOVzG\
+BkF5jSqVDABxBybusmdi1y4OQ+HAr1A6nKyVSzjq2nCPqF1qEIduJlxXDDQkP+E7f1+9AVCr/\
+mUDvc+5ZzFWGcfH9hHGDhLM3qrKMIVEx97593kXwOXDBNY9jQ52Yx4pCK4PHxLRK0mPuA9y48\
+wr3AWj711tV4tHU3MJvnp3y3vB306OnH2mLfcuML5nOjgCEIQaaovkJkTMYmmN1GdwvG/Pilh\
+c7JLJAVKSPiCRa2UuVa8S9cU50nxYidMi6cKSY6WzHN2unalWgIRb3J43VDH0A5jQgSejCFCY\
+1YkPpMIAGCSqGSIb3DQEHATAdBglghkgBZQMEASoEECwv8RFq5vhXP9WP1E+YBiSggAQQJjqX\
+tzpe8K1dsCdK+fwpDAAAAAAAAAAAAAA=";
+
+    pub(crate) const PRIVATE_KEY: &str = "\
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC+4nqOJ4xmYtE0\
+rdCY4YwvA/bH15xdpYoC2SoMlrytOhUK77awbfJKwlwiXxaKoaJOOaV+neci8BRi\
+s0/8mKr7VoX7GG5E4lVj/8nl8LBeq5DAZUlasyJpQ1+1k3zU2vWYJDQxU/6tDp63\
+opYZx3QZqEHjHYIA+N0xOexTfMAbWRntZU8M2ZNpxxkdYLbQRRprpMvt6aH8PvkF\
+Y1iFKJJJQ7Onkl8P664KJvZcPyJRrbk2ORXYZVcuowT2nPTXaEAutlCx6mTyzsrz\
+/Pq8k4RQtQlBfw0+ocMwmfHxeXIstAr/bY8vXgOi/071cFF9kVMQFjud6gs4sJ0Q\
+mXdqrphHAgMBAAECggEAODR1g5/vfkJAeXNohWt8HGfdZTB+UTCp93a8I+LKgXMl\
+uQemUkK9Yffiqxg2ifFX2hKtQR/7a9UnG3zS43yMc98hKjMiXNQL8prhdvws4mNA\
+BvaL59HxIu98oflge0hRok+espuZ1JkGcOnFqqeI7vkVFWud2O1uK81zYY3M/v/1\
+uXXiYBkM2q40FJKuL1IhtV6SUsjn0qmam+Wt3dQOpXkJ7bjBJaXYR4IMiDmL0woW\
+ZabQaOuOc1ck77bPmY1ft2y654zF0aKHMo1h4+hGBsch1/GlBqxWDyA5+HUUwePq\
+CNK0C8DBgnsCfxGZ/k5/tasbt57jWkjIYYnmYdUoAQKBgQDwRNLGYRDrP5PiIQol\
+uuNv72ndGn/npSW5dBuyezs5Clh0ewYqZHkeBucyqgciQhsl5YofmNe4VkW2ycht\
+ijzLho7IUgF0fB5adfUJUr4qQ+dDN1NbzlTybXKn9AFUTbaQ/2yXyT7yAcY61y9J\
+bGXc59RSpVYeO1k0ep+aqVFcAQKBgQDLYevU4t+HVZSDWXvtiVMqXakxe/wnQyq+\
+M3hQA2awc5O8ov5WafOr1zojlNiZ/s4b3meWnW0SxH813B8N8x5OIlgwbbYO4LxJ\
+2LLVcbYfrXTrvdfWUJa5xAMSGnSVwlN03pN+mmSseJTUJaD4/20aYPJi/CALfJBF\
+uyGYke4URwKBgFiRJhkWYsQ09XBfuXva/keeuylTwV5EVDmegS8zmcsW8zBMwSMT\
+UkotRUA5yNNqBtPbXyTylGJQ+vW8P/ORB4QGn89b20lzD0VNQfwj0hGGYlM2q7Wl\
+w05x5dffbDYFR4z/eqog9uECom3CMJ4iJRJfKrckVzBhtCpSIU9DpsgBAoGBAKAz\
+I3Xutq99Q5wq0ikKsE2AtRLbXIT4rSRgmnY8F5kJkOdXZAthLaS/xXXderfiMytU\
+hjfnDNFpoeIk3vk39TkKaHjNEkip0OZCIKtsBE7zbFN8mBSiKfdtZBXQbODBzscR\
+wxBIQOBxoplwgllfqOrMTmCVxBAIMAQdIJty5xtlAoGBAM9+8qkG1g9nZO4fYxXo\
+4VnlV25W7Ki+PNFAqCO/73JfBqvlVDn8o9xXZmEWbb3L+WVm5KDFjBmHblf9v2jI\
+IzBcCfCv6hZssdGPGDXMDPB45pw2HYJHGxyBK5T8jr+ja9zcu2IyD11u3a/LBn9G\
+UBYkWlVgulDg28KBqahr9r04";
+
+    #[test]
+    fn test_content_info() {
+        let ber = base64::decode(INPUT).unwrap();
+
+        let ci = ContentInfo::parse_ber(&ber).unwrap();
+        ci.validate().unwrap();
+
+        let key_der = base64::decode(PRIVATE_KEY).unwrap();
+        let priv_key = RsaPrivateKey::from_pkcs8_der(&key_der).unwrap();
+
+        let plaintext = ci.decrypt_content(&priv_key).unwrap();
+        let msg = std::str::from_utf8(&plaintext).unwrap();
+
+        assert!(msg == "Hello, World");
+    }
+}
