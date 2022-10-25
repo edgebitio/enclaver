@@ -49,6 +49,8 @@ In the future, a more transparent TCP proxy mode will be added to ease integrati
 - **defaults** (object): Default resource requirements for running the application. Requirements may be overridden at runtime.
   - **cpu_count** (integer): Number of CPUs dedicated to the enclave. Defaults to 2 if not specified here.
   - **memory_mb** (integer): Megabytes of memory dedicated to the enclave. Defaults to 4096 if not specified here.
+- **kms_proxy** (object): Configuration for the KMS proxy listening inside of the enclave, which dynamically [adds attestation information to requests][kms] that benefit from it.
+  - **listen_port** (integer): Required. Valid port number for the proxy to listen for traffic on. The environment variable `AWS_KMS_ENDPOINT` is available for your application to connect to the proxy.
 - **egress** (object): Information about egress traffic leaving the enclave. The policy is deny by default and supports `*` single wildcards for matching a specific position of a subdomain (`web.*.example.com`) or `**` greedy wildcards that match all (`**.example.com`).
   - **allow**: (list of strings): List of allowed hostnames, IP addresses, or CIDR ranges that traffic may flow out of the enclave to. The enforcement is strict, so any redirects must list _all_ of the encountered addresses.
   - **deny**: (list of strings): List of denied hostnames, IP addresses, or CIDR ranges that traffic may _not_ flow out of the enclave to. Deny rules take precedence over allow rules.
@@ -56,3 +58,4 @@ In the future, a more transparent TCP proxy mode will be added to ease integrati
   - **listen_port** (integer): Required. Valid port number for the proxy to listen for traffic on.
 
 [format]: architecture.md#enclaver-image-format
+[kms]: architecture.md#inner-proxy
