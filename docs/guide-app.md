@@ -235,7 +235,7 @@ This application is on GitHub: https://github.com/edgebitio/no-fly-list/blob/mai
 
 Once you factor out the S3 fetching and the boilerplate KMS handling, our actual logic is just a [handfull of lines][code] that is easily audited. This is the ideal type of enclave app. It's focused, simple and acts like a secure sidecar to the rest of our app.
 
-[code]: https://github.com/edgebitio/no-fly-list/blob/main/server.py#L54-L61
+[code]: https://github.com/edgebitio/no-fly-list/blob/main/server.py#L56-L65
 
 ## Next Steps
 
