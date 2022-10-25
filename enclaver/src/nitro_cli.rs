@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use anyhow::{anyhow, Result};
 use log::debug;
 use serde::{Deserialize, Serialize};
@@ -48,7 +50,6 @@ impl NitroCLI {
         self.run_and_deserialize_output(args).await
     }
 
-    #[allow(dead_code)]
     pub async fn describe_enclaves(&self) -> Result<Vec<EnclaveInfo>> {
         self.run_and_deserialize_output(DescribeEnclavesArgs {})
             .await

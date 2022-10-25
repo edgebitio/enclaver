@@ -17,7 +17,7 @@ docker_build_dir=$(mktemp -d)
 cargo build --target $rust_target --all-features
 
 cp $rust_target_dir/odyn $docker_build_dir/
-cp $rust_target_dir/enclaver $docker_build_dir/
+cp $rust_target_dir/enclaver-run $docker_build_dir/
 
 docker build \
 	-f ../build/dockerfiles/odyn-dev.dockerfile \
