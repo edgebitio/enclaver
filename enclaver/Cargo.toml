@@ -8,6 +8,10 @@ name = "odyn"
 required-features = ["odyn"]
 
 [[bin]]
+required-features = ["run_enclave"]
+name = "enclaver-run"
+
+[[bin]]
 name = "enclaver"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

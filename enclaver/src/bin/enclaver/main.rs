@@ -1,15 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use enclaver::{build::EnclaveArtifactBuilder, run::EnclaveExitStatus};
-#[cfg(feature = "run_enclave")]
-use enclaver::run::{Enclave, EnclaveOpts};
-use log::{info};
-use std::{future::Future, path::PathBuf, process::{Termination, ExitCode}};
-use tokio::signal::unix::{signal, SignalKind};
-use tokio_util::sync::CancellationToken;
-
-const ENCLAVE_SIGNALED_EXIT_CODE: u8 = 107;
-const ENCLAVER_INTERRUPTED : u8 = 109;
+use enclaver::build::EnclaveArtifactBuilder;
 
 #[derive(Debug, Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -31,43 +22,10 @@ enum Commands {
         #[clap(long = "--pull")]
         force_pull: bool,
     },
-
-    #[clap(name = "run-eif")]
-    RunEIF {
-        #[clap(long, parse(from_os_str))]
-        eif_file: Option<PathBuf>,
-
-        #[clap(long, parse(from_os_str))]
-        manifest_file: Option<PathBuf>,
-
-        #[clap(long)]
-        cpu_count: Option<i32>,
-
-        #[clap(long)]
-        memory_mb: Option<i32>,
-
-        #[clap(long)]
-        debug_mode: bool,
-    },
 }
 
-enum CLISuccess {
-    Ok,
-    EnclaveStatus(enclaver::run::EnclaveExitStatus),
-}
 
-impl Termination for CLISuccess {
-    fn report(self) -> ExitCode {
-        match self {
-            CLISuccess::Ok => ExitCode::SUCCESS,
-            CLISuccess::EnclaveStatus(EnclaveExitStatus::Exited(code)) => ExitCode::from(code as u8),
-            CLISuccess::EnclaveStatus(EnclaveExitStatus::Signaled(_signal)) => ExitCode::from(ENCLAVE_SIGNALED_EXIT_CODE),
-            CLISuccess::EnclaveStatus(EnclaveExitStatus::Cancelled) => ExitCode::from(ENCLAVER_INTERRUPTED),
-        }
-    }
-}
-
-async fn run(args: Cli) -> Result<CLISuccess> {
+async fn run(args: Cli) -> Result<()> {
     match args.subcommand {
         Commands::Build {
             manifest_file,
@@ -80,7 +38,7 @@ async fn run(args: Cli) -> Result<CLISuccess> {
             println!("Built Release Image: {release_img} ({tag})");
             println!("EIF Info: {:#?}", eif_info);
 
-            Ok(CLISuccess::Ok)
+            Ok(())
         }
 
         Commands::Build {
@@ -95,77 +53,13 @@ async fn run(args: Cli) -> Result<CLISuccess> {
             println!("Built EIF: {}", eif_path.display());
             println!("EIF Info: {:#?}", eif_info);
 
-            Ok(CLISuccess::Ok)
-        }
-
-        #[cfg(feature = "run_enclave")]
-        Commands::RunEIF {
-            eif_file,
-            manifest_file,
-            cpu_count,
-            memory_mb,
-            debug_mode,
-        } => {
-            let shutdown_signal = register_shutdown_signal_handler().await?;
-
-            let enclave = Enclave::new(EnclaveOpts {
-                eif_path: eif_file,
-                manifest_path: manifest_file,
-                cpu_count,
-                memory_mb,
-                debug_mode,
-            })
-            .await?;
-
-            let cancellation = CancellationToken::new();
-
-            // Wait for the shutdown signal in a separate task. If the signal comes, cancel the
-            // enclave run.
-            let cancel_task = {
-                let cancellation = cancellation.clone();
-                tokio::task::spawn(async move {
-                    shutdown_signal.await;
-                    cancellation.cancel();
-                    info!("shutdown signal received, terminating enclave");
-                })
-            };
-
-            let status = enclave.run(cancellation).await?;
-
-            cancel_task.abort();
-            _ = cancel_task.await;
-
-            Ok(CLISuccess::EnclaveStatus(status))
-        }
-
-        // run-eif on unsupported platform
-        #[cfg(not(feature = "run_enclave"))]
-        Commands::RunEIF { .. } => {
-            use anyhow::anyhow;
-
-            Err(anyhow!(
-                "Running enclaves is not supported on this platform"
-            ))
+            Ok(())
         }
     }
 }
 
-async fn register_shutdown_signal_handler() -> Result<impl Future> {
-    let mut sigint = signal(SignalKind::interrupt())?;
-    let mut sigterm = signal(SignalKind::terminate())?;
-
-    let f = tokio::task::spawn(async move {
-        tokio::select! {
-            _ = sigint.recv() => (),
-            _ = sigterm.recv() => (),
-        }
-    });
-
-    Ok(f)
-}
-
 #[tokio::main]
-async fn main() -> Result<CLISuccess> {
+async fn main() -> Result<()> {
     enclaver::utils::init_logging();
 
     let args = Cli::parse();

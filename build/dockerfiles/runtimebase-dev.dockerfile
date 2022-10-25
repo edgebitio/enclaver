@@ -1,5 +1,5 @@
 FROM edgebitio/nitro-cli:latest
 
-COPY ./enclaver /usr/local/bin/enclaver
+COPY ./enclaver-run /usr/local/bin/enclaver-run
 
-ENTRYPOINT ["/usr/local/bin/enclaver", "run-eif"]
+ENTRYPOINT ["/usr/local/bin/enclaver-run"]

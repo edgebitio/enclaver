@@ -34,17 +34,7 @@ Builds an OCI container image in [Enclaver image format][format] containing the 
 $ enclaver run
 ```
 
-| Flag | Type | Description |
-|:-----|:-----|:------------|
-| TODO | TODO | TODO: add options |
-
-## Run-EIF
-
-```sh
-$ enclaver run-eif [file] [cpus] [memory] [debug]
-```
-
-Runs the given EIF file as an enclave without starting the outside components. Useful to debug enclave startup without needing all of the other components running.
+TODO: `enclaver run` is not yet implemented.
 
 | Flag | Type | Description |
 |:-----|:-----|:------------|
