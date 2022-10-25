@@ -3,10 +3,12 @@ use std::sync::Arc;
 use tokio::task::JoinHandle;
 use anyhow::{Result, anyhow};
 use log::{info, error};
+use aws_types::credentials::ProvideCredentials;
 
 use enclaver::nsm::Nsm;
 use enclaver::keypair::KeyPair;
 use enclaver::proxy::kms::{NsmAttestationProvider, KmsProxyConfig, KmsProxy};
+use enclaver::proxy::aws_util;
 
 use crate::config::Configuration;
 
@@ -26,9 +28,24 @@ impl KmsProxyService {
                 info!("Generating public/private keypair");
                 let keypair = Arc::new(KeyPair::generate()?);
 
+                let imds = aws_util::imds_client_with_proxy(proxy_uri.clone()).await?;
+
                 info!("Fetching credentials from IMDSv2");
-                let kms_config = KmsProxyConfig::from_imds(proxy_uri, keypair, attester, config.clone()).await?;
+                let sdk_config = aws_util::load_config_from_imds(imds).await?;
+                let credentials = sdk_config.credentials_provider()
+                    .ok_or(anyhow!("credentials provider is missing"))?
+                    .provide_credentials()
+                    .await?;
                 info!("Credentials fetched");
+
+                let client = Box::new(enclaver::http_client::new_http_proxy_client(proxy_uri));
+                let kms_config = KmsProxyConfig{
+                    credentials,
+                    client,
+                    keypair,
+                    attester,
+                    endpoints: config,
+                };
 
                 let proxy = KmsProxy::bind(port, kms_config)?;
 

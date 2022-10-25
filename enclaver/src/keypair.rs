@@ -19,6 +19,15 @@ impl KeyPair {
         Ok(KeyPair{ private, public })
     }
 
+    pub fn from_private(private: RsaPrivateKey) -> Self {
+        let public = private.to_public_key();
+
+        Self{
+            private,
+            public,
+        }
+    }
+
     pub fn public_key_as_der(&self) -> Result<Vec<u8>> {
         Ok(self.public.to_public_key_der()?.into_vec())
     }
