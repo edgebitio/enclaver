@@ -63,8 +63,8 @@ async fn run(args: &CliArgs) -> Result<()> {
     let kms_proxy = KmsProxyService::start(config.clone(), nsm.clone()).await?;
 
     let creds = launcher::Credentials{
-        uid: 100,
-        gid: 100,
+        uid: 0,
+        gid: 0,
     };
 
     info!("Starting {:?}", args.entrypoint);

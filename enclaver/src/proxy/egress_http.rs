@@ -157,11 +157,20 @@ impl HostHttpProxy {
 
     async fn service_conn(mut vsock: VsockStream) -> anyhow::Result<()> {
         let conn_req = ConnectRequest::recv(&mut vsock).await?;
-        match TcpStream::connect((conn_req.host.as_ref(), conn_req.port)).await {
+
+        // A special hostname "host" refers to the localhost on the outside
+        // of the enclave.
+        let host = if conn_req.host.eq_ignore_ascii_case(crate::constants::OUTSIDE_HOST) {
+            "127.0.0.1".to_string()
+        } else {
+            conn_req.host
+        };
+
+        match TcpStream::connect((host.as_ref(), conn_req.port)).await {
             Ok(mut tcp) => {
                 ConnectResponse::Ok.send(&mut vsock).await?;
 
-                debug!("Connected to {}:{}, starting to proxy bytes", conn_req.host, conn_req.port);
+                debug!("Connected to {}:{}, starting to proxy bytes", host, conn_req.port);
                 _ = tokio::io::copy_bidirectional(&mut vsock, &mut tcp).await;
                 debug!("Proxying is done");
             },
