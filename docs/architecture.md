@@ -24,11 +24,28 @@ These use-cases directly map to `enclaver` commands. Refer to the [full list of 
 
 ### Building an Enclave
 
-`enclaver build` takes an existing container image of your application code and builds it into a new container image. `--policy-file` specifies a policy for network ingress/egress and runtime parameters of the enclave itself. This policy is packaged into the image because it is distributed with the image and included in its [cryptographic attestation][attestation].
+`enclaver build` takes an existing container image of your application code and builds it into a new container image. `--file` specifies a [manifest file][manifest] for network ingress/egress and runtime parameters of the enclave itself. This manifest is packaged into the image so it can be distributed with the image and included in its [cryptographic attestation][attestation].
+
+In this example, our manifest file contains the source app container `edgebit-containers/containers/no-fly-list` (see [sample Python app][app-guide]) and the resulting enclave image is saved as `no-fly-list:enclave-latest`:
 
 ```sh
-$ enclaver build registry.example.com/my-app:v1.0 --policy-file policy.yaml
-TODO: add output
+$ enclaver build --file enclaver.yaml
+ INFO  enclaver::images > latest: Pulling from edgebit-containers/containers/no-fly-list
+ INFO  enclaver::images > latest: Pulling from edgebit-containers/containers/odyn
+ INFO  enclaver::images > latest: Pulling from edgebit-containers/containers/nitro-cli
+ INFO  enclaver::build  > starting nitro-cli build-eif in container: 40bcc4af5c0581c5fb6fc04e2aef4458b326738c7938e08df19244ec3c847972
+ INFO  nitro-cli::build-eif > Start building the Enclave Image...
+ INFO  nitro-cli::build-eif > Using the locally available Docker image...
+ INFO  nitro-cli::build-eif > Enclave Image successfully created.
+ INFO  enclaver::build      > packaging EIF into release image
+Built Release Image: sha256:da0dea2c7024ba6f8f2cb993981b3c4456ab8b2d397de483d8df1b300aba7b55 (no-fly-list:enclave-latest)
+EIF Info: EIFInfo {
+    measurements: EIFMeasurements {
+        pcr0: "b3c972c441189bd081765cb044dfcf69da0f57050474fb29e8f4f3d4b497cd66567f3f39935dee75d83ea0c9e9483d5a",
+        pcr1: "bcdf05fefccaa8e55bf2c8d6dee9e79bbff31e34bf28a99aa19e6b29c37ee80b214a414b7607236edf26fcb78654e63f",
+        pcr2: "40bf9153c43454574fa8ff2d65407b43b26995112db4e1457ba7f152b3620d2a947b0e595d513cb07f965b38bf33e5df",
+    },
+}
 ```
 
 The new image contains both [the outside][outside] and [inside components][inside] of a secure enclave. This artifact is designed to be handled like a regular container. It can be stored in any container registry and be signed with cosign. Read more about the [image format][format] below.
@@ -39,7 +56,7 @@ Refer to the [full list of commands][cmd-build] to learn about all of the featur
 
 ### Signing an Enclave image
 
-TODO: expand signing instructions
+TODO: expand signing instructions. See [issue #32](https://github.com/edgebitio/enclaver/issues/32).
 
 ### Running an Enclave
 
@@ -47,6 +64,36 @@ TODO: expand signing instructions
 
 After the image is fetched, it is broken apart into [the outside][outside] and [inside components][inside]. The outer components are started first, then the enclave, with the inner components inside, is started.
 
+All of this happens transparently to you, so the experience you get is very close to running the app outside of an enclave:
+
+```sh
+$ enclaver run no-fly-list:enclave-latest
+ INFO  enclaver::run   > starting egress proxy on vsock port 17002
+ INFO  enclaver::vsock > Listening on vsock port 17002
+ INFO  enclaver::run   > starting enclave
+ INFO  enclaver::run   > started enclave i-00e43bfc030dd8469-enc1840fa584262e1a
+ INFO  enclaver::run   > waiting for enclave to boot
+ INFO  enclaver::run   > connected to enclave, starting log stream
+ INFO  enclave         >  INFO  enclaver::vsock > Listening on vsock port 17001
+ INFO  enclave         >  INFO  enclaver::vsock > Listening on vsock port 17000
+ INFO  enclave         >  INFO  odyn::enclave   > Bringing up loopback interface
+ INFO  enclave         >  INFO  odyn::enclave   > Seeding /dev/random with entropy from nsm device
+ INFO  enclave         >  INFO  odyn            > Enclave initialized
+ INFO  enclave         >  INFO  odyn            > Startng egress
+ INFO  enclave         >  INFO  odyn            > Startng ingress
+ INFO  enclave         >  INFO  enclaver::vsock > Listening on vsock port 8001
+ INFO  enclave         >  INFO  odyn            > Starting KMS proxy
+ INFO  enclave         >  INFO  odyn::kms_proxy > Generating public/private keypair
+ INFO  enclave         >  INFO  enclaver::vsock > Connection accepted
+ INFO  enclave         >  INFO  enclaver::vsock > Connection accepted
+ INFO  enclave         >  INFO  odyn::kms_proxy > Fetching credentials from IMDSv2
+ INFO  enclave         >  INFO  odyn::kms_proxy > Credentials fetched
+ INFO  enclave         >  INFO  odyn            > Starting ["python", "-m", "flask", "run", "--host=0.0.0.0", "--port=8001"]
+ INFO  enclave         >  * Serving Flask app "/opt/app/server.py"
+ ...your app logs...
+```
+
+TODO: Implement verify-before-run. See [issue #35](https://github.com/edgebitio/enclaver/issues/35).
 `enclaver run --verify-before-run attestation.json` will verify an attestation of an image after fetching it, but before executing it. If the comparison fails, the violating PCRs will be logged and the command will fail with an exit code.
 
 `enclaver run --debug` allows for streaming logs from within the enclave. This is intended for debugging issues related to attestations and communicating with services outside the enclave, and not for general debugging. For debugging during development, it is more useful to run your container directly outside of an enclave.
@@ -69,6 +116,8 @@ The network policy is duplicated in two places: inside of the EIF so it's part o
 
 ### Calculating Cryptographic Attestations
 
+TODO: Implement enclaver trust command. See [issue #38](https://github.com/edgebitio/enclaver/issues/38).
+
 `enclaver trust` outputs the cryptographic attestation of an image. An attestation is a reproducable "measurement" of a piece of code that can be used to give the code a unique identity. The word "measurement" is used because, just like a ruler, Enclaver records the content of various parts of the code that make up the enclave image. The hash of this measurement is recorded into Platform Configuration Registers (PCRs). A collection of certain PCRs (eg. PCR0-4 + PCR8) is the unique attestation of that particular piece of code.
 
 ```sh
@@ -88,11 +137,13 @@ An attestion must be reproduceable in order to ensure that each time the enclave
 
 If an attestation matches, engineers can guarantee that its configuration is _exactly_ what was tested/verified/trusted. If you're remotely communicating with an enclave, the attestation can remotely prove it's configuration. An attestation serves as a piece of identity that can't be hijacked because it's crypographically tied to the code itself.
 
-PCR0 measures the length of our EIF file. Since it's critical that our enclave code is not modified, this is important to check.
-PCR1 measures our enclave's kernel and boot RamFS data. Again, we don't want our kernel image modified or the kernel parameters changed.
-PCR3 measures the IAM instance role assigned to your EC2 machine.
-PCR4 measures the instance ID of a specific EC2 machine.
-PCR8 measures the enclave image file signing certificate.
+| Register | Description |
+|----------|-------------|
+| PCR0 | Measures the length of our EIF file. Since it's critical that our enclave code is not modified, this is important to check. |
+| PCR1 | Measures our enclave's kernel and boot RamFS data. Again, we don't want our kernel image modified or the kernel parameters changed. |
+| PCR3 | Measures the IAM instance role assigned to your EC2 machine. |
+| PCR4 | Measures the instance ID of a specific EC2 machine. |
+| PCR8 | Measures the enclave image file signing certificate. |
 
 When using attestations, you must decide which "measurements", the PCR values, are useful to you. In almost all cases you should care about the image and kernel parameters, but if you're running multiple enclave instances with the same code, PCR4 will not be useful because it will be unique to each EC2 machine running your enclaves.
 
@@ -110,7 +161,7 @@ These components have minimal overhead, in the order of xx MB of RAM and xx mill
 
 `enclaver run` is the enclave supervisor. It runs as a systemd unit and exits if the enclave dies. By design, there is very little visibility into the enclave, so the command watches the context ID (CID) for information provided directly from the Nitro hypervisor.
 
-```yaml
+```systemd
 [Unit]
 Description=Enclaver
 Documentation=https://edgebit.io/enclaver/docs/
@@ -165,22 +216,19 @@ For ingress, TLS is terminated and ingress policy is enforced. The private keys 
 
 For egress, policy is enforced before traffic leaves the enclave.
 
-The inner proxy also appends the attestation of the enclave to `Decrypt`, `GenerateDataKey`, and `GenerateRandom` calls to AWS KMS, which allows for super easy integration for your code to use your KMS keys to decrypt data within the enclave. This is when you see the power of using the output from `enclaver trust --kms` as part of a KMS key policy.
+The inner proxy can optionally append the attestation of the enclave to `Decrypt`, `GenerateDataKey`, and `GenerateRandom` calls to AWS KMS, which allows for super easy integration for your code to use your KMS keys to decrypt data within the enclave. This is when you see the power of using the output from `enclaver trust --kms` as part of a KMS key policy.
 
-TODO: upadte with final enclaver trust command
+TODO: update with final enclaver trust command. See [issue #38](https://github.com/edgebitio/enclaver/issues/38).
 
 ### Verifying Cryptographic Attestations
 
-TODO: does this need to be captured as an issue?
+TODO: Implement this feature. See [issue #35](https://github.com/edgebitio/enclaver/issues/35).
 
 `enclaver run --verify-before-run attestation.json` will verify an attestation of an image after fetching it, but before executing it. If the comparison fails, the violating PCRs will be logged and the command will fail with an exit code. Since our threat model can consider the host hostile, this is more of a corruption check.
 
 Inside of the enclave, the KMS proxy will also fetch the attestation, but it will come directly from the hypervisor, so it can be fully trusted. The `get-attestation-document` API  is only available inside of the enclave.
 
 TODO: expand general usage with other non-KMS systems
-
-
-TODO: update header links
 
 [cli]: #enclaver-cli
 [format]: #enclaver-image-format
@@ -190,3 +238,5 @@ TODO: update header links
 [cmd]: commands.md
 [cmd-run]: commands.md#run
 [cmd-build]: commands.md#build
+[manifest]: manifest.md
+[app-guide]: guide-app.md

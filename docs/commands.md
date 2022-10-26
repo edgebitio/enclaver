@@ -12,11 +12,7 @@ Enclaver is shipped as a single binary that fulfills two main use-cases:
 1. Build enclave images, sign them and calculate attestations locally on a developer's machine
 1. Bootstrap and run the Nitro enclave on an EC2 machine
 
-Enclaver accepts configuration from command line flags, environment variables, and from a configuration file for builds. When all three are present, the order of precedence is `flag > env var > config file`.
-
-All environment variables are prefixed with `ENC_` and exclusively use underscores. Flags exclusively use dashes. Configuration file parameters exclusively use underscores. For example, `--cpu-count` flag and `ENC_CPU_COUNT` configure the same behavior. 
-
-When overriding a configuration file parameter that is nested, like `image > from`, flatten it like so: `--image-from` or `ENC_IMAGE_FROM`.
+TODO: Document flag vs env var vs manifest file behavior for configuration. See [issue #78](https://github.com/edgebitio/enclaver/issues/78)
 
 ## Build
 
@@ -24,11 +20,11 @@ When overriding a configuration file parameter that is nested, like `image > fro
 $ enclaver build [options]
 ```
 
-Builds an OCI container image in [Enclaver image format][format] containing the components that [run outside][outside] and [inside the enclave][inside]. Once built, the container is tagged with the `name` and `output_tag` field of your enclave configuration file.
+Builds an OCI container image in [Enclaver image format][format] containing the components that [run outside][outside] and [inside the enclave][inside]. Once built, the container is named after the `target` field of your [enclave manifest file][manifest].
 
 | Flag | Type | Description |
 |:-----|:-----|:------------|
-| `-f`, `--file` | String (Default=enclaver.yaml) | Path on disk to your enclave configuration file. |
+| `-f`, `--file` | String (Default=enclaver.yaml) | Path on disk to your enclave manifest file. |
 | `--eif-only` | String | If set, build only the components that run inside of the enclave. EIF is written to the provided path on disk and the containing directory must exist. |
 | `--pull` | Boolean (Default=false) | Force a pull of source images. By default, if a local image matching a specified source is found, it will be used without pulling. |
 
@@ -62,3 +58,4 @@ Runs the given EIF file as an enclave without starting the outside components. U
 [format]: architecture.md#enclaver-image-format
 [outside]: architecture.md#components-outside-the-enclave
 [inside]: architecture.md#components-inside-the-enclave
+[manifest]: manifest.md
