@@ -3,11 +3,13 @@ use clap::{Parser, Subcommand};
 use enclaver::{build::EnclaveArtifactBuilder, run::EnclaveExitStatus};
 #[cfg(feature = "run_enclave")]
 use enclaver::run::{Enclave, EnclaveOpts};
-use log::{debug, error, info};
+use log::{info};
 use std::{future::Future, path::PathBuf, process::{Termination, ExitCode}};
 use tokio::signal::unix::{signal, SignalKind};
+use tokio_util::sync::CancellationToken;
 
 const ENCLAVE_SIGNALED_EXIT_CODE: u8 = 107;
+const ENCLAVER_INTERRUPTED : u8 = 109;
 
 #[derive(Debug, Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -60,6 +62,7 @@ impl Termination for CLISuccess {
             CLISuccess::Ok => ExitCode::SUCCESS,
             CLISuccess::EnclaveStatus(EnclaveExitStatus::Exited(code)) => ExitCode::from(code as u8),
             CLISuccess::EnclaveStatus(EnclaveExitStatus::Signaled(_signal)) => ExitCode::from(ENCLAVE_SIGNALED_EXIT_CODE),
+            CLISuccess::EnclaveStatus(EnclaveExitStatus::Cancelled) => ExitCode::from(ENCLAVER_INTERRUPTED),
         }
     }
 }
@@ -105,7 +108,7 @@ async fn run(args: Cli) -> Result<CLISuccess> {
         } => {
             let shutdown_signal = register_shutdown_signal_handler().await?;
 
-            let mut enclave = Enclave::new(EnclaveOpts {
+            let enclave = Enclave::new(EnclaveOpts {
                 eif_path: eif_file,
                 manifest_path: manifest_file,
                 cpu_count,
@@ -114,23 +117,25 @@ async fn run(args: Cli) -> Result<CLISuccess> {
             })
             .await?;
 
-            tokio::select! {
-                _ = shutdown_signal => {
-                    info!("shutdown signal received, terminating enclave");
-                },
-                enclave_res = enclave.run() => {
-                    match enclave_res {
-                        Ok(()) => debug!("enclave exited successfully"),
-                        Err(e) => error!("error running enclave: {e:#}"),
-                    }
-                },
-            }
+            let cancellation = CancellationToken::new();
 
-            if let Some(status) = enclave.cleanup().await? {
-                Ok(CLISuccess::EnclaveStatus(status))
-            } else {
-                Ok(CLISuccess::Ok)
-            }
+            // Wait for the shutdown signal in a separate task. If the signal comes, cancel the
+            // enclave run.
+            let cancel_task = {
+                let cancellation = cancellation.clone();
+                tokio::task::spawn(async move {
+                    shutdown_signal.await;
+                    cancellation.cancel();
+                    info!("shutdown signal received, terminating enclave");
+                })
+            };
+
+            let status = enclave.run(cancellation).await?;
+
+            cancel_task.abort();
+            _ = cancel_task.await;
+
+            Ok(CLISuccess::EnclaveStatus(status))
         }
 
         // run-eif on unsupported platform
