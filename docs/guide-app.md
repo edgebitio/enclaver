@@ -33,11 +33,13 @@ TODO: add real attestation
 
 In the recent past, there was an incident  – this is a rumor – that caused the entire cast of Sesame Street to be added to the no-fly list. We can find out if that's true :)
 
-For this example you’ll need an EC2 instance with support for Nitro Enclaves enabled (`c6a.xlarge` is the cheapest qualifying instance type as of this writing) and Docker installed.  See [the Deploying on AWS](deploy-aws.md) for more details.
+For this example you’ll need an EC2 instance with support for Nitro Enclaves enabled (`c6a.xlarge` is the cheapest x86 instance) and Docker installed.  See [the Deploying on AWS](deploy-aws.md) for more details.
 
-[![CloudFormation](img/launch-stack.svg)][cloudformation]
+[![CloudFormation](img/launch-stack-x86.svg)][cloudformation-x86]
+[![CloudFormation](img/launch-stack-arm.svg)][cloudformation-arm]
 
-[cloudformation]: https://us-east-1.console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://enclaver-cloudformation.s3.amazonaws.com/enclaver.cloudformation.yaml&stackName=Enclaver-Demo
+[cloudformation-x86]: https://us-east-1.console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://enclaver-cloudformation.s3.amazonaws.com/enclaver.cloudformation-x86.yaml&stackName=Enclaver-Demo
+[cloudformation-arm]: https://us-east-1.console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://enclaver-cloudformation.s3.amazonaws.com/enclaver.cloudformation-arm.yaml&stackName=Enclaver-Demo
 
 ## The No-Fly-List App
 

@@ -4,17 +4,17 @@ Parameters:
   VpcId:
     Type: AWS::EC2::VPC::Id
     Description: Existing VPC to place the machine
-  ImageId:
-    Type: String
-    Description: 'Amazon Linux 2 AMI for us-east1 Region'
-    Default: 'ami-026b57f3c383c2eec'
   InstanceType:
     Type: String
-    Description: Cheapest instance that supports Nitro Enclaves
+    Description: Cheapest x86 instance that supports Nitro Enclaves
     Default: c6a.xlarge
   KeyName:
     Description: SSH Keypair to login to the instance
     Type: AWS::EC2::KeyPair::KeyName
+  LatestAmiId:
+    Description: Amazon Linux 2 x86 AMI for us-east1 Region
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
 Resources:
   DemoLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
@@ -36,17 +36,18 @@ Resources:
               yum install aws-nitro-enclaves-cli-devel -y
               usermod -aG ne ec2-user
               usermod -aG docker ec2-user
-              sed -i 's/memory_mib: 512/memory_mib: 4096/g' /etc/nitro_enclaves/allocator.yaml
+              sed -i 's/memory_mib: 512/memory_mib: 3072/g' /etc/nitro_enclaves/allocator.yaml
               systemctl start nitro-enclaves-allocator.service && sudo systemctl enable nitro-enclaves-allocator.service
               systemctl start docker && sudo systemctl enable docker
   DemoInstance:
     Type: 'AWS::EC2::Instance'
     Properties: 
-      ImageId: !Ref ImageId
+      ImageId: !Ref LatestAmiId
       InstanceType: !Ref InstanceType
       LaunchTemplate: 
           LaunchTemplateId: !Ref DemoLaunchTemplate
           Version: !GetAtt DemoLaunchTemplate.LatestVersionNumber
+      IamInstanceProfile: !Ref DemoInstanceProfile
   DemoSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
@@ -60,6 +61,25 @@ Resources:
       Tags:
         - Key: Name
           Value: Enclaver-Security-Group
+  DemoIAMRole:
+    # This role intentionally doesn't grant any allowed actions
+    # It's only needed to obtain IMDS credentials to pull our publicly accessible objects
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+  DemoInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Roles:
+        - !Ref DemoIAMRole
 Outputs:
   DemoInstanceId:
     Description: Instance Id 
