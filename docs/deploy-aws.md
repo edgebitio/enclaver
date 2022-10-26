@@ -10,10 +10,9 @@ Enclaver can be used with EC2 machines that are enabled to run Nitro Enclaves. T
 
 ## Instance Requirements
 
-Only certain [EC2 instance types][instance-req] can run Nitro Enclaves. Since dedicated CPUs are carved off for the enclave, the larger x86 types with 4+ vCPUs are ok, with `c6a.xlarge` being the cheapest. Gravitron2/Arm instances have a lower 2+ vCPU requirement, with `c6g.large` being the cheapest. Your machines must be booted with the Nitro Enclave option enabled.
+Only certain [EC2 instance types][instance-req] can run Nitro Enclaves. Since dedicated CPUs are carved off for the enclave, the larger x86 types with 4+ vCPUs are ok, with `c6a.xlarge` being the cheapest. Your machines must be booted with the Nitro Enclave option enabled.
 
 [![CloudFormation](img/launch-stack-x86.svg)][cloudformation-x86]
-[![CloudFormation](img/launch-stack-arm.svg)][cloudformation-arm]
 
 Due to Amazon restrictions, each EC2 machine can only run a single enclave at a time.
 

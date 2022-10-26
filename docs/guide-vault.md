@@ -10,10 +10,9 @@ Enclaver works by transforming a containerized application into a new container 
 
 To demonstrate how this works, let’s run HashiCorp Vault in an enclave. Vault has good security out of the box, but if we trust our attestation, we can cryptographically guarantee that our Vault will only be unsealed in a known trusted state and all material can’t be leaked outside the enclave.
 
-For this example you’ll need an EC2 instance with support for Nitro Enclaves enabled (`c6a.xlarge` is the cheapest x86 instance and `c6g.large` is the cheapest Graivtron2/Arm instance) and Docker installed.  See [the Deploying on AWS](deploy-aws.md) for more details.
+For this example you’ll need an EC2 instance with support for Nitro Enclaves enabled (`c6a.xlarge` is the cheapest x86 instance) and Docker installed.  See [the Deploying on AWS](deploy-aws.md) for more details.
 
 [![CloudFormation](img/launch-stack-x86.svg)][cloudformation-x86]
-[![CloudFormation](img/launch-stack-arm.svg)][cloudformation-arm]
 
 [cloudformation-x86]: https://us-east-1.console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://enclaver-cloudformation.s3.amazonaws.com/enclaver.cloudformation-x86.yaml&stackName=Enclaver-Demo
 [cloudformation-arm]: https://us-east-1.console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://enclaver-cloudformation.s3.amazonaws.com/enclaver.cloudformation-arm.yaml&stackName=Enclaver-Demo

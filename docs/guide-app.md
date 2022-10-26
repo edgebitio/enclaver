@@ -32,7 +32,7 @@ TODO: add real attestation
 
 In the recent past, there was an incident  – this is a rumor – that caused the entire cast of Sesame Street to be added to the no-fly list. We can find out if that's true :)
 
-For this example you’ll need an EC2 instance with support for Nitro Enclaves enabled (`c6a.xlarge` is the cheapest x86 instance and `c6g.large` is the cheapest Graivtron2/Arm instance) and Docker installed.  See [the Deploying on AWS](deploy-aws.md) for more details.
+For this example you’ll need an EC2 instance with support for Nitro Enclaves enabled (`c6a.xlarge` is the cheapest x86 instance) and Docker installed.  See [the Deploying on AWS](deploy-aws.md) for more details.
 
 [![CloudFormation](img/launch-stack-x86.svg)][cloudformation-x86]
 [![CloudFormation](img/launch-stack-arm.svg)][cloudformation-arm]
