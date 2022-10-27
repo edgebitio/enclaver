@@ -42,7 +42,6 @@ pub struct Enclave {
     memory_mb: i32,
     debug_mode: bool,
     enclave_info: Option<EnclaveInfo>,
-    status_task: Option<tokio::task::JoinHandle<Result<EnclaveExitStatus>>>,
     tasks: Vec<tokio::task::JoinHandle<()>>,
 }
 
@@ -110,16 +109,15 @@ impl Enclave {
             debug_mode: opts.debug_mode,
             enclave_info: None,
             tasks: Vec::new(),
-            status_task: None,
         })
     }
 
-    pub async fn run(&mut self) -> Result<()> {
+    // Start the enclave and run it until it either exits or is interrupted via
+    // the passed in cancellation token. Terminates the enclave prior to returning.
+    pub async fn run(mut self, cancellation: CancellationToken) -> Result<EnclaveExitStatus> {
         if self.enclave_info.is_some() {
             return Err(anyhow!("Enclave already started"));
         }
-
-        let terminated = CancellationToken::new();
 
         // Start the egress proxy before starting the enclave, to avoid (unlikely) race conditions
         // where something inside the enclave attempts egress before the proxy is ready.
@@ -146,15 +144,23 @@ impl Enclave {
             self.attach_debug_console(&enclave_info.id).await?;
         }
 
-        self.start_odyn_log_stream(enclave_info.cid).await?;
+        self.start_odyn_log_stream(enclave_info.cid);
 
         self.start_ingress_proxies(enclave_info.cid).await?;
 
-        self.start_status_task(enclave_info.cid, terminated.clone());
+        let exit_res = tokio::select! {
+            exit_res = Enclave::await_exit(enclave_info.cid) =>
+                exit_res,
 
-        terminated.cancelled().await;
+            _ = cancellation.cancelled() =>
+                Ok(EnclaveExitStatus::Cancelled),
+        };
 
-        Ok(())
+        if let Err(err) = self.cleanup().await {
+            error!("error terminating enclave: {err}");
+        }
+
+        exit_res
     }
 
     async fn start_ingress_proxies(&mut self, cid: u32) -> Result<()> {
@@ -194,37 +200,24 @@ impl Enclave {
         Ok(())
     }
 
-    async fn start_odyn_log_stream(&mut self, cid: u32) -> Result<()> {
-        info!("waiting for enclave to boot");
-        let conn = loop {
-            match VsockStream::connect(cid, APP_LOG_PORT).await {
-                Ok(conn) => break conn,
-
-                // TODO: improve the polling frequency / backoff / timeout
-                Err(_) => {
-                    tokio::time::sleep(LOG_VSOCK_RETRY_INTERVAL).await;
-                }
-            }
-        };
-
-        info!("connected to enclave, starting log stream");
-
+    fn start_odyn_log_stream(&mut self, cid: u32) {
         self.tasks.push(tokio::task::spawn(async move {
+            info!("waiting for enclave to boot to stream logs");
+            let conn = loop {
+                match VsockStream::connect(cid, APP_LOG_PORT).await {
+                    Ok(conn) => break conn,
+
+                    // TODO: improve the polling frequency / backoff / timeout
+                    Err(_) => {
+                        tokio::time::sleep(LOG_VSOCK_RETRY_INTERVAL).await;
+                    }
+                }
+            };
+
+            info!("connected to enclave, starting log stream");
             if let Err(e) = utils::log_lines_from_stream("enclave", conn).await {
                 error!("error reading log lines from enclave: {e}");
             }
-        }));
-
-        Ok(())
-    }
-
-    fn start_status_task(&mut self, cid: u32, terminate: CancellationToken) {
-        self.status_task = Some(tokio::task::spawn(async move {
-            let exit_res = Enclave::await_exit(cid).await;
-
-            terminate.cancel();
-
-            exit_res
         }));
     }
 
@@ -301,7 +294,7 @@ impl Enclave {
         Ok(())
     }
 
-    pub async fn cleanup(self) -> Result<Option<EnclaveExitStatus>> {
+    async fn cleanup(self) -> Result<()> {
         if let Some(enclave_info) = self.enclave_info {
             debug!("terminating enclave");
             self.cli.terminate_enclave(&enclave_info.id).await?;
@@ -319,12 +312,7 @@ impl Enclave {
             };
         }
 
-        let exit_status = match self.status_task {
-            Some(task) => Some(task.await??),
-            None => None,
-        };
-
-        Ok(exit_status)
+        Ok(())
     }
 }
 
@@ -343,6 +331,7 @@ enum EnclaveProcessStatus {
 
 #[derive(Debug)]
 pub enum EnclaveExitStatus {
+    Cancelled,
     Exited(i32),
     Signaled(i32),
 }
