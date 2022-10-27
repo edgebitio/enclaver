@@ -141,9 +141,9 @@ $ enclaver build --file enclaver.yaml
 Built Release Image: sha256:da0dea2c7024ba6f8f2cb993981b3c4456ab8b2d397de483d8df1b300aba7b55 (no-fly-list:enclave-latest)
 EIF Info: EIFInfo {
     measurements: EIFMeasurements {
-        pcr0: "b3c972c441189bd081765cb044dfcf69da0f57050474fb29e8f4f3d4b497cd66567f3f39935dee75d83ea0c9e9483d5a",
+        pcr0: "85aaa37e85a0b7178bb5700a8c1ae584bf4f994996db6f18503e215cf35b65f737b19e822b3f10eb634317bd4f11deee",
         pcr1: "bcdf05fefccaa8e55bf2c8d6dee9e79bbff31e34bf28a99aa19e6b29c37ee80b214a414b7607236edf26fcb78654e63f",
-        pcr2: "40bf9153c43454574fa8ff2d65407b43b26995112db4e1457ba7f152b3620d2a947b0e595d513cb07f965b38bf33e5df",
+        pcr2: "cb64e00fce6987d7484c18cc4c19d92ec80955d86f6b43b2d4794f9edc1a9d0200d72cf3e876566e9d888bc971413f46",
     },
 }
 ```
@@ -216,6 +216,56 @@ foo is cleared to fly. Enjoy your flight!
 
 See how many names you can discover that won't be flying today.
 
+## Explore the Enclave
+
+### KMS Policy
+
+The beginning of the guide discussed how the crypographic attestation is used to protect the key. This configuration happens within AWS KMS on the key access policy. The policy for the No Fly List app uses the `PCR0` measurement, which measures all of the enclave code, so it represents the most holistic measurement of our enclave image.
+
+Enclaver's [KMS integration][kms] attaches the full attestation to KMS requests automatically. The measurement for `PCR0` gets used in the policy like this:
+
+```json
+"StringEqualsIgnoreCase": {
+    "kms:RecipientAttestation:PCR0": "85aaa37e85a0b...17bd4f11deee"
+}
+```
+
+<details>
+  <summary>View the complete access policy</summary>
+
+The `Principal` may stand out to you &mdash; it allows _any_ AWS account to use this key. Anyone can run this demo, so anyone can use the key...well, anyone inside of _this exact Enclave image_ can use the key.
+
+For real use-cases, you would lock down this policy to your AWS accounts and you could target higher PCR values for greater specificity.
+
+```json
+{
+    "Version": "2012-10-17",
+    "Id": "key-noflylist",
+    "Statement": [
+        {
+            "Sid": "Allow public use of the key for no-fly-list demo",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "*"
+            },
+            "Action": [
+                "kms:Decrypt",
+                "kms:DescribeKey"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "StringEqualsIgnoreCase": {
+                    "kms:RecipientAttestation:PCR0": "85aaa37e85a0b7178bb5700a8c1ae584bf4f994996db6f18503e215cf35b65f737b19e822b3f10eb634317bd4f11deee"
+                }
+            }
+        }
+    ]
+}
+```
+</details>
+
+[kms]: architecture.md#inner-proxy
+
 ### Dedicated CPUs
 
 If you booted a `c6a.xlarge`, the full machine has 4 vCPUs. By default, Enclaver dedicates 2 of those to the Nitro Enclave. Dedicated CPUs are part of the isolation and protection of your workloads in the enclave.
@@ -235,7 +285,7 @@ KiB Swap:        0 total,        0 free,        0 used.  7046532 avail Mem
 
 This application is on GitHub: https://github.com/edgebitio/no-fly-list/blob/main/server.py
 
-Once you factor out the S3 fetching and the boilerplate KMS handling, our actual logic is just a [handfull of lines][code] that is easily audited. This is the ideal type of enclave app. It's focused, simple and acts like a secure sidecar to the rest of our app.
+Once you factor out the S3 fetching and the boilerplate KMS handling, our actual logic is just a [handful of lines][code] that is easily audited. This is the ideal type of enclave app. It's focused, simple and acts like a secure sidecar to the rest of our app.
 
 [code]: https://github.com/edgebitio/no-fly-list/blob/main/server.py#L56-L65
 
