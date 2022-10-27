@@ -19,7 +19,7 @@ The enclave is extremely isolated by design. It guarantees that no one can inspe
 
 The enclave has a code identity, called an attestation, that unqiuely identifies it. This is generated through cryptography, so it's impossible to fake. Since it's code, it's not possible to steal, unlike a human's identity.
 
-`enclave trust` will show you the cryptographic attestation of a specific enclave image. Our specific code, via the attestation, is granted access to read our encryption key needed to decrypt the no-fly list. With a locked-down access policy, it's _impossible_ for anything other than _this specific code_ to read the key.
+`enclaver trust` will show you the cryptographic attestation of a specific enclave image. Our specific code, via the attestation, is granted access to read our encryption key needed to decrypt the no-fly list. With a locked-down access policy, it's _impossible_ for anything other than _this specific code_ to read the key.
 
 Here's an example of an attestation:
 
@@ -128,7 +128,7 @@ It's pretty straightforward. The `sources.app` parameter specifies the source co
 
 We're passing in our manifest file from above to the build:
 
-```
+```sh
 $ enclaver build --file enclaver.yaml
  INFO  enclaver::images > latest: Pulling from edgebit-containers/containers/no-fly-list
  INFO  enclaver::images > latest: Pulling from edgebit-containers/containers/odyn
