@@ -35,11 +35,6 @@ Read the [architecture doc](docs/architecture.md) for the full details. Enclaver
 
 See [the FAQ](docs/faq.md) for common questions and a comparison of Enclaver to similar technologies.
 
-## Contributing
-
-TODO: add contrib instructions + "good first issue" tags
-
-TODO: formalize and add code of conduct
 
 ## Reporting Security Bugs
 
