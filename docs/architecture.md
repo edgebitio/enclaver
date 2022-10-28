@@ -116,9 +116,10 @@ The network policy is duplicated in two places: inside of the EIF so it's part o
 
 ### Calculating Cryptographic Attestations
 
-TODO: Implement enclaver trust command. See [issue #38](https://github.com/edgebitio/enclaver/issues/38).
+`enclaver build` outputs the cryptographic attestation of an image. An attestation is a reproducable "measurement" of a piece of code that can be used to give the code a unique identity. The word "measurement" is used because, just like a ruler, Enclaver records the content of various parts of the code that make up the enclave image. The hash of this measurement is recorded into Platform Configuration Registers (PCRs). A collection of certain PCRs (eg. PCR0-4 + PCR8) is the unique attestation of that particular piece of code.
 
-`enclaver trust` outputs the cryptographic attestation of an image. An attestation is a reproducable "measurement" of a piece of code that can be used to give the code a unique identity. The word "measurement" is used because, just like a ruler, Enclaver records the content of various parts of the code that make up the enclave image. The hash of this measurement is recorded into Platform Configuration Registers (PCRs). A collection of certain PCRs (eg. PCR0-4 + PCR8) is the unique attestation of that particular piece of code.
+<details>
+    <summary>TODO: Implement enclaver trust command. See [issue #38](https://github.com/edgebitio/enclaver/issues/38).</summary>
 
 ```sh
 $ enclaver trust registry.example.com/my-app:v1.0
@@ -130,6 +131,18 @@ $ enclaver trust registry.example.com/my-app:v1.0
     "PCR2": "0f0ac32c300289e872e6ac4d19b0b5ac4a9b020c98295643ff3978610750ce6a86f7edff24e3c0a4a445f2ff8a9ea79d",
     "PCR8": "70da58334a884328944cd806127c7784677ab60a154249fd21546a217299ccfa1ebfe4fa96a163bf41d3bcfaebe68f6f"
   }
+}
+```
+
+</details>
+
+```
+EIF Info: EIFInfo {
+    measurements: EIFMeasurements {
+        pcr0: "b3c972c441189bd081765cb044dfcf69da0f57050474fb29e8f4f3d4b497cd66567f3f39935dee75d83ea0c9e9483d5a",
+        pcr1: "bcdf05fefccaa8e55bf2c8d6dee9e79bbff31e34bf28a99aa19e6b29c37ee80b214a414b7607236edf26fcb78654e63f",
+        pcr2: "40bf9153c43454574fa8ff2d65407b43b26995112db4e1457ba7f152b3620d2a947b0e595d513cb07f965b38bf33e5df",
+    },
 }
 ```
 
