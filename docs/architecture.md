@@ -216,6 +216,8 @@ For ingress, TLS is terminated and ingress policy is enforced. The private keys 
 
 For egress, policy is enforced before traffic leaves the enclave.
 
+The `host` hostname can refer to localhost on the parent instance of the enclave, which is useful for egress traffic to stay local to the machine, like talking to other containers running outside the enclave.
+
 The inner proxy can optionally append the attestation of the enclave to `Decrypt`, `GenerateDataKey`, and `GenerateRandom` calls to AWS KMS, which allows for super easy integration for your code to use your KMS keys to decrypt data within the enclave. This is when you see the power of using the output from `enclaver trust --kms` as part of a KMS key policy.
 
 TODO: update with final enclaver trust command. See [issue #38](https://github.com/edgebitio/enclaver/issues/38).
