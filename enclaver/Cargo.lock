@@ -2346,7 +2346,7 @@ dependencies = [
 [[package]]
 name = "tokio-vsock"
 version = "0.3.3"
-source = "git+https://github.com/eyakubovich/tokio-vsock.git?rev=8abc3b5c18d866a2d7f6c2f1fe0d835b49c85bd5#8abc3b5c18d866a2d7f6c2f1fe0d835b49c85bd5"
+source = "git+https://github.com/eyakubovich/tokio-vsock.git?rev=5ac66443f1dcbe2658440ade78b7a42406e8c019#5ac66443f1dcbe2658440ade78b7a42406e8c019"
 dependencies = [
  "bytes 0.4.12",
  "futures",
