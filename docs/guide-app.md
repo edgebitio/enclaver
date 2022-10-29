@@ -248,8 +248,7 @@ For real use-cases, you would lock down this policy to your AWS accounts and you
                 "AWS": "*"
             },
             "Action": [
-                "kms:Decrypt",
-                "kms:DescribeKey"
+                "kms:Decrypt"
             ],
             "Resource": "*",
             "Condition": {

@@ -4,6 +4,9 @@ Parameters:
   VpcId:
     Type: AWS::EC2::VPC::Id
     Description: Existing VPC to place the machine
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet within the VPC to place the machine
   InstanceType:
     Type: String
     Description: Cheapest x86 instance that supports Nitro Enclaves
@@ -48,6 +51,7 @@ Resources:
           LaunchTemplateId: !Ref DemoLaunchTemplate
           Version: !GetAtt DemoLaunchTemplate.LatestVersionNumber
       IamInstanceProfile: !Ref DemoInstanceProfile
+      SubnetId: !Ref SubnetId
   DemoSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
