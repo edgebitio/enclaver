@@ -117,7 +117,7 @@ ingress:
   - listen_port: 8001
 ```
 
-It's pretty straightforward. The `sources.app` parameter specifies the source container for our code. Since we're using AWS KMS for crypotgraphy and S3 for fetching our encrypted no-fly list, those addresses are allowed. The IP address is the AWS istance metadata service, where we get a dynamic set of credentials to use for the KMS and S3 requests.
+It's pretty straightforward. The `sources.app` parameter specifies the source container for our code. Since we're using AWS KMS for cryptography and S3 for fetching our encrypted no-fly list, those addresses are allowed. The IP address is the AWS instance metadata service, which grants dynamic credentials to use for the KMS and S3 requests.
 
 [attestation]: architecture.md#calculating-cryptographic-attestations
 
