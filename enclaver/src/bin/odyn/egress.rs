@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use tokio::task::JoinHandle;
 use anyhow::Result;
-use enclaver::constants::HTTP_EGRESS_VSOCK_PORT;
+use log::info;
 
+use enclaver::constants::HTTP_EGRESS_VSOCK_PORT;
 use enclaver::proxy::egress_http::EnclaveHttpProxy;
 use enclaver::policy::EgressPolicy;
 use crate::config::Configuration;
@@ -15,6 +16,8 @@ pub struct EgressService {
 impl EgressService {
     pub async fn start(config: &Configuration) -> Result<Self> {
         let task = if let Some(proxy_uri) = config.egress_proxy_uri() {
+            info!("Startng egress");
+
             let policy = Arc::new(EgressPolicy::new(config.manifest.egress.as_ref().unwrap()));
 
             set_proxy_env_var(&proxy_uri.to_string());

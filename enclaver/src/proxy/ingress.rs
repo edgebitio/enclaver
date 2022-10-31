@@ -62,7 +62,6 @@ where
             Ok(mut tcp) => {
                 debug!("Connected to {target}, proxying data");
                 _ = tokio::io::copy_bidirectional(&mut vsock, &mut tcp).await;
-                debug!("Proxying is done");
             },
             Err(err) => error!("Connection to upstream ({target}) failed: {err}"),
         }
@@ -99,7 +98,6 @@ impl HostProxy {
             Ok(mut vsock) => {
                 debug!("Connected to {target_port}:{target_cid}, proxying data");
                 _ = tokio::io::copy_bidirectional(&mut vsock, &mut tcp).await;
-                debug!("Proxying is done");
             },
             Err(err) => error!("Connection to upstream vsock ({target_cid}:{target_port}) failed: {err}"),
         }

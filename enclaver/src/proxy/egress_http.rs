@@ -172,7 +172,6 @@ impl HostHttpProxy {
 
                 debug!("Connected to {}:{}, starting to proxy bytes", host, conn_req.port);
                 _ = tokio::io::copy_bidirectional(&mut vsock, &mut tcp).await;
-                debug!("Proxying is done");
             },
             Err(err) => {
                 ConnectResponse::failed(&err)
@@ -198,8 +197,6 @@ async fn proxy(egress_port: u32, req: Request<Body>,
 }
 
 async fn handle_connect(egress_port: u32, req: Request<Body>, egress_policy: &EgressPolicy) -> Response<Body> {
-    debug!("Handling CONNECT request");
-
     match req.uri().authority() {
         Some(authority) => {
             let port = match authority.port() {
@@ -217,19 +214,18 @@ async fn handle_connect(egress_port: u32, req: Request<Body>, egress_policy: &Eg
 
             }
 
+            debug!("Handling CONNECT to {}:{port}", authority.host());
+
             // Connect to remote server before the upgrade so we can return an error if it fails
             let mut remote = match remote_connect(egress_port, authority.host(), port).await {
                 Ok(remote) => remote,
                 Err(err) => return err_resp(http::StatusCode::SERVICE_UNAVAILABLE, err.to_string()),
             };
-            debug!("Connected to origin server");
 
             tokio::task::spawn(async move {
                 match hyper::upgrade::on(req).await {
                     Ok(mut upgraded) => {
-                        debug!("Connection upgraded");
                         _ = tokio::io::copy_bidirectional(&mut upgraded, &mut remote).await;
-                        debug!("Proxying is done");
                     }
                     Err(err) => {
                         error!("Upgrade failed: {err}");
@@ -240,7 +236,7 @@ async fn handle_connect(egress_port: u32, req: Request<Body>, egress_policy: &Eg
             Response::new(Body::empty())
         },
         None => {
-            let err_msg = format!("CONNECT host is not socket addr: {:?}", req.uri());
+            let err_msg = format!("CONNECT host is not a socket addr: {:?}", req.uri());
             error!("{err_msg}");
             bad_request(err_msg)
         }

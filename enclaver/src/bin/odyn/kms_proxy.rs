@@ -22,6 +22,7 @@ impl KmsProxyService {
     pub async fn start(config: Arc<Configuration>, nsm: Arc<Nsm>) -> Result<Self> {
         let task = if let Some(port) = config.kms_proxy_port() {
             if let Some(proxy_uri) = config.egress_proxy_uri() {
+                info!("Starting KMS proxy");
                 let attester = Box::new(NsmAttestationProvider::new(nsm));
 
                 // If a keypair will be needed elsewhere, this should be moved out
