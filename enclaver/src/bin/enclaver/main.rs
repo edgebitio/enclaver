@@ -7,7 +7,8 @@ use enclaver::{
 use log::{debug, error};
 
 #[derive(Debug, Parser)]
-#[clap(author, version, about, long_about = None)]
+#[clap(author, version)]
+/// Package and run applications in Nitro Enclaves.
 struct Cli {
     #[clap(subcommand)]
     subcommand: Commands,
@@ -16,27 +17,49 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Commands {
     #[clap(name = "build")]
+    /// Package a Docker image into a self-executing Enclaver container image.
     Build {
         #[clap(long = "file", short = 'f', default_value = "enclaver.yaml")]
+        /// Path to the Enclaver manifest file to build from.
         manifest_file: String,
 
         #[clap(long = "eif-only", hidden = true)]
+        /// Only build the EIF file, do not package it into a self-executing image.
         eif_file: Option<String>,
 
         #[clap(long = "--pull")]
+        /// Pull any Docker images this depends on bef
         force_pull: bool,
     },
 
     #[clap(name = "run")]
+    /// Run a packaged Enclaver container image without typing long Docker commands.
+    ///
+    /// This command is a convenience utility that runs a pre-existing Enclaver image
+    /// in the local Docker Daemon. It is equivalent to running the image with Docker,
+    /// and passing:
+    ///
+    ///     '--device=/dev/nitro_enclaves:/dev/nitro_enclaves:rw'.
+    ///
+    /// Requires a local Docker Daemon to be running, and that this computer is an AWS
+    /// instance configured to support Nitro Enclaves.
     Run {
         #[clap(long = "file", short = 'f')]
-        // manifest file in which to look for an image name
+        /// Enclaver Manifest file in which to look for an image name.
+        ///
+        /// Defaults to enclaver.yaml if not set and no image is specified. To run a specific
+        /// image instead, pass the name of the image as an argument.
         manifest_file: Option<String>,
 
         #[clap(index = 1, name = "image")]
+        /// Name of a pre-existing Enclaver image to run.
+        ///
+        /// To automatically look this value up from an Enclaver manifest, use -f, or
+        /// execute this command with an enclaver.yaml file in the current directory.
         image_name: Option<String>,
 
-        #[clap(short = 'p', long = "port")]
+        #[clap(short = 'p', long = "publish")]
+        /// Port to expose on the host machine, for example: 8080:80.
         port_forwards: Vec<String>,
     },
 }
