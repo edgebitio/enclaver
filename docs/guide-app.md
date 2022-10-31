@@ -70,7 +70,7 @@ If we throw away the plaintext of key A, the envelope only contains encrypted da
 1. Possible to encrypt the same data key under multiple master keys without re-encrypting the raw data.
 </details>
 
-Functionally, this means we'll have two layers of encryption, the inner layer is normal AES symmetric encryption around our sensitive data and the outer layer of public/private key encryption with the private key stored in AWS KMS.
+Functionally, this means we'll have two layers of encryption, the first is encrypted using AES with a key unique for each sensitive item and then the unique keys are encrypted by a master key that is stored in AWS KMS.
 
 Here's what the actual envelope used by the app looks like:
 
@@ -117,7 +117,7 @@ ingress:
   - listen_port: 8001
 ```
 
-It's pretty straightforward. The `sources.app` parameter specifies the source container for our code. Since we're using AWS KMS for crypotgraphy and S3 for fetching our encrypted no-fly list, those addresses are allowed. The IP address is the AWS istance metadata service, where we get a dynamic set of credentials to use for the KMS and S3 requests.
+It's pretty straightforward. The `sources.app` parameter specifies the source container for our code. Since we're using AWS KMS for cryptography and S3 for fetching our encrypted no-fly list, those addresses are allowed. The IP address is the AWS instance metadata service, which grants dynamic credentials to use for the KMS and S3 requests.
 
 [attestation]: architecture.md#calculating-cryptographic-attestations
 
