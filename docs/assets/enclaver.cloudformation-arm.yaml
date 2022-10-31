@@ -1,5 +1,30 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Test Enclaver on a single EC2 machine with Nitro Enclaves enabled
+Metadata: 
+  AWS::CloudFormation::Interface: 
+    ParameterGroups: 
+      - Label: 
+          default: "VPC Configuration"
+        Parameters: 
+          - VpcId
+          - SubnetId
+      - Label: 
+          default: "EC2 Machine"
+        Parameters: 
+          - InstanceType
+          - KeyName
+          - LatestAmiId
+    ParameterLabels: 
+      VpcId: 
+        default: "Pick a VPC"
+      SubnetId: 
+        default: "Pick a subnet"
+      InstanceType: 
+        default: "Instance type"
+      KeyName: 
+        default: "SSH key"
+      LatestAmiId: 
+        default: "AMI to use"
 Parameters:
   VpcId:
     Type: AWS::EC2::VPC::Id
