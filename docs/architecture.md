@@ -102,12 +102,12 @@ Refer to the [full list of commands][cmd-run] to learn about all of the features
 
 ## Enclaver Image Format
 
-The Enclaver image format is a regular OCI container image with a specific layout, roughly split into the inside and outside components:
+The Enclaver image format is a regular OCI container image with the inside and outside components:
 
 ```sh
-TODO: add image structure in style of `ls -la`
-/enclave/application.eif
-/enclave/policy.yaml
+/usr/local/bin/enclaver  # entrypoint
+/enclave/application.eif # inner components
+/enclave/enclaver.yaml   # manifest
 ```
 
 The inner components inside `/enclave` are placed inside of another format, the Nitro-compatible Enclave Image Format (EIF) file. The EIF is an Amazon specification, and looks similar to an AMI, since it contains a kernel and Linux userland. Enclaver vendors Amazon's `nitro-cli` code to build the EIF. Enclaver will override the `ENTRYPOINT` of your source container with it's own PID1 and then trigger your original entrypoint. Do not plan to pass runtime configuration into the enclave.
@@ -168,7 +168,7 @@ From within the enclave, the `get-attestation-document` API also provides the ab
 
 The goal of components outside of the enclave are to monitor the health of the enclave and to route allowed traffic into the enclave. Since isolation is a critical component to enclave security, Enclaver has proxies sitting on both sides of the virtual socket (vsock) that connects the inside and outside.
 
-These components have minimal overhead, in the order of xx MB of RAM and xx millicores of CPU (TODO: insert), in addition to the CPU and RAM carved out for the enclave itself.
+These components have minimal overhead compared to the CPU and RAM carved out for the enclave itself.
 
 ### Enclave Supervisor
 
