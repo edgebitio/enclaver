@@ -1,8 +1,10 @@
 use anyhow::{anyhow, Result};
 use futures_util::stream::StreamExt;
 use log::info;
+use std::future::Future;
 use std::path::PathBuf;
 use tokio::io::AsyncRead;
+use tokio::signal::unix::{signal, SignalKind};
 use tokio_util::codec::{FramedRead, LinesCodec};
 
 const LOG_LINE_MAX_LEN: usize = 4 * 1024;
@@ -46,4 +48,18 @@ where
     }
 
     Ok(())
+}
+
+pub async fn register_shutdown_signal_handler() -> Result<impl Future> {
+    let mut sigint = signal(SignalKind::interrupt())?;
+    let mut sigterm = signal(SignalKind::terminate())?;
+
+    let f = tokio::task::spawn(async move {
+        tokio::select! {
+            _ = sigint.recv() => (),
+            _ = sigterm.recv() => (),
+        }
+    });
+
+    Ok(f)
 }

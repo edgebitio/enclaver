@@ -1,13 +1,15 @@
 use anyhow::Result;
 use clap::Parser;
-use enclaver::run::{Enclave, EnclaveOpts, EnclaveExitStatus};
+use enclaver::run::{Enclave, EnclaveExitStatus, EnclaveOpts};
 use log::info;
+use std::{
+    path::PathBuf,
+    process::{ExitCode, Termination},
+};
 use tokio_util::sync::CancellationToken;
-use std::{future::Future, path::PathBuf, process::{Termination, ExitCode}};
-use tokio::signal::unix::{signal, SignalKind};
 
 const ENCLAVE_SIGNALED_EXIT_CODE: u8 = 107;
-const ENCLAVER_INTERRUPTED : u8 = 109;
+const ENCLAVER_INTERRUPTED: u8 = 109;
 
 #[derive(Debug, Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -28,25 +30,28 @@ struct Cli {
     debug_mode: bool,
 }
 
-
 enum CLISuccess {
     EnclaveStatus(EnclaveExitStatus),
 }
 
-
 impl Termination for CLISuccess {
     fn report(self) -> ExitCode {
         match self {
-            CLISuccess::EnclaveStatus(EnclaveExitStatus::Exited(code)) => ExitCode::from(code as u8),
-            CLISuccess::EnclaveStatus(EnclaveExitStatus::Signaled(_signal)) => ExitCode::from(ENCLAVE_SIGNALED_EXIT_CODE),
-            CLISuccess::EnclaveStatus(EnclaveExitStatus::Cancelled) => ExitCode::from(ENCLAVER_INTERRUPTED),
+            CLISuccess::EnclaveStatus(EnclaveExitStatus::Exited(code)) => {
+                ExitCode::from(code as u8)
+            }
+            CLISuccess::EnclaveStatus(EnclaveExitStatus::Signaled(_signal)) => {
+                ExitCode::from(ENCLAVE_SIGNALED_EXIT_CODE)
+            }
+            CLISuccess::EnclaveStatus(EnclaveExitStatus::Cancelled) => {
+                ExitCode::from(ENCLAVER_INTERRUPTED)
+            }
         }
     }
 }
 
-
 async fn run(args: Cli) -> Result<CLISuccess> {
-    let shutdown_signal = register_shutdown_signal_handler().await?;
+    let shutdown_signal = enclaver::utils::register_shutdown_signal_handler().await?;
 
     let enclave = Enclave::new(EnclaveOpts {
         eif_path: args.eif_file,
@@ -76,20 +81,6 @@ async fn run(args: Cli) -> Result<CLISuccess> {
     _ = cancel_task.await;
 
     Ok(CLISuccess::EnclaveStatus(status))
-}
-
-async fn register_shutdown_signal_handler() -> Result<impl Future> {
-    let mut sigint = signal(SignalKind::interrupt())?;
-    let mut sigterm = signal(SignalKind::terminate())?;
-
-    let f = tokio::task::spawn(async move {
-        tokio::select! {
-            _ = sigint.recv() => (),
-            _ = sigterm.recv() => (),
-        }
-    });
-
-    Ok(f)
 }
 
 #[tokio::main]
