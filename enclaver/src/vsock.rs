@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use log::{info, error};
+use log::{info, debug, error};
 use anyhow::{Result};
 use rustls::{ServerConfig, ClientConfig};
 use rustls::client::ServerName;
@@ -19,18 +19,18 @@ pub type TlsClientStream = tokio_rustls::client::TlsStream<VsockStream>;
 pub fn serve(port: u32) -> Result<impl Stream<Item=VsockStream> + Unpin> {
     let listener = VsockListener::bind(VMADDR_CID_ANY, port)?;
 
-    info!("Listening on vsock port {}", port);
+    info!("Listening on vsock port {port}");
     let stream = listener.incoming()
         .filter_map(move |result| {
             futures::future::ready(
                 match result {
                     Ok(vsock) => {
-                        info!("Connection accepted");
+                        debug!("Connection accepted on port {port}");
                         Some(vsock)
                     },
 
-                    Err(e) => {
-                        error!("Failed to accept a vsock: {}", e);
+                    Err(err) => {
+                        error!("Failed to accept a vsock: {err}");
                         None
                     }
                 }
@@ -53,18 +53,18 @@ pub fn tls_serve(port: u32, tls_config: Arc<ServerConfig>) -> Result<impl Stream
             async move {
                 match result {
                     Ok(vsock) => {
-                        info!("Connection accepted");
+                        debug!("Connection accepted on port {port}");
                         match acceptor.accept(vsock).await {
                             Ok(vsock) => Some(vsock),
-                            Err(e) => {
-                                error!("TLS handshake failed: {}", e);
+                            Err(err) => {
+                                error!("TLS handshake failed: {err}");
                                 None
                             }
                         }
                     },
 
-                    Err(e) => {
-                        error!("Failed to accept a vsock: {}", e);
+                    Err(err) => {
+                        error!("Failed to accept a vsock: {err}");
                         None
                     }
                 }

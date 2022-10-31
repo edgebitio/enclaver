@@ -55,11 +55,8 @@ async fn run(args: &CliArgs) -> Result<()> {
         info!("Enclave initialized");
     }
 
-    info!("Startng egress");
     let egress = EgressService::start(&config).await?;
-    info!("Startng ingress");
     let ingress = IngressService::start(&config)?;
-    info!("Starting KMS proxy");
     let kms_proxy = KmsProxyService::start(config.clone(), nsm.clone()).await?;
 
     let creds = launcher::Credentials{
@@ -71,12 +68,8 @@ async fn run(args: &CliArgs) -> Result<()> {
     let exit_status = launcher::start_child(args.entrypoint.clone(), creds).await??;
     info!("Entrypoint {}", exit_status);
 
-    info!("Stopping kms proxy");
     kms_proxy.stop().await;
-
-    info!("Stopping ingress");
     ingress.stop().await;
-    info!("Stopping egress");
     egress.stop().await;
 
     app_status.exited(exit_status);

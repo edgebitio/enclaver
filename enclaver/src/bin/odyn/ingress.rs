@@ -1,5 +1,6 @@
 use tokio::task::JoinHandle;
 use anyhow::Result;
+use log::info;
 
 use enclaver::proxy::ingress::EnclaveProxy;
 use crate::config::{Configuration, ListenerConfig};
@@ -15,10 +16,12 @@ impl IngressService {
         for (port, cfg) in &config.listener_configs {
             match cfg {
                 ListenerConfig::TCP => {
+                    info!("Startng TCP ingress on port {}", *port);
                     let proxy = EnclaveProxy::bind(*port)?;
                     tasks.push(tokio::spawn(proxy.serve()));
                 },
                 ListenerConfig::TLS(tls_cfg) => {
+                    info!("Startng TLS ingress on port {}", *port);
                     let proxy = EnclaveProxy::bind_tls(*port, tls_cfg.clone())?;
                     tasks.push(tokio::spawn(proxy.serve()));
                 },
