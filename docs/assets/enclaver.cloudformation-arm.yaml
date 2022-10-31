@@ -4,20 +4,25 @@ Parameters:
   VpcId:
     Type: AWS::EC2::VPC::Id
     Description: Existing VPC to place the machine
+    AllowedPattern: ".+"
   SubnetId:
     Type: AWS::EC2::Subnet::Id
     Description: Subnet within the VPC to place the machine
+    AllowedPattern: ".+"
   InstanceType:
     Type: String
     Description: Cheapest Gravitron2 instance that supports Nitro Enclaves
     Default: c6g.large
+    AllowedPattern: ".+"
   KeyName:
     Description: SSH Keypair to login to the instance
     Type: AWS::EC2::KeyPair::KeyName
+    AllowedPattern: ".+"
   LatestAmiId:
     Description: Amazon Linux 2 Arm AMI for us-east1 Region
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-arm64-gp2'
+    AllowedPattern: ".+"
 Resources:
   DemoLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
