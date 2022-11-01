@@ -7,12 +7,13 @@ weight: 10
 
 # Enclaver Commands
 
-Enclaver is shipped as a single binary that fulfills two main use-cases:
+Enclaver is shipped as a single `enclaver` binary that fulfills two main use-cases:
 
-1. Build enclave images, sign them and calculate attestations locally on a developer's machine
-1. Bootstrap and run the Nitro enclave on an EC2 machine
+1. Package an exising Docker image into a self-executing Enclaver container image for distribution
+1. Easily run a packaged Enclaver container image for testing - without typing long Docker commands
 
-TODO: Document flag vs env var vs manifest file behavior for configuration. See [issue #78](https://github.com/edgebitio/enclaver/issues/78)
+In production, `enclaver build` should be used in a CI workflow, and the container images that it creates
+can be distributed and run using existing container registries, Docker, Kubernetes, etc.
 
 ## Build
 
@@ -31,19 +32,25 @@ Builds an OCI container image in [Enclaver image format][format] containing the 
 ## Run
 
 ```sh
-$ enclaver run
+$ enclaver run [OPTIONS] [image]
 ```
 
-TODO: `enclaver run` is not yet implemented.
+Run a packaged Enclaver container image without typing long Docker commands.
+
+This command is a convenience utility that runs a pre-existing Enclaver image in the local Docker
+Daemon. It is equivalent to running the image with Docker, and passing:
+
+```sh
+    --device=/dev/nitro_enclaves:/dev/nitro_enclaves:rwm
+```
+
+Requires a local Docker Daemon to be running, and that this computer is an AWS instance configured
+to support Nitro Enclaves.
 
 | Flag | Type | Description |
 |:-----|:-----|:------------|
-| `--eif-file` | String (Default="/enclave/application.eif") | Path on disk to EIF file to run. |
-| `--manifest-file` | String (Default="/enclave/enclaver.yaml") | Path on disk to the manifest file used to generate the EIF. |
-| `--cpu-count` | Int (Default=2) | Number of CPUs dedicated to the enclave. Defaults to 2, unless another default is specified in the manifest. |
-| `--memory-mb` | Int (Default=4096) | Megabytes of memory dedicated to the enclave. Defaults to 4096, unless another default is specified in the manifest. |
-| `--debug-mode` | Boolean (Default=false) | Enable debug mode on the enclave, and translate its console output to log lines. |
-
+| `-f`, `--file` | String | Enclaver Manifest file in which to look for an image name.<br>Defaults to `enclaver.yaml` if not set and no image is specified. To run a specific image instead, pass the name of the image as an argument. |
+| `-p`, `--publish` | String | Port to expose on the host machine, for example: 8080:80 |
 
 [format]: architecture.md#enclaver-image-format
 [outside]: architecture.md#components-outside-the-enclave
