@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - v*
 
 jobs:
   build-release-binaries:
@@ -68,7 +70,7 @@ jobs:
 
 
   publish-images:
-    if: github.repository == 'edgebitio/enclaver' && github.ref == 'refs/heads/main'
+    if: github.repository == 'edgebitio/enclaver' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag')
     needs: build-release-binaries
     runs-on: ubuntu-latest
 
@@ -123,3 +125,44 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: us-docker.pkg.dev/edgebit-containers/containers/enclaver-wrapper-base:latest
+
+  create-release:
+    if: github.repository == 'edgebitio/enclaver' && github.ref_type == 'tag'
+    needs: build-release-binaries
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        include:
+          - target: 'x86_64-unknown-linux-musl'
+            release_name: 'enclaver-linux-x86_64'
+          - target: 'aarch64-unknown-linux-musl'
+            release_name: 'enclaver-linux-aarch64'
+          - target: 'x86_64-apple-darwin'
+            release_name: 'enclaver-macos-x86_64'
+          - target: 'aarch64-apple-darwin'
+            release_name: 'enclaver-macos-aarch64'
+
+    steps:
+      - name: Download Binaries
+        uses: actions/download-artifact@v3
+
+      - name: Construct Release Artifact
+        shell: bash
+        run: |
+          release_dir="${{ matrix.release_name }}-${{ github.ref_name }}"
+
+          mkdir ${release_dir}
+          mv ${{ matrix.target }}/enclaver ${release_dir}/enclaver
+          chmod 755 ${release_dir}/enclaver
+          tar -czf ${release_dir}.tar.gz ${release_dir}
+          sha256sum ${release_dir}.tar.gz > ${release_dir}.tar.gz.sha256
+
+      - name: Upload Artifact to GH Release
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: true
+          tag_name: ${{ github.ref_name }}
+          files: |
+            ${{ matrix.release_name }}-${{ github.ref_name }}.tar.gz
+            ${{ matrix.release_name }}-${{ github.ref_name }}.tar.gz.sha256
