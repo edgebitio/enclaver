@@ -7,7 +7,7 @@ weight: 10
 
 # Enclaver Architecture
 
-Enclaver consists of a CLI tool for building and running secure enclaves. This document describes the architecture of [the CLI][cli], the container-based [image format][format], and the components that [run outside][outside] and [inside the enclave][inside] to allow your code to make the best use of the enclave's security properties.
+Enclaver is a tool that makes it easy to package and run applications in Nitro Enclaves. This document describes the architecture of [the CLI][cli], the container-based [image format][format], and the components that [run outside][outside] and [inside the enclave][inside] to allow your code to make the best use of the enclave's security properties.
 
 Different enclave technologies vary in capabilities and deployment patterns. Enclaver currently only supports AWS Nitro Enclaves and this document reflects this deployment pattern. Support for other cloud provider offerings and Intel/AMD enclave features will come in the future.
 
@@ -60,14 +60,14 @@ TODO: expand signing instructions. See [issue #32](https://github.com/edgebitio/
 
 ### Running an Enclave
 
-`enclaver run` executes on an EC2 machine to fetch, unpack and run your enclave image. Docker must be installed on the EC2 machine to pull the container image.
+Images built by Enclaver can be run using Docker, or another container runtime. Enclaver-built images come pre-configured with an Entrypoint which will invoke Enclaver's internal `enclaver-run` enclave wrapper in order to start the enclave, configure proxying and facilitate logging and monitoring.
 
-After the image is fetched, it is broken apart into [the outside][outside] and [inside components][inside]. The outer components are started first, then the enclave, with the inner components inside, is started.
+`enclaver run` is provided as a convenience utility for starting Enclaver images in a local Docker Daemon.
 
 All of this happens transparently to you, so the experience you get is very close to running the app outside of an enclave:
 
 ```sh
-$ enclaver run no-fly-list:enclave-latest
+$ enclaver run no-fly-list:enclave-latest -p 8001:8001
  INFO  enclaver::run   > starting egress proxy on vsock port 17002
  INFO  enclaver::vsock > Listening on vsock port 17002
  INFO  enclaver::run   > starting enclave
@@ -93,26 +93,27 @@ $ enclaver run no-fly-list:enclave-latest
  ...your app logs...
 ```
 
-TODO: Implement verify-before-run. See [issue #35](https://github.com/edgebitio/enclaver/issues/35).
-`enclaver run --verify-before-run attestation.json` will verify an attestation of an image after fetching it, but before executing it. If the comparison fails, the violating PCRs will be logged and the command will fail with an exit code.
+Output from the application is automatically logged by the "wrapper" container. When implementing an enclave application you should carefully consider what is logged, and avoid logging anything which is not intended to leave the confines of the enclave.
 
-`enclaver run --debug` allows for streaming logs from within the enclave. This is intended for debugging issues related to attestations and communicating with services outside the enclave, and not for general debugging. For debugging during development, it is more useful to run your container directly outside of an enclave.
+`enclaver run --debug` starts the underlying Nitro Enclave in debug mode, and automatically gathers the output of the underlying VM's console into the wrapper container logs. This is intended for debugging issues related to attestations and communicating with services outside the enclave, and not for general debugging. For debugging during development, it is more useful to run your container directly outside of an enclave.
 
 Refer to the [full list of commands][cmd-run] to learn about all of the features.
 
 ## Enclaver Image Format
 
-The Enclaver image format is a regular OCI container image with the inside and outside components:
+The Enclaver image format is a regular OCI container image consisting of:
 
-```sh
-/usr/local/bin/enclaver  # entrypoint
-/enclave/application.eif # inner components
-/enclave/enclaver.yaml   # manifest
-```
+1. A base image built on `amazonlinux`, with `nitro-cli` installed (this may be slimmed down in the future)
+2. An Enclaver "wrapper" binary, installed at `/usr/local/bin/enclaver`
+3. Enclave-specific `application.eif` and `enclaver.yaml` files installed under `/enclave/`
 
-The inner components inside `/enclave` are placed inside of another format, the Nitro-compatible Enclave Image Format (EIF) file. The EIF is an Amazon specification, and looks similar to an AMI, since it contains a kernel and Linux userland. Enclaver vendors Amazon's `nitro-cli` code to build the EIF. Enclaver will override the `ENTRYPOINT` of your source container with it's own PID1 and then trigger your original entrypoint. Do not plan to pass runtime configuration into the enclave.
+The EIF file is in an AWS-specified format, and contains a kernel and Linux userland including the enclave application and Enclaver's "inner" component, `odyn`.
 
-The network policy is duplicated in two places: inside of the EIF so it's part of the [cryptographic attestation][attestation] and outside so it can be read by other components outside of the enclave.
+The `enclaver.yaml` manifest file is an exact copy of the one that was used to build the image. A second copy of this file is bundled into the filesystem within `application.eif`, both for use by `odyn` for policy enforcement, and so that it is covered by [cryptographic attestations][attestation].
+
+Enclaver-built images are configured with an `ENTRYPOINT` which will automatically launch Enclaver's outer proxy and enclave supervisor, which in turn launches the enclave and inner proxy and supervisor, which in turn launches your application.
+
+To minimize the attack surface of enclave applications, it is not possible to pass runtime parameters.
 
 ### Calculating Cryptographic Attestations
 
@@ -146,7 +147,7 @@ EIF Info: EIFInfo {
 }
 ```
 
-An attestion must be reproduceable in order to ensure that each time the enclave is started, and nothing about it has been modified, the attestation remains constant. Other systems will rely on this reproduceability to build trust with the software. 
+An attestion must be reproduceable in order to ensure that each time the enclave is started, and nothing about it has been modified, the attestation remains constant. Other systems will rely on this reproduceability to build trust with the software.
 
 If an attestation matches, engineers can guarantee that its configuration is _exactly_ what was tested/verified/trusted. If you're remotely communicating with an enclave, the attestation can remotely prove it's configuration. An attestation serves as a piece of identity that can't be hijacked because it's crypographically tied to the code itself.
 
