@@ -160,6 +160,14 @@ impl Enclave {
             error!("error terminating enclave: {err}");
         }
 
+        match exit_res {
+            Ok(EnclaveExitStatus::Exited(code)) => info!("enclave exited with code {code}"),
+            Ok(EnclaveExitStatus::Signaled(signal)) => info!("enclave stopped due to signal {signal}"),
+            Ok(EnclaveExitStatus::Fatal(ref error)) => info!("enclave exited due to fatal error: {error}"),
+            Ok(EnclaveExitStatus::Cancelled) => (),
+            Err(ref err) => error!("error waing for enclave exit: {err}"),
+        };
+
         exit_res
     }
 
@@ -263,13 +271,14 @@ impl Enclave {
 
                 match status {
                     EnclaveProcessStatus::Exited { code } => {
-                        info!("enclave exited with code {code}");
                         return Ok(EnclaveExitStatus::Exited(code));
                     }
                     EnclaveProcessStatus::Signaled { signal } => {
-                        info!("enclave stopped due to signal {signal}");
                         return Ok(EnclaveExitStatus::Signaled(signal));
-                    }
+                    },
+                    EnclaveProcessStatus::Fatal { error } => {
+                        return Ok(EnclaveExitStatus::Fatal(error));
+                    },
                     _ => {
                         debug!("enclave status: {status:#?}");
                     }
@@ -305,7 +314,7 @@ impl Enclave {
         for task in self.tasks {
             task.abort();
             match task.await {
-                Ok(_) => {}
+                Ok(_) => {},
                 Err(e) => {
                     debug!("task terminated with error {e}");
                 }
@@ -327,6 +336,9 @@ enum EnclaveProcessStatus {
 
     #[serde(rename = "signaled")]
     Signaled { signal: i32 },
+
+    #[serde(rename = "fatal")]
+    Fatal { error: String },
 }
 
 #[derive(Debug)]
@@ -334,4 +346,5 @@ pub enum EnclaveExitStatus {
     Cancelled,
     Exited(i32),
     Signaled(i32),
+    Fatal(String),
 }

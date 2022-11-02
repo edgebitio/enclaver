@@ -9,6 +9,7 @@ use std::{
 use tokio_util::sync::CancellationToken;
 
 const ENCLAVE_SIGNALED_EXIT_CODE: u8 = 107;
+const ENCLAVE_FATAL: u8 = 108;
 const ENCLAVER_INTERRUPTED: u8 = 109;
 
 #[derive(Debug, Parser)]
@@ -42,6 +43,9 @@ impl Termination for CLISuccess {
             }
             CLISuccess::EnclaveStatus(EnclaveExitStatus::Signaled(_signal)) => {
                 ExitCode::from(ENCLAVE_SIGNALED_EXIT_CODE)
+            }
+            CLISuccess::EnclaveStatus(EnclaveExitStatus::Fatal(_err)) => {
+                ExitCode::from(ENCLAVE_FATAL)
             }
             CLISuccess::EnclaveStatus(EnclaveExitStatus::Cancelled) => {
                 ExitCode::from(ENCLAVER_INTERRUPTED)

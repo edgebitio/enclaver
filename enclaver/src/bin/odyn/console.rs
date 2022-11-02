@@ -258,6 +258,7 @@ impl AppLog {
 enum EntrypointStatus {
     Running,
     Exited(ExitStatus),
+    Fatal(String),
 }
 
 impl EntrypointStatus {
@@ -266,10 +267,11 @@ impl EntrypointStatus {
             Self::Running => "{ \"status\": \"running\" }\n".to_string(),
             Self::Exited(exit_status) => {
                 match exit_status {
-                    ExitStatus::Exited(code) => format!("{{ \"status\": \"exited\", \"code\": {} }}\n", code),
-                    ExitStatus::Signaled(sig) => format!("{{ \"status\": \"signaled\", \"signal\": \"{}\" }}\n", sig),
+                    ExitStatus::Exited(code) => format!("{{ \"status\": \"exited\", \"code\": {code} }}\n"),
+                    ExitStatus::Signaled(sig) => format!("{{ \"status\": \"signaled\", \"signal\": \"{sig}\" }}\n"),
                 }
-            }
+            },
+            Self::Fatal(err) => format!("{{ \"status\": \"fatal\", \"error\": \"{err}\" }}\n"),
         }
     }
 }
@@ -291,6 +293,11 @@ impl AppStatusInner {
         self.status = EntrypointStatus::Exited(status);
         self.watches.notify();
     }
+
+    fn fatal(&mut self, err: String) {
+        self.status = EntrypointStatus::Fatal(err);
+        self.watches.notify();
+    }
 }
 
 #[derive(Clone)]
@@ -307,6 +314,10 @@ impl AppStatus {
 
     pub fn exited(&self, status: ExitStatus) {
         self.inner.lock().unwrap().exited(status);
+    }
+
+    pub fn fatal(&self, err: String) {
+        self.inner.lock().unwrap().fatal(err);
     }
 
     pub fn start_serving(&self, port: u32) -> JoinHandle<Result<()>> {
