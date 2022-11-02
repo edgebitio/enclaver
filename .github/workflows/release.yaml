@@ -106,6 +106,19 @@ jobs:
         run: |
           gcloud auth configure-docker us-docker.pkg.dev
 
+      - name: Generate Odyn Image Metadata
+        id: odyn-metadata
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            us-docker.pkg.dev/edgebit-containers/containers/odyn
+          tags: |
+            type=sha,
+            type=semver,pattern=v{{major}}
+            type=semver,pattern=v{{major}}.{{minor}}
+            type=semver,pattern=v{{major}}.{{minor}}.{{patch}}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
+
       - name: Build Odyn Image
         uses: docker/build-push-action@v3
         with:
@@ -114,7 +127,20 @@ jobs:
           file: odyn-release.dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: us-docker.pkg.dev/edgebit-containers/containers/odyn:latest
+          tags: ${{ steps.odyn-meta.outputs.tags }}
+
+      - name: Generate Runtime Base Image Metadata
+        id: wrapper-base-metadata
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            us-docker.pkg.dev/edgebit-containers/containers/enclaver-wrapper-base
+          tags: |
+            type=sha,
+            type=semver,pattern=v{{major}}
+            type=semver,pattern=v{{major}}.{{minor}}
+            type=semver,pattern=v{{major}}.{{minor}}.{{patch}}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
 
       - name: Build Runtime Base Image
         uses: docker/build-push-action@v3
@@ -124,9 +150,9 @@ jobs:
           file: runtimebase.dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: us-docker.pkg.dev/edgebit-containers/containers/enclaver-wrapper-base:latest
+          tags: ${{ steps.wrapper-base-meta.outputs.tags }}
 
-  create-release:
+  upload-release-artifact:
     if: github.repository == 'edgebitio/enclaver' && github.ref_type == 'tag'
     needs: build-release-binaries
     runs-on: ubuntu-latest
