@@ -4,7 +4,7 @@ use bollard::image::{BuildImageOptions, CreateImageOptions, TagImageOptions};
 use bollard::models::{BuildInfo, CreateImageInfo, ImageId};
 use bollard::Docker;
 use futures_util::stream::{StreamExt, TryStreamExt};
-use log::{debug, info, trace};
+use log::{debug, trace};
 use std::fmt;
 use std::fmt::Write;
 use std::path::PathBuf;
@@ -117,7 +117,7 @@ impl ImageManager {
                 ..
             } = create_image_info
             {
-                info!("{}: {}", id, status);
+                debug!("{}: {}", id, status);
             }
         }
 

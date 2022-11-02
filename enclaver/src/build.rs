@@ -250,7 +250,7 @@ impl EnclaveArtifactBuilder {
         // would output an identical EIF, so this seems like it should be modeled as more
         // of a toolchain than a source. In any case there isn't much use-case for overriding
         // it right now (perhaps pinning though), so deferring that problem for later.
-        let nitro_cli = self.resolve_image(NITRO_CLI_IMAGE).await?;
+        let nitro_cli = self.resolve_external_source_image(NITRO_CLI_IMAGE).await?;
 
         debug!("using nitro-cli image: {nitro_cli}");
 
@@ -380,7 +380,10 @@ impl EnclaveArtifactBuilder {
         }
     }
 
-    async fn resolve_image(&self, image_name: &str) -> Result<ImageRef> {
+    // External images are images whose tags we do not normally manage. In other words,
+    // a user tags an image, then gives us that tag - and unless specifically instructed
+    // otherwise we should not overwrite that tag.
+    async fn resolve_external_source_image(&self, image_name: &str) -> Result<ImageRef> {
         if self.pull_tags {
             self.image_manager.pull_image(image_name).await
         } else {
@@ -388,30 +391,38 @@ impl EnclaveArtifactBuilder {
         }
     }
 
+    async fn resolve_internal_source_image(
+        &self,
+        name_override: Option<&str>,
+        default: &str,
+    ) -> Result<ImageRef> {
+        match name_override {
+            Some(image_name) => self.image_manager.find_or_pull(image_name).await,
+            None => self.image_manager.pull_image(default).await,
+        }
+    }
+
     async fn resolve_sources(&self, manifest: &Manifest) -> Result<ResolvedSources> {
         let app = self
-            .image_manager
-            .find_or_pull(&manifest.sources.app)
+            .resolve_external_source_image(&manifest.sources.app)
             .await?;
-
         info!("using app image: {app}");
 
-        let odyn = match &manifest.sources.supervisor {
-            Some(odyn_image) => self.image_manager.find_or_pull(odyn_image).await?,
-            None => self.image_manager.find_or_pull(ODYN_IMAGE).await?,
-        };
-
+        let odyn = self
+            .resolve_internal_source_image(manifest.sources.supervisor.as_deref(), ODYN_IMAGE)
+            .await?;
         if manifest.sources.supervisor.is_none() {
             debug!("no supervisor image specified in manifest; using default: {odyn}");
         } else {
             info!("using supervisor image: {odyn}");
         }
 
-        let release_base = match &manifest.sources.wrapper {
-            Some(wrapper_base_image) => self.resolve_image(wrapper_base_image).await?,
-            None => self.resolve_image(RELEASE_BASE_IMAGE).await?,
-        };
-
+        let release_base = self
+            .resolve_internal_source_image(
+                manifest.sources.supervisor.as_deref(),
+                RELEASE_BASE_IMAGE,
+            )
+            .await?;
         if manifest.sources.wrapper.is_none() {
             debug!("no wrapper base image specified in manifest; using default: {release_base}");
         } else {
