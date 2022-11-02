@@ -36,19 +36,10 @@ struct CliArgs {
     entrypoint: Vec<OsString>,
 }
 
-async fn run(args: &CliArgs) -> Result<()> {
+async fn launch(args: &CliArgs) -> Result<launcher::ExitStatus> {
     let config = Arc::new(Configuration::load(&args.config_dir).await?);
 
-    let mut console_task = None;
-    if !args.no_console {
-        let app_log = AppLog::with_stdio_redirect()?;
-        console_task = Some(app_log.start_serving(APP_LOG_PORT));
-    }
-
     let nsm = Arc::new(Nsm::new());
-
-    let app_status = AppStatus::new();
-    let app_status_task = app_status.start_serving(STATUS_PORT);
 
     if !args.no_bootstrap {
         enclave::bootstrap(nsm.clone()).await?;
@@ -72,7 +63,25 @@ async fn run(args: &CliArgs) -> Result<()> {
     ingress.stop().await;
     egress.stop().await;
 
-    app_status.exited(exit_status);
+    Ok(exit_status)
+}
+
+async fn run(args: &CliArgs) -> Result<()> {
+    // Start the status and logs listeners ASAP so that if we fail to
+    // initialize, we can communicate the status and stream the logs
+    let app_status = AppStatus::new();
+    let app_status_task = app_status.start_serving(STATUS_PORT);
+
+    let mut console_task = None;
+    if !args.no_console {
+        let app_log = AppLog::with_stdio_redirect()?;
+        console_task = Some(app_log.start_serving(APP_LOG_PORT));
+    }
+
+    match launch(args).await {
+        Ok(exit_status) => app_status.exited(exit_status),
+        Err(err) => app_status.fatal(err.to_string()),
+    };
 
     app_status_task.await??;
 
