@@ -127,7 +127,7 @@ jobs:
           file: odyn-release.dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.odyn-meta.outputs.tags }}
+          tags: ${{ steps.odyn-metadata.outputs.tags }}
 
       - name: Generate Runtime Base Image Metadata
         id: wrapper-base-metadata
@@ -150,7 +150,7 @@ jobs:
           file: runtimebase.dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.wrapper-base-meta.outputs.tags }}
+          tags: ${{ steps.wrapper-base-metadata.outputs.tags }}
 
   upload-release-artifact:
     if: github.repository == 'edgebitio/enclaver' && github.ref_type == 'tag'
