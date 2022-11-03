@@ -102,9 +102,19 @@ jobs:
           workload_identity_provider: 'projects/77991489452/locations/global/workloadIdentityPools/gh-actions-identity-pool/providers/gh-actions-identity-provider'
           service_account: 'github-actions-service-account@edgebit-containers.iam.gserviceaccount.com'
 
-      - name: Configure Docker Auth
+      - name: Configure GCP Docker Auth
         run: |
           gcloud auth configure-docker us-docker.pkg.dev
+
+      - name: Authenticate to AWS
+        uses: aws-actions/configure-aws-credentials@v1-node16
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::970625735569:role/GitHubActionsECRPush
+
+      - name: Configure AWS Docker Auth
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
 
       - name: Generate Odyn Image Metadata
         id: odyn-metadata
@@ -112,6 +122,7 @@ jobs:
         with:
           images: |
             us-docker.pkg.dev/edgebit-containers/containers/odyn
+            public.ecr.aws/p0s1m1r8/odyn
           tags: |
             type=sha,
             type=semver,pattern=v{{major}}
@@ -135,6 +146,7 @@ jobs:
         with:
           images: |
             us-docker.pkg.dev/edgebit-containers/containers/enclaver-wrapper-base
+            public.ecr.aws/p0s1m1r8/enclaver-wrapper-base
           tags: |
             type=sha,
             type=semver,pattern=v{{major}}
