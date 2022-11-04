@@ -39,6 +39,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "enclaver -> target"
+          key: ${{ matrix.target }}
 
       - name: Build Release Binaries (native cargo)
         if: ${{ !matrix.uses_musl }}
