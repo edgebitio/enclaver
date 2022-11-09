@@ -96,8 +96,6 @@ Resources:
         - Key: Name
           Value: Enclaver-Security-Group
   DemoIAMRole:
-    # This role intentionally doesn't grant any allowed actions
-    # It's only needed to obtain IMDS credentials to pull our publicly accessible objects
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -114,6 +112,24 @@ Resources:
     Properties:
       Roles:
         - !Ref DemoIAMRole
+  AccessS3andKMSPolicy:
+    Type: "AWS::IAM::Policy"
+    Properties:
+      PolicyName: "root"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow" # Allow access to request the KMS key, which is protected by the attestation PCR0
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:DescribeKey'
+            Resource: "arn:aws:kms:us-east-1:841252696414:key/mrk-b3152356da604a7dac485a0a272957c7"
+          - Effect: "Allow" # Allow access to request the encrypted envelope from S3, which is publicly available
+            Action:
+              - 's3:getObject'
+            Resource: "arn:aws:s3:::no-fly-list/no-fly-envelope.txt"
+      Roles:
+        - Ref: "DemoIAMRole"
 Outputs:
   DemoInstanceId:
     Description: Instance Id 
