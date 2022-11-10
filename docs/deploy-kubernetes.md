@@ -8,13 +8,13 @@ category: deploying
 
 Enclaver can be used with Kubernetes to run Nitro Enclaves on qualified Nodes in your EKS, Rancher/k3s or OpenShift cluster. Users of your cluster can use an enclave image (from `enclaver build`) inside of a Deployment.
 
-<div style="background: #F5BF4F; padding: 5px 10px;">Note: this document is largely aspirational but will be implemented soon. It is preserved to understand our direction and help is always appreciated if you want to implement some of this functionality.</div>
-
 ## Running an Enclave
 
-Running an Deployment that uses an enclave is very easy. Here's the easiest example:
+Running an Deployment that uses an enclave is very easy since Enclaver images are self-contained. They can be scaled out normally based on your Node availability.
 
-TODO: this needs further testing
+<details>
+  <summary>View example-enclave.yaml</summary>
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -38,11 +38,6 @@ spec:
       nodeSelector:
         edgebit.io/enclave: nitro
       containers:
-      - name: webapp 
-        image: registry.example.com/webapp:latest
-        ports: 
-           - containerPort: 80
-             name: web
       - name: enclave 
         image: us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:enclave-latest
         ports: 
@@ -50,29 +45,60 @@ spec:
              name: enclave-app
         volumeMounts:
         - mountPath: /dev/nitro_enclaves
-          name: nitro_enclaves
+          name: nitro-enclaves
+        - mountPath: /dev/hugepages-1Gi
+          name: hugepages
+          readOnly: false
+        securityContext:
+          privileged: true
+        resources:
+          limits:
+            hugepages-1Gi: 3Gi
+            memory: 500Mi
+          requests:
+            hugepages-1Gi: 3Gi
       restartPolicy: Always
       volumes:
-      - hostPath:
+      - name: nitro-enclaves
+        hostPath:
           path: /dev/nitro_enclaves
-        name: nitro_enclaves
+      - name: hugepages
+        emptyDir:
+          medium: HugePages
 ```
+</details>
 
-There are two parts to call out:
-1. The `nodeSelector` is selecting only our Nitro enabled Nodes and the `topologySpreadConstraints` ensures that each Node only runs one enclave at a time. See below for more robust hardware tracking.
-2. The `args` of the enclave container points to your enclave image.
+There are a few essential parts of each Deployment:
+1. The `nodeSelector` is selecting only our Nitro enabled Nodes and the `topologySpreadConstraints` ensures that each Node only runs one enclave at a time.
+2. The `image` of the enclave container points to your enclave image.
+3. The resource limit for `hugepages-1Gi` should match or exceed the memory value from your `enclaver.yaml`. In our example above, it's 3 GB.
+4. The pod must run as privileged to mount `/dev/nitro_enclaves`
 
-This assumes you have Nodes available that can run Nitro Enclaves.
+## Add Qualified Nodes to your EKS Cluster
 
-## Add Qualified Nodes to your Cluster
+This guide assumes you already have an EKS cluster. It doesn't matter if it has other NodeGroups attached to it. 
 
-Only certain [EC2 instance types][instance-req] can run Nitro Enclaves. `c6a.xlarge` is the cheapest qualifying instance type as of this writing) and Docker installed.  See [the Deploying on AWS](deploy-aws.md) for more details.
+Only certain [EC2 instance types][instance-req] can run Nitro Enclaves. `c6a.xlarge` is the cheapest qualifying instance type as of this writing) and Docker installed.  See [the Deploying on AWS](deploy-aws.md) for more details. Create the CloudFormation stack before continuing:
 
-Due to Amazon restrictions, each EC2 machine can only run a single enclave at a time. This is enforced by teaching the scheduler about the Nitro Enclave hardware resource below.
+[![CloudFormation](img/launch-stack-x86.svg)][cloudformation-x86]
 
-### Label Nodes
+It will create a Launch Template in order to set enclave options, create an IAM role for our Nodes to talk to the cluster, then create an EKS NodeGroup that references both.
 
-Label your Nodes with `edgebit.io/enclave=nitro` so that your Deployment can target the qualified Nodes.
+Due to Amazon restrictions, each EC2 machine can only run a single enclave at a time. This is enforced by `topologySpreadConstraints` in the Deployment.
+
+[instance-req]: https://docs.aws.amazon.com/enclaves/latest/user/nitro-enclave.html#nitro-enclave-reqs
+[cloudformation-x86]: https://us-east-1.console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://enclaver-cloudformation.s3.amazonaws.com/enclaver-eks-nodegroup-x86.yaml&stackName=Enclaver-Demo
+
+### Labeling Nodes
+
+The CloudFormation will label your Nodes with `edgebit.io/enclave=nitro` so that your Deployment can target the qualified Nodes.
+
+```sh
+$ kubectl get nodes --selector=edgebit.io/enclave=nitro
+NAME                            STATUS   ROLES    AGE     VERSION
+ip-172-31-37-102.ec2.internal   Ready    <none>   5m      v1.23.9-eks-ba74326
+ip-172-31-38-217.ec2.internal   Ready    <none>   4m44s   v1.23.9-eks-ba74326
+```
 
 ### Tainting is Optional
 
@@ -80,9 +106,14 @@ You may also Taint your Nodes so other workloads don't land on it, but in most c
 
 ## Testing the Enclave
 
-The example app answers web requests on port 443. You can make a Service and Load Balancer to address all of the Pods, or for a simple test, port-forward to the Pod:
+Submit the sample enclave application to the cluster ([download here][k8s-deployment]):
 
-TODO: update ports once final logic is in place
+```sh
+$ kubectl create -f example-enclave.yaml
+```
+
+The example app answers web requests on port 8001. You can make a Service and Load Balancer to address all of the Pods, or for a simple test, port-forward to the Pod:
+
 ```sh
 $ kubectl port-forward <podname> 8001:8001
 ```
@@ -94,57 +125,50 @@ $ curl localhost:8001
 "https://edgebit.io/enclaver/docs/0.x/guide-app/"
 ```
 
-Jump over to the [simple Python app][app] guide (the output URL above) that explains our sample application in more detail.
+Jump over to the [simple Python app][app] guide (the URL printed above) that explains our sample application in more detail.
 
-## Extend Scheduler with Nitro Enclaves Hardware Resource
-
-There are a few options for extending the Kubernetes scheduler to understand Nitro Enclaves. The goal is to ensure that only one enclave is running on each Node at a time, which is a limitation from Amazon.
-
-### Using Smarter Device Manager
-
-ARM's [Smarter Device Manager][device-manager] is designed to track special hardware resources so the Kubernetes scheduler can manage them correctly. You can [read more][eks-blog] or install it pre-configured with the Node labels from above:
-
-```sh
-$ kubectl create -f smarter-device-manager-ds-with-cm.yaml
-```
-
-### OpenShift's Node Feature Discovery Operator
-
-OpenShift users will want to use the [Node Feature Discovery Operator][nfd] from Red Hat. This will install it from OperatorHub on your cluster:
-
-TODO: write this file
-```
-$ kubectl create -f node-feature-discovery-install.yaml
-```
-
-After installation, target the Nitro hardware device with this config:
-
-TODO: target the nitro devices correctly
-
-```yaml
-apiVersion: nfd.openshift.io/v1
-kind: NodeFeatureDiscovery
-metadata:
-  name: nfd-instance
-  namespace: openshift-nfd
-spec:
-  instance: "" # instance is empty by default
-  topologyupdater: false # False by default
-  operand:
-    image: registry.redhat.io/openshift4/ose-node-feature-discovery:v4.10
-    imagePullPolicy: Always
-  workerConfig:
-    configData: |
-        sources:
-          pci:
-            deviceClassWhitelist: ["0200", "03"]
-```
+[app]: guide-app.md
+[k8s-deployment]: https://github.com/edgebitio/enclaver/blob/main/docs/assets/example-enclave.yaml
 
 ## Troubleshooting
 
-TODO: add troubleshooting
+If your pods are pending, check that hugepages is enabled on your Nodes. Here's what the status block of a pending Node looks like:
 
-[device-manager]: https://gitlab.com/arm-research/smarter/smarter-device-manager
-[eks-blog]: https://github.com/spkane/aws-nitro-cli-for-k8s/blob/d3e318f8de2690bc5507e50f0cdbe6be98dd9717/k8s/smarter-device-manager-ds-with-cm.yaml
-[instance-req]: https://docs.aws.amazon.com/enclaves/latest/user/nitro-enclave.html#nitro-enclave-reqs
-[nfd]: https://docs.openshift.com/container-platform/4.10/hardware_enablement/psap-node-feature-discovery-operator.html
+```sh
+$ kubectl get pods/example-enclave-5fbddb6cc8-nspgw -o yaml
+...
+status:
+  conditions:
+  - lastProbeTime: null
+    lastTransitionTime: "2022-11-08T14:35:27Z"
+    message: '0/2 nodes are available: 2 Insufficient hugepages-1Gi.'
+    reason: Unschedulable
+    status: "False"
+    type: PodScheduled
+  phase: Pending
+  qosClass: Burstable
+```
+
+Check that Kubernetes is reading the available hugepages by looking at one of your Nitro Enclave Nodes. Here you can see that `hugepages-1Gi` has capacity for `3Gi`. If your Node is not configured correctly, you might see a `0` for both hugepages entries.
+
+```sh
+$ kubectl get nodes/ip-172-31-37-102.ec2.internal -o yaml
+...
+  allocatable:
+    attachable-volumes-aws-ebs: "39"
+    cpu: 1930m
+    ephemeral-storage: "18242267924"
+    hugepages-1Gi: 3Gi
+    hugepages-2Mi: "0"
+    memory: 3796024Ki
+    pods: "58"
+  capacity:
+    attachable-volumes-aws-ebs: "39"
+    cpu: "2"
+    ephemeral-storage: 20959212Ki
+    hugepages-1Gi: 3Gi
+    hugepages-2Mi: "0"
+    memory: 7958584Ki
+    pods: "58"
+...
+```

@@ -1,69 +1,56 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: Test Enclaver on a single EC2 machine with Nitro Enclaves enabled
-Metadata: 
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Add a new Nitro Enclave Node Group to an existing EKS cluster
+Metadata:
   AWS::CloudFormation::Interface: 
     ParameterGroups: 
       - Label: 
-          default: "VPC Configuration"
+          default: "EKS Cluster Info"
         Parameters: 
-          - VpcId
-          - SubnetId
+          - ClusterName
       - Label: 
-          default: "EC2 Machine"
+          default: "Node Group"
         Parameters: 
-          - InstanceType
-          - KeyName
-          - LatestAmiId
+          - SubnetId
     ParameterLabels: 
-      VpcId: 
-        default: "Pick a VPC"
+      ClusterName: 
+        default: "Name of Existing EKS Cluster"
       SubnetId: 
         default: "Pick a subnet"
-      InstanceType: 
-        default: "Instance type"
       KeyName: 
         default: "SSH key"
-      LatestAmiId: 
-        default: "AMI to use"
 Parameters:
-  VpcId:
-    Type: AWS::EC2::VPC::Id
-    Description: Existing VPC to place the machine
+  ClusterName:
+    Type: String
+    Description: Name of your existing EKS cluster
     AllowedPattern: ".+"
   SubnetId:
     Type: AWS::EC2::Subnet::Id
-    Description: Subnet within the VPC to place the machine
-    AllowedPattern: ".+"
-  InstanceType:
-    Type: String
-    Description: Cheapest x86 instance that supports Nitro Enclaves
-    Default: c6a.xlarge
+    Description: Subnet within the VPC to place the machines
     AllowedPattern: ".+"
   KeyName:
-    Description: SSH Keypair to login to the instance
+    Description: SSH Keypair to login to the instances
     Type: AWS::EC2::KeyPair::KeyName
-    AllowedPattern: ".+"
-  LatestAmiId:
-    Description: Amazon Linux 2 x86 AMI for us-east1 Region
-    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
-    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
     AllowedPattern: ".+"
 Resources:
   DemoLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: EnclaverLaunchTemplate
+      LaunchTemplateName: EnclaverEKSLaunchTemplate
       LaunchTemplateData:
         MetadataOptions:
           HttpPutResponseHopLimit: 2 # Increase from 1 to 2 due to docker0 hop
         KeyName: !Ref KeyName
-        SecurityGroupIds: 
-          - !Ref DemoSecurityGroup
         EnclaveOptions:
           Enabled: true
         UserData:
           Fn::Base64: 
             !Sub |
+              MIME-Version: 1.0
+              Content-Type: multipart/mixed; boundary="==EDGEBIT=="
+
+              --==EDGEBIT==
+              Content-Type: text/x-shellscript; charset="us-ascii"
+
               #!/bin/bash
               amazon-linux-extras install aws-nitro-enclaves-cli
               yum install aws-nitro-enclaves-cli-devel -y
@@ -72,34 +59,33 @@ Resources:
               sed -i 's/memory_mib: 512/memory_mib: 3072/g' /etc/nitro_enclaves/allocator.yaml
               systemctl start nitro-enclaves-allocator.service && sudo systemctl enable nitro-enclaves-allocator.service
               systemctl start docker && sudo systemctl enable docker
-  DemoInstance:
-    Type: 'AWS::EC2::Instance'
+
+              --==EDGEBIT==--
+  DemoNodeGroup:
+    Type: AWS::EKS::Nodegroup
     Properties: 
-      ImageId: !Ref LatestAmiId
-      InstanceType: !Ref InstanceType
+      ClusterName: !Ref ClusterName
+      AmiType: AL2_x86_64
+      NodeRole: !GetAtt DemoIAMRole.Arn
+      Subnets:
+        - !Ref SubnetId
       LaunchTemplate: 
-          LaunchTemplateId: !Ref DemoLaunchTemplate
-          Version: !GetAtt DemoLaunchTemplate.LatestVersionNumber
-      IamInstanceProfile: !Ref DemoInstanceProfile
-      SubnetId: !Ref SubnetId
-  DemoSecurityGroup:
-    Type: 'AWS::EC2::SecurityGroup'
-    Properties:
-      VpcId: !Ref VpcId
-      GroupDescription: Allow SSH access via port 22
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: '22'
-          ToPort: '22'
-          CidrIp: '0.0.0.0/0'
-      Tags:
-        - Key: Name
-          Value: Enclaver-Security-Group
+        Id: !Ref DemoLaunchTemplate
+        Version: !GetAtt DemoLaunchTemplate.LatestVersionNumber
+      NodegroupName: EnclaveNodes
+      ScalingConfig:
+        MinSize: 1
+        DesiredSize: 2
+        MaxSize: 3
+      Labels: {"edgebit.io/enclave": "nitro"}
+      InstanceTypes:
+        - c6a.xlarge
   DemoIAMRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: EnclaverEKS
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
@@ -107,18 +93,18 @@ Resources:
                 - ec2.amazonaws.com
             Action:
               - 'sts:AssumeRole'
-  DemoInstanceProfile:
-    Type: "AWS::IAM::InstanceProfile"
-    Properties:
-      Roles:
-        - !Ref DemoIAMRole
-  AccessS3andKMSPolicy:
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+      Path: /
+  AccessS3andKMSPolicy: 
     Type: "AWS::IAM::Policy"
-    Properties:
+    Properties: 
       PolicyName: "root"
-      PolicyDocument:
+      PolicyDocument: 
         Version: "2012-10-17"
-        Statement:
+        Statement: 
           - Effect: "Allow" # Allow access to request the KMS key, which is protected by the attestation PCR0
             Action:
               - 'kms:Decrypt'
@@ -128,9 +114,5 @@ Resources:
             Action:
               - 's3:getObject'
             Resource: "arn:aws:s3:::no-fly-list/no-fly-envelope.txt"
-      Roles:
+      Roles: 
         - Ref: "DemoIAMRole"
-Outputs:
-  DemoInstanceId:
-    Description: Instance Id 
-    Value: !Ref DemoInstance
