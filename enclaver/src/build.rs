@@ -419,7 +419,7 @@ impl EnclaveArtifactBuilder {
 
         let release_base = self
             .resolve_internal_source_image(
-                manifest.sources.supervisor.as_deref(),
+                manifest.sources.wrapper.as_deref(),
                 RELEASE_BASE_IMAGE,
             )
             .await?;
