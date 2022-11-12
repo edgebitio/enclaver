@@ -13,13 +13,15 @@ These demos show off how your apps can use these unique features to improve priv
  - [Run a simple Python app](docs/guide-app.md) that represents a microservice or security-centric function
  - [Run Hashicorp Vault](docs/guide-vault.md) to fully isolate it after it's unsealed
 
+<a href="https://www.youtube.com/watch?v=nxSgRYten1o"><img src="docs/img/thumb-run.png" width="400" /></a>
+
 ## Project State
 
 Enclaver is currently in alpha and not intended for use in production. Enclaver currently only supports [AWS Nitro Enclaves](https://aws.amazon.com/ec2/nitro/nitro-enclaves/); support for Azure Confidential VMs, GCP Confidential VMs, and arbitrary SGX and OP-TEE enclaves is on the roadmap.
 
  - [Getting started guide](docs/getting-started.md)
  - [Deploy an enclave on AWS](docs/deploy-aws.md)
- - [Deploy locally for development](docs/deploy-local.md)
+ - [Deploy an enclave on Kubernetes](docs/deploy-kubernetes.md)
 
 ## Architecture
 

@@ -8,6 +8,8 @@ category: guides
 
 This guide will walk through running the No-Fly-List app, which checks passengers attempting to fly on an airline against a no-fly list. It's a fairly simple Python application that requires protection "in-use" for it's data, because we don't want anyone to be able to see the full no-fly list. The app uses a secure enclave and Amazon KMS to achieve that.
 
+[![No-Fly demo on YouTube](img/thumb-run.png)](https://www.youtube.com/watch?v=MBXxzeiGYew)
+
 <details>
   <summary>How does the enclave's isolation protect the no-fly list?</summary>
 
