@@ -221,7 +221,6 @@ pub struct FileBuilder {
     pub path: PathBuf,
     pub source: FileSource,
     pub chown: String,
-    pub chmod: String,
 }
 
 impl FileBuilder {
@@ -247,8 +246,6 @@ impl FileBuilder {
         }
 
         writeln!(&mut line, " {}", dst_path)?;
-
-        writeln!(&mut line, "RUN chmod {} {}", self.chmod, dst_path)?;
 
         Ok(line)
     }
