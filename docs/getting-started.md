@@ -16,6 +16,8 @@ Enclaves provide several critical features for operating software which processe
 
 Refer to [the architecture](architecture.md) for a complete understanding of Enclaver components.
 
+[![Enclaver demo on YouTube](img/thumb-run.png)](https://www.youtube.com/watch?v=nxSgRYten1o)
+
 ## Tutorials
 
 ### [No-Fly-List Python app][no-fly-app]

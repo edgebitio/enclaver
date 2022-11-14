@@ -8,6 +8,8 @@ category: deploying
 
 Enclaver can be used with EC2 machines that are enabled to run Nitro Enclaves. This guide assumes you are running newer versions of Amazon Linux 2 and will deploy the [simple Python example app][app].
 
+[![No-Fly demo on YouTube](img/thumb-run.png)](https://www.youtube.com/watch?v=MBXxzeiGYew)
+
 ## Instance Requirements
 
 Only certain [EC2 instance types][instance-req] can run Nitro Enclaves. Since dedicated CPUs are carved off for the enclave, the larger x86 types with 4+ vCPUs are ok, with `c6a.xlarge` being the cheapest. Your machines must be booted with the Nitro Enclave option enabled.

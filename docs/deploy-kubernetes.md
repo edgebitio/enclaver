@@ -8,6 +8,8 @@ category: deploying
 
 Enclaver can be used with Kubernetes to run Nitro Enclaves on qualified Nodes in your EKS, Rancher/k3s or OpenShift cluster. Users of your cluster can use an enclave image (from `enclaver build`) inside of a Deployment.
 
+[![Secure Enclaves with EKS demo on YouTube](img/thumb-eks.png)](https://www.youtube.com/watch?v=Alte0y52WEY)
+
 ## Running an Enclave
 
 Running an Deployment that uses an enclave is very easy since Enclaver images are self-contained. They can be scaled out normally based on your Node availability.
