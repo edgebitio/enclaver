@@ -16,11 +16,7 @@ use tempfile::TempDir;
 use tokio::fs::{canonicalize, rename};
 use uuid::Uuid;
 
-const ENCLAVE_MANIFEST_PERMS: &str = "440";
-const ENCLAVE_ODYN_PERMS: &str = "550";
 const ENCLAVE_OVERLAY_CHOWN: &str = "0:0";
-
-const RELEASE_OVERLAY_PERMS: &str = "444";
 const RELEASE_OVERLAY_CHOWN: &str = "0:0";
 
 const NITRO_CLI_IMAGE: &str = "us-docker.pkg.dev/edgebit-containers/containers/nitro-cli:latest";
@@ -166,7 +162,6 @@ impl EnclaveArtifactBuilder {
                             path: PathBuf::from(manifest_path),
                         },
                         chown: ENCLAVE_OVERLAY_CHOWN.to_string(),
-                        chmod: ENCLAVE_MANIFEST_PERMS.into(),
                     })
                     .append_file(FileBuilder {
                         path: PathBuf::from(ENCLAVE_ODYN_PATH),
@@ -175,7 +170,6 @@ impl EnclaveArtifactBuilder {
                             path: ODYN_IMAGE_BINARY_PATH.into(),
                         },
                         chown: ENCLAVE_OVERLAY_CHOWN.to_string(),
-                        chmod: ENCLAVE_ODYN_PERMS.into(),
                     })
                     .set_entrypoint(odyn_command),
             )
@@ -209,13 +203,11 @@ impl EnclaveArtifactBuilder {
                             path: PathBuf::from(manifest_path),
                         },
                         chown: RELEASE_OVERLAY_CHOWN.to_string(),
-                        chmod: RELEASE_OVERLAY_PERMS.into(),
                     })
                     .append_file(FileBuilder {
                         path: PathBuf::from(RELEASE_BUNDLE_DIR).join(EIF_FILE_NAME),
                         source: FileSource::Local { path: eif_path },
                         chown: RELEASE_OVERLAY_CHOWN.to_string(),
-                        chmod: RELEASE_OVERLAY_PERMS.into(),
                     }),
             )
             .await?;
