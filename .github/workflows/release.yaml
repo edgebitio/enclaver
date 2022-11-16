@@ -1,11 +1,13 @@
 name: Build Release
 
-on:
-  push:
-    branches:
-      - "*"
-    tags:
-      - v*
+on: [push, pull_request_target]
+
+#on:
+#  push:
+#    branches:
+#      - main
+#    tags:
+#      - v*
 
 jobs:
   build-release-binaries:
