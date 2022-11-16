@@ -3,8 +3,7 @@ name: Build Release
 on:
   push:
     branches:
-      - main
-      - ey/fix-image-build
+      - *
     tags:
       - v*
 
