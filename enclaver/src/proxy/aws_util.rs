@@ -1,21 +1,23 @@
 use anyhow::{anyhow, Result};
 
-use hyper::client::HttpConnector;
-use hyper_proxy::{Proxy, ProxyConnector, Intercept};
 use http::Uri;
+use hyper::client::HttpConnector;
+use hyper_proxy::{Intercept, Proxy, ProxyConnector};
 
-use aws_types::sdk_config::SdkConfig;
-use aws_types::credentials::SharedCredentialsProvider;
 use aws_config::imds;
 use aws_config::imds::credentials::ImdsCredentialsProvider;
 use aws_config::imds::region::ImdsRegionProvider;
 use aws_config::provider_config::ProviderConfig;
-use aws_smithy_client::{hyper_ext, erase::DynConnector, bounds::SmithyConnector};
-use aws_smithy_http::{result::ConnectorError};
+use aws_smithy_client::{bounds::SmithyConnector, erase::DynConnector, hyper_ext};
+use aws_smithy_http::result::ConnectorError;
+use aws_types::credentials::SharedCredentialsProvider;
+use aws_types::sdk_config::SdkConfig;
 
 const IMDS_URL: &str = "http://169.254.169.254:80/";
 
-fn new_proxy_connector(proxy_uri: Uri) -> Result<impl SmithyConnector<Error=ConnectorError> + Send> {
+fn new_proxy_connector(
+    proxy_uri: Uri,
+) -> Result<impl SmithyConnector<Error = ConnectorError> + Send> {
     let mut proxy = Proxy::new(Intercept::All, proxy_uri);
     proxy.force_connect();
 
@@ -27,8 +29,7 @@ fn new_proxy_connector(proxy_uri: Uri) -> Result<impl SmithyConnector<Error=Conn
 pub async fn imds_client_with_proxy(proxy_uri: Uri) -> Result<imds::Client> {
     let connector = new_proxy_connector(proxy_uri)?;
 
-    let config = ProviderConfig::without_region()
-        .with_http_connector(DynConnector::new(connector));
+    let config = ProviderConfig::without_region().with_http_connector(DynConnector::new(connector));
 
     let client = imds::Client::builder()
         .configure(&config)

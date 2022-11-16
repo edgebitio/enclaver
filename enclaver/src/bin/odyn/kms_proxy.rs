@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
-use tokio::task::JoinHandle;
-use anyhow::{Result, anyhow};
-use log::{info, error};
+use anyhow::{anyhow, Result};
 use aws_types::credentials::ProvideCredentials;
+use log::{error, info};
+use tokio::task::JoinHandle;
 
-use enclaver::nsm::Nsm;
 use enclaver::keypair::KeyPair;
-use enclaver::proxy::kms::{NsmAttestationProvider, KmsProxyConfig, KmsProxy};
+use enclaver::nsm::Nsm;
 use enclaver::proxy::aws_util;
+use enclaver::proxy::kms::{KmsProxy, KmsProxyConfig, NsmAttestationProvider};
 
 use crate::config::Configuration;
 
@@ -33,14 +33,15 @@ impl KmsProxyService {
 
                 info!("Fetching credentials from IMDSv2");
                 let sdk_config = aws_util::load_config_from_imds(imds).await?;
-                let credentials = sdk_config.credentials_provider()
+                let credentials = sdk_config
+                    .credentials_provider()
                     .ok_or(anyhow!("credentials provider is missing"))?
                     .provide_credentials()
                     .await?;
                 info!("Credentials fetched");
 
                 let client = Box::new(enclaver::http_client::new_http_proxy_client(proxy_uri));
-                let kms_config = KmsProxyConfig{
+                let kms_config = KmsProxyConfig {
                     credentials,
                     client,
                     keypair,
@@ -65,9 +66,7 @@ impl KmsProxyService {
             None
         };
 
-        Ok(Self{
-            proxy: task,
-        })
+        Ok(Self { proxy: task })
     }
 
     pub async fn stop(self) {

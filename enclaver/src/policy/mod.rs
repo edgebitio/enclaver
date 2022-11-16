@@ -19,10 +19,10 @@ impl EgressPolicy {
         let (domain_deny, ip_deny) = load_filters(&spec.deny);
 
         Self {
-            domain_allow: domain_allow,
-            domain_deny: domain_deny,
-            ip_allow: ip_allow,
-            ip_deny: ip_deny,
+            domain_allow,
+            domain_deny,
+            ip_allow,
+            ip_deny,
         }
     }
 

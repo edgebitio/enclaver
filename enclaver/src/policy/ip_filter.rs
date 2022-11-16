@@ -23,16 +23,16 @@ pub struct IpFilter {
 
 impl IpFilter {
     pub fn new() -> Self {
-        Self{
+        Self {
             patterns: Vec::new(),
         }
     }
 
     pub fn allow_all() -> Self {
-        Self{
+        Self {
             patterns: vec![
                 Pattern::new("0.0.0.0/0").unwrap(),
-                Pattern::new("::/0").unwrap()
+                Pattern::new("::/0").unwrap(),
             ],
         }
     }
@@ -43,17 +43,16 @@ impl IpFilter {
     }
 
     pub fn matches(&self, addr: IpAddr) -> bool {
-        self.patterns.iter()
-            .any(|p| p.matches(addr))
+        self.patterns.iter().any(|p| p.matches(addr))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::net::IpAddr;
     use assert2::assert;
+    use std::net::IpAddr;
 
-    use super::{Pattern, IpFilter};
+    use super::{IpFilter, Pattern};
 
     struct TestCase {
         pattern: &'static str,
@@ -64,29 +63,33 @@ mod tests {
     #[test]
     fn test_pattern_matching() {
         let cases = vec![
-            TestCase{
+            TestCase {
                 pattern: "66.254.33.22",
                 positives: vec!["66.254.33.22"],
                 negatives: vec!["66.254.33.21"],
             },
-            TestCase{
+            TestCase {
                 pattern: "66.254.33.22/32",
                 positives: vec!["66.254.33.22"],
                 negatives: vec!["66.254.33.21", "66.254.33.23"],
             },
-            TestCase{
+            TestCase {
                 pattern: "0.0.0.0/0",
                 positives: vec!["66.254.33.22", "1.2.3.4", "255.255.255.255"],
                 negatives: vec![],
             },
-            TestCase{
+            TestCase {
                 pattern: "66.254.33.22/24",
                 positives: vec!["66.254.33.1", "66.254.33.22", "66.254.33.255"],
                 negatives: vec!["66.254.34.1", "67.254.33.22", "66.254.32.255"],
             },
-            TestCase{
+            TestCase {
                 pattern: "::/0",
-                positives: vec!["::", "fc00::1234", "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"],
+                positives: vec![
+                    "::",
+                    "fc00::1234",
+                    "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+                ],
                 negatives: vec![],
             },
             // TODO: support IPv4 addresses encoded in IPv6
@@ -100,18 +103,14 @@ mod tests {
         for tc in &cases {
             let pat = Pattern::new(tc.pattern).unwrap();
 
-            let pos = tc.positives
-                .iter()
-                .map(|a| a.parse::<IpAddr>().unwrap());
+            let pos = tc.positives.iter().map(|a| a.parse::<IpAddr>().unwrap());
 
             for a in pos {
                 println!("pattern={:?}, addr={}", pat, a);
                 assert!(pat.matches(a));
             }
 
-            let neg = tc.negatives
-                .iter()
-                .map(|a| a.parse::<IpAddr>().unwrap());
+            let neg = tc.negatives.iter().map(|a| a.parse::<IpAddr>().unwrap());
 
             for a in neg {
                 assert!(!pat.matches(a));

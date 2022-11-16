@@ -1,6 +1,6 @@
-use anyhow::{Result};
-use rsa::{RsaPrivateKey, RsaPublicKey};
+use anyhow::Result;
 use rsa::pkcs8::{EncodePublicKey, LineEnding};
+use rsa::{RsaPrivateKey, RsaPublicKey};
 
 const RSA_KEY_LEN: usize = 2048;
 
@@ -16,16 +16,13 @@ impl KeyPair {
         let private = RsaPrivateKey::new(&mut rng, RSA_KEY_LEN)?;
         let public = RsaPublicKey::from(&private);
 
-        Ok(KeyPair{ private, public })
+        Ok(KeyPair { private, public })
     }
 
     pub fn from_private(private: RsaPrivateKey) -> Self {
         let public = private.to_public_key();
 
-        Self{
-            private,
-            public,
-        }
+        Self { private, public }
     }
 
     pub fn public_key_as_der(&self) -> Result<Vec<u8>> {

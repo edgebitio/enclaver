@@ -1,14 +1,14 @@
-use std::sync::Arc;
 use std::net::{Ipv4Addr, SocketAddrV4};
+use std::sync::Arc;
 
-use log::{debug, error};
-use anyhow::Result;
-use rustls::ServerConfig;
-use tokio::net::{TcpStream, TcpListener};
-use tokio_vsock::VsockStream;
-use futures::{Stream, StreamExt};
-use tokio::io::{AsyncRead, AsyncWrite};
 use crate::vsock;
+use anyhow::Result;
+use futures::{Stream, StreamExt};
+use log::{debug, error};
+use rustls::ServerConfig;
+use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::net::{TcpListener, TcpStream};
+use tokio_vsock::VsockStream;
 
 use crate::vsock::TlsServerStream;
 
@@ -17,7 +17,7 @@ use crate::vsock::TlsServerStream;
 // over vsock is over the TLS. EnclaveProxy terminates the
 // TLS and connects out to the app over plain TCP.
 pub struct EnclaveProxy<S> {
-    incoming: Box<dyn Stream<Item=S> + Send>,
+    incoming: Box<dyn Stream<Item = S> + Send>,
     port: u16,
 }
 
@@ -32,7 +32,10 @@ impl EnclaveProxy<VsockStream> {
 }
 
 impl EnclaveProxy<TlsServerStream> {
-    pub fn bind_tls(port: u16, tls_config: Arc<ServerConfig>) -> Result<EnclaveProxy<TlsServerStream>> {
+    pub fn bind_tls(
+        port: u16,
+        tls_config: Arc<ServerConfig>,
+    ) -> Result<EnclaveProxy<TlsServerStream>> {
         let incoming = vsock::tls_serve(port as u32, tls_config)?;
         Ok(Self {
             incoming: Box::new(incoming),
@@ -43,7 +46,7 @@ impl EnclaveProxy<TlsServerStream> {
 
 impl<S> EnclaveProxy<S>
 where
-    S: AsyncRead + AsyncWrite + Unpin + Send + 'static
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
     pub async fn serve(self) {
         let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, self.port);
@@ -62,7 +65,7 @@ where
             Ok(mut tcp) => {
                 debug!("Connected to {target}, proxying data");
                 _ = tokio::io::copy_bidirectional(&mut vsock, &mut tcp).await;
-            },
+            }
             Err(err) => error!("Connection to upstream ({target}) failed: {err}"),
         }
     }
@@ -78,7 +81,7 @@ pub struct HostProxy {
 impl HostProxy {
     pub async fn bind(port: u16) -> Result<Self> {
         let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port);
-        Ok(Self{
+        Ok(Self {
             listener: TcpListener::bind(addr).await?,
         })
     }
@@ -98,27 +101,29 @@ impl HostProxy {
             Ok(mut vsock) => {
                 debug!("Connected to {target_port}:{target_cid}, proxying data");
                 _ = tokio::io::copy_bidirectional(&mut vsock, &mut tcp).await;
-            },
-            Err(err) => error!("Connection to upstream vsock ({target_cid}:{target_port}) failed: {err}"),
+            }
+            Err(err) => {
+                error!("Connection to upstream vsock ({target_cid}:{target_port}) failed: {err}")
+            }
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::net::{SocketAddrV4, Ipv4Addr};
-    use std::collections::hash_map::DefaultHasher;
-    use std::sync::Arc;
-    use std::hash::Hasher;
-    use rand::RngCore;
-    use tokio::net::{TcpListener, TcpStream};
-    use tokio::io::{AsyncWrite, AsyncRead, AsyncWriteExt, AsyncReadExt};
-    use tokio::task::JoinHandle;
-    use rustls::{ServerConfig, ClientConfig};
-    use tokio_rustls::TlsConnector;
     use anyhow::Result;
-    use rustls::ServerName;
     use assert2::assert;
+    use rand::RngCore;
+    use rustls::ServerName;
+    use rustls::{ClientConfig, ServerConfig};
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::Hasher;
+    use std::net::{Ipv4Addr, SocketAddrV4};
+    use std::sync::Arc;
+    use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+    use tokio::net::{TcpListener, TcpStream};
+    use tokio::task::JoinHandle;
+    use tokio_rustls::TlsConnector;
 
     use super::{EnclaveProxy, HostProxy};
 
@@ -129,7 +134,7 @@ mod tests {
     impl TcpEchoServer {
         async fn bind(port: u16) -> Result<Self> {
             let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
-            Ok(Self{
+            Ok(Self {
                 listener: TcpListener::bind(addr).await?,
             })
         }
@@ -152,12 +157,18 @@ mod tests {
 
     fn start_enclave_proxy(port: u16, cfg: Arc<ServerConfig>) -> JoinHandle<()> {
         let proxy = EnclaveProxy::bind_tls(port, cfg).unwrap();
-        tokio::task::spawn(async move { proxy.serve().await; } )
+        tokio::task::spawn(async move {
+            proxy.serve().await;
+        })
     }
 
     async fn start_host_proxy(host_port: u16, enclave_port: u32) -> JoinHandle<()> {
         let proxy = HostProxy::bind(host_port).await.unwrap();
-        tokio::task::spawn(async move { proxy.serve(crate::vsock::VMADDR_CID_HOST, enclave_port).await; })
+        tokio::task::spawn(async move {
+            proxy
+                .serve(crate::vsock::VMADDR_CID_HOST, enclave_port)
+                .await;
+        })
     }
 
     fn start_source<W: AsyncWrite + Send + Unpin + 'static>(mut w: W) -> JoinHandle<u64> {
@@ -196,15 +207,26 @@ mod tests {
         let proxy_task = start_enclave_proxy(PORT, server_config);
 
         // start a simple TCP echo server
-        let mut echo = TcpEchoServer::bind(PORT).await.expect("bind for the echo server failed");
-        let echo_task = tokio::task::spawn(async move { echo.serve().await; });
+        let mut echo = TcpEchoServer::bind(PORT)
+            .await
+            .expect("bind for the echo server failed");
+        let echo_task = tokio::task::spawn(async move {
+            echo.serve().await;
+        });
 
         // connect to the proxy and send a stream of random bytes
         // and make sure it comes back the same (via a hash)
-        let client_config = crate::tls::load_insecure_client_config().expect("client config load failed");
+        let client_config =
+            crate::tls::load_insecure_client_config().expect("client config load failed");
         let server_name = ServerName::try_from("test.local").expect("invalid server name");
-        let conn = crate::vsock::tls_connect(crate::vsock::VMADDR_CID_HOST, PORT as u32, server_name, client_config)
-            .await.expect("connect failed");
+        let conn = crate::vsock::tls_connect(
+            crate::vsock::VMADDR_CID_HOST,
+            PORT as u32,
+            server_name,
+            client_config,
+        )
+        .await
+        .expect("connect failed");
         let (r, w) = tokio::io::split(conn);
 
         let (expected, actual) = tokio::join!(start_source(w), start_sink(r));
@@ -221,7 +243,12 @@ mod tests {
     //type TlsServerStream = tokio_rustls::server::TlsStream<TcpStream>;
     type TlsClientStream = tokio_rustls::client::TlsStream<TcpStream>;
 
-    async fn tls_connect(host: Ipv4Addr, port: u16, name: ServerName, cfg: Arc<ClientConfig>) -> Result<TlsClientStream> {
+    async fn tls_connect(
+        host: Ipv4Addr,
+        port: u16,
+        name: ServerName,
+        cfg: Arc<ClientConfig>,
+    ) -> Result<TlsClientStream> {
         let addr = SocketAddrV4::new(host, port);
         let stream = TcpStream::connect(addr).await?;
         let connector = TlsConnector::from(cfg);
@@ -234,19 +261,25 @@ mod tests {
         const PORT: u16 = 7787;
 
         let server_config = crate::tls::test_server_config().unwrap();
-        let enclave_proxy_task = start_enclave_proxy(PORT+1, server_config);
-        let host_proxy_task = start_host_proxy(PORT, (PORT+1) as u32).await;
+        let enclave_proxy_task = start_enclave_proxy(PORT + 1, server_config);
+        let host_proxy_task = start_host_proxy(PORT, (PORT + 1) as u32).await;
 
         // start a simple TCP echo server
-        let mut echo = TcpEchoServer::bind(PORT+1).await.expect("bind for the echo server failed");
-        let echo_task = tokio::task::spawn(async move { echo.serve().await; });
+        let mut echo = TcpEchoServer::bind(PORT + 1)
+            .await
+            .expect("bind for the echo server failed");
+        let echo_task = tokio::task::spawn(async move {
+            echo.serve().await;
+        });
 
         // connect to the proxy and send a stream of random bytes
         // and make sure it comes back the same (via a hash)
-        let client_config = crate::tls::load_insecure_client_config().expect("client config load failed");
+        let client_config =
+            crate::tls::load_insecure_client_config().expect("client config load failed");
         let server_name = ServerName::try_from("test.local").expect("invalid server name");
         let conn = tls_connect(Ipv4Addr::LOCALHOST, PORT, server_name, client_config)
-            .await.expect("connect failed");
+            .await
+            .expect("connect failed");
         let (r, w) = tokio::io::split(conn);
 
         let (expected, actual) = tokio::join!(start_source(w), start_sink(r));

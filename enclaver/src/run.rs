@@ -162,8 +162,12 @@ impl Enclave {
 
         match exit_res {
             Ok(EnclaveExitStatus::Exited(code)) => info!("enclave exited with code {code}"),
-            Ok(EnclaveExitStatus::Signaled(signal)) => info!("enclave stopped due to signal {signal}"),
-            Ok(EnclaveExitStatus::Fatal(ref error)) => info!("enclave exited due to fatal error: {error}"),
+            Ok(EnclaveExitStatus::Signaled(signal)) => {
+                info!("enclave stopped due to signal {signal}")
+            }
+            Ok(EnclaveExitStatus::Fatal(ref error)) => {
+                info!("enclave exited due to fatal error: {error}")
+            }
             Ok(EnclaveExitStatus::Cancelled) => (),
             Err(ref err) => error!("error waing for enclave exit: {err}"),
         };
@@ -275,10 +279,10 @@ impl Enclave {
                     }
                     EnclaveProcessStatus::Signaled { signal } => {
                         return Ok(EnclaveExitStatus::Signaled(signal));
-                    },
+                    }
                     EnclaveProcessStatus::Fatal { error } => {
                         return Ok(EnclaveExitStatus::Fatal(error));
-                    },
+                    }
                     _ => {
                         debug!("enclave status: {status:#?}");
                     }
@@ -314,7 +318,7 @@ impl Enclave {
         for task in self.tasks {
             task.abort();
             match task.await {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(e) => {
                     debug!("task terminated with error {e}");
                 }

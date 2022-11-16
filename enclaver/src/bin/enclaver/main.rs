@@ -110,7 +110,8 @@ async fn run(args: Cli) -> Result<()> {
                 // If no image was specified, either use the specified manifest file or the default
                 // to try to look up the target image name.
                 (manifest_file, None) => {
-                    let manifest_file = manifest_file.unwrap_or_else(|| MANIFEST_FILE_NAME.to_string());
+                    let manifest_file =
+                        manifest_file.unwrap_or_else(|| MANIFEST_FILE_NAME.to_string());
                     let manifest = load_manifest(manifest_file).await?;
                     Ok(manifest.target)
                 }

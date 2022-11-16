@@ -1,24 +1,24 @@
 pub mod config;
-pub mod enclave;
 pub mod console;
-pub mod launcher;
-pub mod ingress;
 pub mod egress;
+pub mod enclave;
+pub mod ingress;
 pub mod kms_proxy;
+pub mod launcher;
 
-use log::{info, error};
+use anyhow::Result;
+use clap::Parser;
+use log::{error, info};
 use std::ffi::OsString;
 use std::sync::Arc;
-use clap::{Parser};
-use anyhow::{Result};
 
 use enclaver::constants::{APP_LOG_PORT, STATUS_PORT};
 use enclaver::nsm::Nsm;
 
-use console::{AppLog, AppStatus};
 use config::Configuration;
-use ingress::IngressService;
+use console::{AppLog, AppStatus};
 use egress::EgressService;
+use ingress::IngressService;
 use kms_proxy::KmsProxyService;
 
 #[derive(Parser)]
@@ -50,10 +50,7 @@ async fn launch(args: &CliArgs) -> Result<launcher::ExitStatus> {
     let ingress = IngressService::start(&config)?;
     let kms_proxy = KmsProxyService::start(config.clone(), nsm.clone()).await?;
 
-    let creds = launcher::Credentials{
-        uid: 0,
-        gid: 0,
-    };
+    let creds = launcher::Credentials { uid: 0, gid: 0 };
 
     info!("Starting {:?}", args.entrypoint);
     let exit_status = launcher::start_child(args.entrypoint.clone(), creds).await??;
