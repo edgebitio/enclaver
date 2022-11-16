@@ -71,7 +71,7 @@ jobs:
 
 
   publish-images:
-    if: github.repository == 'edgebitio/enclaver' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag')
+    #if: github.repository == 'edgebitio/enclaver' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag')
     needs: build-release-binaries
     runs-on: ubuntu-latest
 
