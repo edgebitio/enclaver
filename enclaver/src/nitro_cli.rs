@@ -236,7 +236,7 @@ machine with more memory available."#
 that enclaver output images contain EIF files, which are potentially very
 large. If you have been doing a lot of enclaver builds, consider cleaning up
 old images in your local Docker engine."#
-            },
+            }
         }
     }
 
@@ -253,7 +253,6 @@ old images in your local Docker engine."#
         None
     }
 }
-
 
 #[cfg(test)]
 mod tests {

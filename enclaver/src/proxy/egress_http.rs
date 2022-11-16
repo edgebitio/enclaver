@@ -1,31 +1,31 @@
-use std::net::{SocketAddrV4, Ipv4Addr};
+use std::net::{Ipv4Addr, SocketAddrV4};
 use std::sync::Arc;
 
-use log::{error, debug};
-use tokio::io::{AsyncWrite, AsyncRead, AsyncWriteExt, AsyncReadExt};
-use tokio::net::{TcpListener, TcpStream};
-use tokio_vsock::VsockStream;
-use futures::{Stream, StreamExt};
-use hyper::client::conn::Builder;
-use hyper::server::conn::Http;
-use hyper::service::service_fn;
-use hyper::{Method, Body, Request, Response};
-use hyper::header::HeaderValue;
-use http::uri::PathAndQuery;
-use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use anyhow::anyhow;
 use async_trait::async_trait;
+use futures::{Stream, StreamExt};
+use http::uri::PathAndQuery;
+use hyper::client::conn::Builder;
+use hyper::header::HeaderValue;
+use hyper::server::conn::Http;
+use hyper::service::service_fn;
+use hyper::{Body, Method, Request, Response};
+use log::{debug, error};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
+use tokio_vsock::VsockStream;
 
 use crate::policy::EgressPolicy;
 
 #[async_trait]
-trait JsonTransport :Sized + Sync {
+trait JsonTransport: Sized + Sync {
     async fn send<W: AsyncWrite + Unpin + Send>(&self, w: &mut W) -> anyhow::Result<()>;
     async fn recv<R: AsyncRead + Unpin + Send>(r: &mut R) -> anyhow::Result<Self>;
 }
 
 #[async_trait]
-impl <M: Serialize + DeserializeOwned + Sync> JsonTransport for M {
+impl<M: Serialize + DeserializeOwned + Sync> JsonTransport for M {
     async fn send<W: AsyncWrite + Unpin + Send>(&self, w: &mut W) -> anyhow::Result<()> {
         // Frame and serialize
         // use JSON serialization to avoid pulling in another dependency
@@ -60,7 +60,7 @@ struct ConnectRequest {
 
 impl ConnectRequest {
     fn new(host: String, port: u16) -> Self {
-        Self{
+        Self {
             host: host,
             port: port,
         }
@@ -70,15 +70,12 @@ impl ConnectRequest {
 #[derive(Serialize, Deserialize)]
 enum ConnectResponse {
     Ok,
-    Err{
-        os_code: i32,
-        message: String,
-    },
+    Err { os_code: i32, message: String },
 }
 
 impl ConnectResponse {
     fn failed(err: &std::io::Error) -> Self {
-        Self::Err{
+        Self::Err {
             os_code: err.raw_os_error().unwrap_or(0i32),
             message: err.to_string(),
         }
@@ -92,7 +89,7 @@ pub struct EnclaveHttpProxy {
 impl EnclaveHttpProxy {
     pub async fn bind(port: u16) -> anyhow::Result<Self> {
         let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
-        Ok(Self{
+        Ok(Self {
             listener: TcpListener::bind(addr).await?,
         })
     }
@@ -106,8 +103,10 @@ impl EnclaveHttpProxy {
                     tokio::task::spawn(async move {
                         EnclaveHttpProxy::service_conn(sock, egress_port, egress_policy).await;
                     });
-                },
-                Err(err) => { error!("Accept failed: {err}"); },
+                }
+                Err(err) => {
+                    error!("Accept failed: {err}");
+                }
             }
         }
     }
@@ -115,9 +114,7 @@ impl EnclaveHttpProxy {
     async fn service_conn(tcp: TcpStream, egress_port: u32, egress_policy: Arc<EgressPolicy>) {
         let svc = service_fn(move |req| {
             let egress_policy = egress_policy.clone();
-            async move {
-                proxy(egress_port, req, &egress_policy).await
-            }
+            async move { proxy(egress_port, req, &egress_policy).await }
         });
 
         if let Err(err) = Http::new()
@@ -133,12 +130,12 @@ impl EnclaveHttpProxy {
 }
 
 pub struct HostHttpProxy {
-    incoming: Box<dyn Stream<Item=VsockStream> + Unpin + Send>,
+    incoming: Box<dyn Stream<Item = VsockStream> + Unpin + Send>,
 }
 
 impl HostHttpProxy {
     pub fn bind(egress_port: u32) -> anyhow::Result<Self> {
-        Ok(Self{
+        Ok(Self {
             incoming: Box::new(crate::vsock::serve(egress_port)?),
         })
     }
@@ -160,7 +157,10 @@ impl HostHttpProxy {
 
         // A special hostname "host" refers to the localhost on the outside
         // of the enclave.
-        let host = if conn_req.host.eq_ignore_ascii_case(crate::constants::OUTSIDE_HOST) {
+        let host = if conn_req
+            .host
+            .eq_ignore_ascii_case(crate::constants::OUTSIDE_HOST)
+        {
             "127.0.0.1".to_string()
         } else {
             conn_req.host
@@ -170,33 +170,44 @@ impl HostHttpProxy {
             Ok(mut tcp) => {
                 ConnectResponse::Ok.send(&mut vsock).await?;
 
-                debug!("Connected to {}:{}, starting to proxy bytes", host, conn_req.port);
+                debug!(
+                    "Connected to {}:{}, starting to proxy bytes",
+                    host, conn_req.port
+                );
                 _ = tokio::io::copy_bidirectional(&mut vsock, &mut tcp).await;
-            },
+            }
             Err(err) => {
-                ConnectResponse::failed(&err)
-                    .send(&mut vsock)
-                    .await?;
-                }
+                ConnectResponse::failed(&err).send(&mut vsock).await?;
+            }
         }
 
         Ok(())
     }
 }
 
-async fn proxy(egress_port: u32, req: Request<Body>,
-               egress_policy: &EgressPolicy) -> Result<Response<Body>, hyper::Error> {
+async fn proxy(
+    egress_port: u32,
+    req: Request<Body>,
+    egress_policy: &EgressPolicy,
+) -> Result<Response<Body>, hyper::Error> {
     if Method::CONNECT == req.method() {
         Ok(handle_connect(egress_port, req, egress_policy).await)
     } else {
         match handle_request(egress_port, req, egress_policy).await {
             Ok(resp) => Ok(resp),
-            Err(err) => Ok(err_resp(http::StatusCode::SERVICE_UNAVAILABLE, err.to_string())),
+            Err(err) => Ok(err_resp(
+                http::StatusCode::SERVICE_UNAVAILABLE,
+                err.to_string(),
+            )),
         }
     }
 }
 
-async fn handle_connect(egress_port: u32, req: Request<Body>, egress_policy: &EgressPolicy) -> Response<Body> {
+async fn handle_connect(
+    egress_port: u32,
+    req: Request<Body>,
+    egress_policy: &EgressPolicy,
+) -> Response<Body> {
     match req.uri().authority() {
         Some(authority) => {
             let port = match authority.port() {
@@ -211,7 +222,6 @@ async fn handle_connect(egress_port: u32, req: Request<Body>, egress_policy: &Eg
             // Check the policy
             if !egress_policy.is_host_allowed(authority.host()) {
                 return blocked();
-
             }
 
             debug!("Handling CONNECT to {}:{port}", authority.host());
@@ -219,7 +229,9 @@ async fn handle_connect(egress_port: u32, req: Request<Body>, egress_policy: &Eg
             // Connect to remote server before the upgrade so we can return an error if it fails
             let mut remote = match remote_connect(egress_port, authority.host(), port).await {
                 Ok(remote) => remote,
-                Err(err) => return err_resp(http::StatusCode::SERVICE_UNAVAILABLE, err.to_string()),
+                Err(err) => {
+                    return err_resp(http::StatusCode::SERVICE_UNAVAILABLE, err.to_string())
+                }
             };
 
             tokio::task::spawn(async move {
@@ -234,7 +246,7 @@ async fn handle_connect(egress_port: u32, req: Request<Body>, egress_policy: &Eg
             });
 
             Response::new(Body::empty())
-        },
+        }
         None => {
             let err_msg = format!("CONNECT host is not a socket addr: {:?}", req.uri());
             error!("{err_msg}");
@@ -243,7 +255,11 @@ async fn handle_connect(egress_port: u32, req: Request<Body>, egress_policy: &Eg
     }
 }
 
-async fn handle_request(egress_port: u32, mut req: Request<Body>, egress_policy: &EgressPolicy) -> anyhow::Result<Response<Body>> {
+async fn handle_request(
+    egress_port: u32,
+    mut req: Request<Body>,
+    egress_policy: &EgressPolicy,
+) -> anyhow::Result<Response<Body>> {
     let host = match req.uri().host() {
         Some(host) => host,
         None => return Ok(bad_request("URI is missing a host".to_string())),
@@ -263,7 +279,8 @@ async fn handle_request(egress_port: u32, mut req: Request<Body>, egress_policy:
         Some(port) => format!("{host}:{port}"),
         None => host.to_string(),
     };
-    req.headers_mut().insert(hyper::header::HOST, HeaderValue::from_str(&host_hdr)?);
+    req.headers_mut()
+        .insert(hyper::header::HOST, HeaderValue::from_str(&host_hdr)?);
 
     // If a proxy receives an OPTIONS request with an absolute-form of
     // request-target in which the URI has an empty path and no query
@@ -280,9 +297,7 @@ async fn handle_request(egress_port: u32, mut req: Request<Body>, egress_policy:
         }
     };
 
-    *req.uri_mut() = http::Uri::builder()
-        .path_and_query(pq)
-        .build()?;
+    *req.uri_mut() = http::Uri::builder().path_and_query(pq).build()?;
 
     let (mut sender, conn) = Builder::new()
         .http1_preserve_header_case(true)
@@ -292,7 +307,9 @@ async fn handle_request(egress_port: u32, mut req: Request<Body>, egress_policy:
 
     // Spawning detached here is not ideal but the right thing to do
     // according to the docs
-    tokio::task::spawn(async move { _ = conn.await; });
+    tokio::task::spawn(async move {
+        _ = conn.await;
+    });
 
     Ok(sender.send_request(req).await?)
 }
@@ -308,7 +325,10 @@ fn bad_request(msg: String) -> Response<Body> {
 }
 
 fn blocked() -> Response<Body> {
-    err_resp(http::StatusCode::UNAUTHORIZED, "blocked by egress security policy".to_string())
+    err_resp(
+        http::StatusCode::UNAUTHORIZED,
+        "blocked by egress security policy".to_string(),
+    )
 }
 
 fn is_empty(pq: Option<&PathAndQuery>) -> bool {
@@ -330,30 +350,36 @@ fn is_empty(pq: Option<&PathAndQuery>) -> bool {
 // connect to the remote address
 async fn remote_connect(egress_port: u32, host: &str, port: u16) -> anyhow::Result<VsockStream> {
     let mut vsock = VsockStream::connect(crate::vsock::VMADDR_CID_HOST, egress_port).await?;
-    debug!("Connected to vsock {}:{}, sending connect request", crate::vsock::VMADDR_CID_HOST, egress_port);
+    debug!(
+        "Connected to vsock {}:{}, sending connect request",
+        crate::vsock::VMADDR_CID_HOST,
+        egress_port
+    );
 
-    ConnectRequest::new(host.to_string(), port).send(&mut vsock).await?;
+    ConnectRequest::new(host.to_string(), port)
+        .send(&mut vsock)
+        .await?;
     debug!("Sent request to connect to {host}:{port}");
 
     match ConnectResponse::recv(&mut vsock).await? {
         ConnectResponse::Ok => Ok(vsock),
-        ConnectResponse::Err{os_code, message} => Err(anyhow!("os_err: {os_code}: {message}")),
+        ConnectResponse::Err { os_code, message } => Err(anyhow!("os_err: {os_code}: {message}")),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::net::{Ipv4Addr, SocketAddr};
-    use std::convert::Infallible;
-    use std::sync::Arc;
-    use std::future::Future;
-    use hyper::{Request, Response, Body, Server};
+    use assert2::assert;
+    use http::{uri::PathAndQuery, Method, Version};
     use hyper::server::conn::AddrIncoming;
-    use http::{Method, Version, uri::PathAndQuery};
+    use hyper::{Body, Request, Response, Server};
+    use rand::RngCore;
+    use std::convert::Infallible;
+    use std::future::Future;
+    use std::net::{Ipv4Addr, SocketAddr};
+    use std::sync::Arc;
     use tls_listener::TlsListener;
     use tokio::task::JoinHandle;
-    use rand::RngCore;
-    use assert2::assert;
 
     async fn echo(req: Request<Body>) -> Result<Response<Body>, Infallible> {
         assert!(req.method() == Method::POST);
@@ -365,7 +391,7 @@ mod tests {
         Ok(Response::new(full_body.into()))
     }
 
-    fn echo_server(port: u16) -> impl Future<Output=Result<(), hyper::Error>> {
+    fn echo_server(port: u16) -> impl Future<Output = Result<(), hyper::Error>> {
         let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
 
         // A `Service` is needed for every connection, so this
@@ -378,7 +404,7 @@ mod tests {
         Server::bind(&addr).serve(make_svc)
     }
 
-    fn tls_echo_server(port: u16) -> impl Future<Output=Result<(), hyper::Error>> {
+    fn tls_echo_server(port: u16) -> impl Future<Output = Result<(), hyper::Error>> {
         let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
 
         // A `Service` is needed for every connection, so this
@@ -406,12 +432,16 @@ mod tests {
     async fn start_enclave_proxy(proxy_port: u16, egress_port: u32) -> JoinHandle<()> {
         let proxy = super::EnclaveHttpProxy::bind(proxy_port).await.unwrap();
         let policy = Arc::new(crate::policy::EgressPolicy::allow_all());
-        tokio::task::spawn(async move { proxy.serve(egress_port, policy).await; } )
+        tokio::task::spawn(async move {
+            proxy.serve(egress_port, policy).await;
+        })
     }
 
     fn start_host_proxy(egress_port: u32) -> JoinHandle<()> {
         let proxy = super::HostHttpProxy::bind(egress_port).unwrap();
-        tokio::task::spawn(async move { proxy.serve().await; })
+        tokio::task::spawn(async move {
+            proxy.serve().await;
+        })
     }
 
     struct HttpProxyFixture {
@@ -425,12 +455,12 @@ mod tests {
         async fn start(base_port: u16, use_tls: bool) -> Self {
             _ = pretty_env_logger::try_init();
 
-            return Self{
+            return Self {
                 base_port: base_port,
                 enclave_proxy_task: start_enclave_proxy(base_port, base_port as u32).await,
                 host_proxy_task: start_host_proxy(base_port as u32),
                 echo_task: start_echo_server(base_port + 1, use_tls),
-            }
+            };
         }
 
         fn proxy_uri(&self) -> http::Uri {
@@ -470,21 +500,30 @@ mod tests {
             .build()
             .unwrap();
 
-        let expected = random_bytes(128*1000);
+        let expected = random_bytes(128 * 1000);
 
         // 200 expected
-        let resp1 = client.post(format!("http://localhost:{}/echo", fixture.webserver_port()))
+        let resp1 = client
+            .post(format!(
+                "http://localhost:{}/echo",
+                fixture.webserver_port()
+            ))
             .body(expected.clone())
-            .send().await.unwrap();
+            .send()
+            .await
+            .unwrap();
 
         let actual = resp1.bytes().await.unwrap();
 
         assert!(&expected == &actual);
 
         // Connection failure
-        let resp2 = client.post(format!("http://adfadfadfadfadsfa.local/echo"))
+        let resp2 = client
+            .post(format!("http://adfadfadfadfadsfa.local/echo"))
             .body(expected.clone())
-            .send().await.unwrap();
+            .send()
+            .await
+            .unwrap();
 
         assert!(resp2.status() == reqwest::StatusCode::SERVICE_UNAVAILABLE);
 
@@ -501,20 +540,28 @@ mod tests {
             .build()
             .unwrap();
 
-        let expected = random_bytes(128*1000);
+        let expected = random_bytes(128 * 1000);
 
-        let resp1 = client.post(format!("https://localhost:{}/echo", fixture.webserver_port()))
+        let resp1 = client
+            .post(format!(
+                "https://localhost:{}/echo",
+                fixture.webserver_port()
+            ))
             .body(expected.clone())
-            .send().await.unwrap();
+            .send()
+            .await
+            .unwrap();
 
         let actual = resp1.bytes().await.unwrap();
 
         assert!(&expected == &actual);
 
         // Connection failure
-        let resp_result = client.post(format!("https://adfadfadfadfadsfa.local/echo"))
+        let resp_result = client
+            .post(format!("https://adfadfadfadfadsfa.local/echo"))
             .body(expected.clone())
-            .send().await;
+            .send()
+            .await;
 
         assert!(resp_result.is_err());
         assert!(resp_result.unwrap_err().is_connect());

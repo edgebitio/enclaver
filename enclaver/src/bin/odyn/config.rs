@@ -1,14 +1,14 @@
 use anyhow::Result;
+use http::Uri;
 use log::debug;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use http::Uri;
 
-use enclaver::constants::{MANIFEST_FILE_NAME, HTTP_EGRESS_PROXY_PORT};
+use enclaver::constants::{HTTP_EGRESS_PROXY_PORT, MANIFEST_FILE_NAME};
 use enclaver::manifest::{self, Manifest};
-use enclaver::tls;
 use enclaver::proxy::kms::KmsEndpointProvider;
+use enclaver::tls;
 
 pub struct Configuration {
     pub config_dir: PathBuf,
@@ -40,7 +40,7 @@ impl Configuration {
                     Some(_) => {
                         let tls_config = Configuration::load_tls_server_config(&tls_path, item)?;
                         ListenerConfig::TLS(tls_config)
-                    },
+                    }
                     None => ListenerConfig::TCP,
                 };
 
@@ -85,19 +85,22 @@ impl Configuration {
         };
 
         if enabled {
-            let port = self.manifest
+            let port = self
+                .manifest
                 .egress
                 .as_ref()
                 .unwrap()
                 .proxy_port
                 .unwrap_or(HTTP_EGRESS_PROXY_PORT);
 
-            Some(Uri::builder()
-                .scheme("http")
-                .authority(format!("127.0.0.1:{port}"))
-                .path_and_query("")
-                .build()
-                .unwrap())
+            Some(
+                Uri::builder()
+                    .scheme("http")
+                    .authority(format!("127.0.0.1:{port}"))
+                    .path_and_query("")
+                    .build()
+                    .unwrap(),
+            )
         } else {
             None
         }
@@ -110,16 +113,14 @@ impl Configuration {
 
 impl KmsEndpointProvider for Configuration {
     fn endpoint(&self, region: &str) -> String {
-        let ep = self.manifest
+        let ep = self
+            .manifest
             .kms_proxy
             .as_ref()
             .map(|kp| {
                 kp.endpoints
                     .as_ref()
-                    .map(|eps| {
-                    eps.get(region)
-                        .map(|ep| ep.clone())
-                })
+                    .map(|eps| eps.get(region).map(|ep| ep.clone()))
             })
             .flatten()
             .flatten();

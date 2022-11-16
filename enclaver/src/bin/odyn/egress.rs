@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
-use tokio::task::JoinHandle;
 use anyhow::Result;
 use log::info;
+use tokio::task::JoinHandle;
 
-use enclaver::constants::HTTP_EGRESS_VSOCK_PORT;
-use enclaver::proxy::egress_http::EnclaveHttpProxy;
-use enclaver::policy::EgressPolicy;
 use crate::config::Configuration;
+use enclaver::constants::HTTP_EGRESS_VSOCK_PORT;
+use enclaver::policy::EgressPolicy;
+use enclaver::proxy::egress_http::EnclaveHttpProxy;
 
 pub struct EgressService {
     proxy: Option<JoinHandle<()>>,
@@ -31,9 +31,7 @@ impl EgressService {
             None
         };
 
-        Ok(Self{
-            proxy: task,
-        })
+        Ok(Self { proxy: task })
     }
 
     pub async fn stop(self) {

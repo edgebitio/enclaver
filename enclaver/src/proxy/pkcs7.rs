@@ -1,20 +1,22 @@
-use anyhow::{Result, anyhow};
-use asn1_rs::{Any, FromBer, Integer, Oid, SetOf, OctetString, Tagged, Class, Tag,OptTaggedParser};
-use asn1_rs::{BerSequence, oid};
-use sha2::Sha256;
-use rsa::RsaPrivateKey;
-use rsa::padding::PaddingScheme;
+use anyhow::{anyhow, Result};
+use asn1_rs::{oid, BerSequence};
+use asn1_rs::{
+    Any, Class, FromBer, Integer, OctetString, Oid, OptTaggedParser, SetOf, Tag, Tagged,
+};
 use cbc::cipher::crypto_common::KeyIvInit;
-use cbc::cipher::{BlockDecryptMut, block_padding};
+use cbc::cipher::{block_padding, BlockDecryptMut};
+use rsa::padding::PaddingScheme;
+use rsa::RsaPrivateKey;
+use sha2::Sha256;
 
 type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
 
-const OID_NIST_SHA_256: Oid<'static> = oid!(2.16.840.1.101.3.4.2.1);
-const OID_NIST_AES256_CBC: Oid<'static> = oid!(2.16.840.1.101.3.4.1.42);
-const OID_PKCS1_RSA_OAEP: Oid<'static> = oid!(1.2.840.113549.1.1.7);
-const OID_PKCS1_MGF: Oid<'static> = oid!(1.2.840.113549.1.1.8);
-const OID_PKCS7_ENVELOPED_DATA: Oid<'static> = oid!(1.2.840.113549.1.7.3);
-const OID_PKCS7_DATA: Oid<'static> = oid!(1.2.840.113549.1.7.1);
+const OID_NIST_SHA_256: Oid<'static> = oid!(2.16.840 .1 .101 .3 .4 .2 .1);
+const OID_NIST_AES256_CBC: Oid<'static> = oid!(2.16.840 .1 .101 .3 .4 .1 .42);
+const OID_PKCS1_RSA_OAEP: Oid<'static> = oid!(1.2.840 .113549 .1 .1 .7);
+const OID_PKCS1_MGF: Oid<'static> = oid!(1.2.840 .113549 .1 .1 .8);
+const OID_PKCS7_ENVELOPED_DATA: Oid<'static> = oid!(1.2.840 .113549 .1 .7 .3);
+const OID_PKCS7_DATA: Oid<'static> = oid!(1.2.840 .113549 .1 .7 .1);
 
 /*
 ContentInfo ::= SEQUENCE {
@@ -30,12 +32,15 @@ pub struct ContentInfo<'a> {
     pub content: EnvelopedData<'a>,
 }
 
-impl <'a> ContentInfo<'a> {
+impl<'a> ContentInfo<'a> {
     pub fn parse_ber(ber: &'a [u8]) -> Result<Self> {
         let (rem, ci) = Self::from_ber(&ber)?;
 
         if !rem.is_empty() {
-            return Err(anyhow!("trailing {} bytes after parsing ContentInfo", rem.len()))
+            return Err(anyhow!(
+                "trailing {} bytes after parsing ContentInfo",
+                rem.len()
+            ));
         }
 
         ci.validate()?;
@@ -45,7 +50,11 @@ impl <'a> ContentInfo<'a> {
 
     fn validate(&self) -> Result<()> {
         if self.content_type != OID_PKCS7_ENVELOPED_DATA {
-            return Err(anyhow!("unexpected content type: {}, expected {}", self.content_type, OID_PKCS7_ENVELOPED_DATA));
+            return Err(anyhow!(
+                "unexpected content type: {}, expected {}",
+                self.content_type,
+                OID_PKCS7_ENVELOPED_DATA
+            ));
         }
 
         self.content.validate()
@@ -53,11 +62,15 @@ impl <'a> ContentInfo<'a> {
 
     pub fn decrypt_content(&self, priv_key: &RsaPrivateKey) -> Result<Vec<u8>> {
         let datakey = self.decrypt_key(priv_key)?;
-        Ok(self.content.encrypted_content_info.decrypt_content(&datakey)?)
+        Ok(self
+            .content
+            .encrypted_content_info
+            .decrypt_content(&datakey)?)
     }
 
     fn decrypt_key(&self, priv_key: &RsaPrivateKey) -> Result<Vec<u8>> {
-        let ciphertext = self.content
+        let ciphertext = self
+            .content
             .recipient_infos
             .iter()
             .next()
@@ -99,26 +112,26 @@ pub struct EnvelopedData<'a> {
     pub unprotected_attrs: Option<SetOf<Attribute<'a>>>,
 }
 
-impl <'a> EnvelopedData<'a> {
-   fn validate(&self) -> Result<()> {
-       let ver = self.version.as_i32()?;
-       if ver != 2 {
-           return Err(anyhow!("unexpected EnvelopedData.version: {ver}, expected 2"));
-       }
+impl<'a> EnvelopedData<'a> {
+    fn validate(&self) -> Result<()> {
+        let ver = self.version.as_i32()?;
+        if ver != 2 {
+            return Err(anyhow!(
+                "unexpected EnvelopedData.version: {ver}, expected 2"
+            ));
+        }
 
-       if self.recipient_infos.len() != 1 {
-           return Err(anyhow!("unexpected EnvelopedData.recipient_infos length: {}, expected 1",
-                   self.recipient_infos.len()));
-       }
+        if self.recipient_infos.len() != 1 {
+            return Err(anyhow!(
+                "unexpected EnvelopedData.recipient_infos length: {}, expected 1",
+                self.recipient_infos.len()
+            ));
+        }
 
-       self.recipient_infos
-           .iter()
-           .next()
-           .unwrap()
-           .validate()?;
+        self.recipient_infos.iter().next().unwrap().validate()?;
 
-       self.encrypted_content_info.validate()
-   }
+        self.encrypted_content_info.validate()
+    }
 }
 
 /*
@@ -163,11 +176,13 @@ pub struct KeyTransRecipientInfo<'a> {
     pub encrypted_key: OctetString<'a>,
 }
 
-impl <'a> KeyTransRecipientInfo<'a> {
+impl<'a> KeyTransRecipientInfo<'a> {
     fn validate(&self) -> Result<()> {
         let ver = self.version.as_i32()?;
         if ver != 2 {
-            return Err(anyhow!("unexpected KeyTransRecipientInfo.version: {ver}, expected 2"));
+            return Err(anyhow!(
+                "unexpected KeyTransRecipientInfo.version: {ver}, expected 2"
+            ));
         }
 
         let key_algo = &self.key_encryption_algorithm;
@@ -181,7 +196,9 @@ impl <'a> KeyTransRecipientInfo<'a> {
             let rsa_oaep_params: RsaesOaepParameters<'a> = params.clone().try_into()?;
             rsa_oaep_params.validate()?;
         } else {
-            return Err(anyhow!("Missing KeyTransRecipientInfo.key_encryption_algorithm.parameters"));
+            return Err(anyhow!(
+                "Missing KeyTransRecipientInfo.key_encryption_algorithm.parameters"
+            ));
         }
 
         Ok(())
@@ -290,7 +307,7 @@ impl<'a, 'b> TryFrom<&'b Any<'a>> for RsaesOaepParameters<'a> {
         let (_, p_source_alg) = OptTaggedParser::new(Class::ContextSpecific, Tag(2))
             .parse_ber(i, |_, inner| AlgorithmIdentifier::from_ber(inner))?;
 
-        Ok(Self{
+        Ok(Self {
             hash_alg,
             mask_gen_alg,
             _p_source_alg: p_source_alg,
@@ -314,12 +331,13 @@ pub struct EncryptedContentInfo<'a> {
     pub encrypted_content: Any<'a>,
 }
 
-
-impl <'a> EncryptedContentInfo<'a> {
+impl<'a> EncryptedContentInfo<'a> {
     fn validate(&self) -> Result<()> {
         if self.content_type != OID_PKCS7_DATA {
-            return Err(anyhow!("unexpected EncryptedContentInfo.content_type: {}, expected {OID_PKCS7_DATA}",
-                    self.content_type));
+            return Err(anyhow!(
+                "unexpected EncryptedContentInfo.content_type: {}, expected {OID_PKCS7_DATA}",
+                self.content_type
+            ));
         }
 
         if self.content_encryption_algorithm.algorithm != OID_NIST_AES256_CBC {
@@ -331,26 +349,37 @@ impl <'a> EncryptedContentInfo<'a> {
         let any = &self.encrypted_content;
 
         if any.header.class() != Class::ContextSpecific {
-            return Err(anyhow!("unexpected EncryptedContentInfo.encrypted_content.class: {}, expected {}",
-                    any.header.class(), Class::ContextSpecific));
+            return Err(anyhow!(
+                "unexpected EncryptedContentInfo.encrypted_content.class: {}, expected {}",
+                any.header.class(),
+                Class::ContextSpecific
+            ));
         }
 
         if any.header.tag().0 != 0 {
-            return Err(anyhow!("unexpected EncryptedContentInfo.encrypted_content.tag: {}, expected 0",
-                any.header.tag().0));
+            return Err(anyhow!(
+                "unexpected EncryptedContentInfo.encrypted_content.tag: {}, expected 0",
+                any.header.tag().0
+            ));
         }
 
         Ok(())
     }
 
     fn decrypt_content(&self, datakey: &[u8]) -> Result<Vec<u8>> {
-        let iv: Aes256CBCParameter = self.content_encryption_algorithm.parameters.as_ref().unwrap()
+        let iv: Aes256CBCParameter = self
+            .content_encryption_algorithm
+            .parameters
+            .as_ref()
+            .unwrap()
             .try_into()
             .unwrap();
 
         let ciphertext = self.combined_content()?;
         let dec = Aes256CbcDec::new(datakey.into(), iv.as_ref().into());
-        Ok(dec.decrypt_padded_vec_mut::<block_padding::Pkcs7>(&ciphertext).unwrap())
+        Ok(dec
+            .decrypt_padded_vec_mut::<block_padding::Pkcs7>(&ciphertext)
+            .unwrap())
     }
 
     fn combined_content(&self) -> Result<Vec<u8>> {
@@ -390,9 +419,9 @@ pub struct Attribute<'a> {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::ContentInfo;
-    use rsa::RsaPrivateKey;
-    use pkcs8::DecodePrivateKey;
     use assert2::assert;
+    use pkcs8::DecodePrivateKey;
+    use rsa::RsaPrivateKey;
 
     pub(crate) const INPUT: &str = "\
 MIAGCSqGSIb3DQEHA6CAMIACAQIxggFrMIIBZwIBAoAg+wnprylA3c8NK79jWMmDr0b8X9ztv\

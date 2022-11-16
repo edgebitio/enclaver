@@ -410,10 +410,7 @@ impl EnclaveArtifactBuilder {
         }
 
         let release_base = self
-            .resolve_internal_source_image(
-                manifest.sources.wrapper.as_deref(),
-                RELEASE_BASE_IMAGE,
-            )
+            .resolve_internal_source_image(manifest.sources.wrapper.as_deref(), RELEASE_BASE_IMAGE)
             .await?;
         if manifest.sources.wrapper.is_none() {
             debug!("no wrapper base image specified in manifest; using default: {release_base}");

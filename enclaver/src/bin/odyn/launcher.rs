@@ -1,11 +1,11 @@
-use std::ffi::OsString;
-use nix::sys::wait::{WaitPidFlag, WaitStatus};
-use nix::unistd::Pid;
-use nix::sys::signal::Signal;
-use std::process::Command;
-use std::os::unix::process::CommandExt;
 use anyhow::{anyhow, Result};
 use log::debug;
+use nix::sys::signal::Signal;
+use nix::sys::wait::{WaitPidFlag, WaitStatus};
+use nix::unistd::Pid;
+use std::ffi::OsString;
+use std::os::unix::process::CommandExt;
+use std::process::Command;
 use tokio::task::JoinHandle;
 
 pub struct Credentials {
@@ -47,9 +47,7 @@ pub fn run_child(argv: &[OsString], creds: &Credentials) -> Result<ExitStatus> {
 
 // runs the child and reaps all of its children as well
 pub fn start_child(argv: Vec<OsString>, creds: Credentials) -> JoinHandle<Result<ExitStatus>> {
-    tokio::task::spawn_blocking(move || {
-        run_child(&argv, &creds)
-    })
+    tokio::task::spawn_blocking(move || run_child(&argv, &creds))
 }
 
 // Reap processes until a process with sentinel pid exits.
@@ -68,14 +66,14 @@ fn reap(sentinel: Pid) -> Result<ExitStatus> {
                     // our child is done, exit
                     return Ok(ExitStatus::Exited(status));
                 }
-            },
+            }
             WaitStatus::Signaled(pid, sig, _) => {
                 debug!("Zombie with PID {} reaped", pid);
                 if pid == sentinel {
                     // our child crashed by signal, exit
                     return Ok(ExitStatus::Signaled(sig));
                 }
-            },
+            }
             _ => {}
         }
     }

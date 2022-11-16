@@ -1,17 +1,17 @@
-use std::sync::{Arc, Mutex};
-use std::os::unix::io::AsRawFd;
-use tokio_pipe::{PipeRead, PipeWrite};
-use circbuf::CircBuf;
 use anyhow::Result;
-use tokio::io::{AsyncWrite, AsyncReadExt, AsyncWriteExt};
-use tokio::task::JoinHandle;
-use tokio::sync::watch::{Sender, Receiver};
-use tokio_vsock::VsockStream;
+use circbuf::CircBuf;
 use futures::Stream;
+use std::os::unix::io::AsRawFd;
+use std::sync::{Arc, Mutex};
+use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::sync::watch::{Receiver, Sender};
+use tokio::task::JoinHandle;
+use tokio_pipe::{PipeRead, PipeWrite};
+use tokio_vsock::VsockStream;
 
 use crate::launcher::ExitStatus;
 
-const APP_LOG_CAPACITY: usize = 128*1024;
+const APP_LOG_CAPACITY: usize = 128 * 1024;
 
 struct LogCursor {
     pos: usize,
@@ -19,9 +19,7 @@ struct LogCursor {
 
 impl LogCursor {
     fn new() -> Self {
-        return Self{
-            pos: 0usize,
-        }
+        return Self { pos: 0usize };
     }
 }
 
@@ -33,7 +31,7 @@ struct ByteLog {
 
 impl ByteLog {
     fn new() -> Self {
-        Self{
+        Self {
             buffer: CircBuf::with_capacity(APP_LOG_CAPACITY).unwrap(),
             head: 0usize,
             watches: WatchSet::new(),
@@ -125,18 +123,14 @@ fn new_app_log() -> Result<(LogWriter, LogServicer, LogReader)> {
 
     let log = Arc::new(Mutex::new(ByteLog::new()));
 
-    let lw = LogWriter{
-        w_pipe: w,
-    };
+    let lw = LogWriter { w_pipe: w };
 
     let ls = LogServicer {
         r_pipe: r,
         log: log.clone(),
     };
 
-    let lr = LogReader{
-        log: log,
-    };
+    let lr = LogReader { log: log };
 
     Ok((lw, ls, lr))
 }
@@ -159,7 +153,7 @@ impl LogWriter {
 impl LogServicer {
     // run in the background and pull data off of the pipe
     async fn run(&mut self) -> Result<()> {
-        let mut buf = vec![0u8; 16*1024];
+        let mut buf = vec![0u8; 16 * 1024];
         loop {
             let n = self.r_pipe.read(&mut buf).await?;
             if n == 0 {
@@ -173,7 +167,7 @@ impl LogServicer {
 
 impl LogReader {
     fn read(&self, cursor: &mut LogCursor, buf: &mut [u8]) -> usize {
-       self.log.lock().unwrap().read(cursor, buf)
+        self.log.lock().unwrap().read(cursor, buf)
     }
 
     #[cfg(test)]
@@ -181,7 +175,11 @@ impl LogReader {
         self.log.lock().unwrap().len()
     }
 
-    async fn write_all<W: AsyncWrite + Unpin>(&self, cursor: &mut LogCursor, writer: &mut W) -> Result<()> {
+    async fn write_all<W: AsyncWrite + Unpin>(
+        &self,
+        cursor: &mut LogCursor,
+        writer: &mut W,
+    ) -> Result<()> {
         let mut buf = vec![0u8; 4096];
         loop {
             let nread = self.read(cursor, &mut buf);
@@ -217,14 +215,14 @@ impl AppLog {
         let (w, s, r) = new_app_log()?;
         w.redirect_stdio()?;
 
-        Ok(Self{
+        Ok(Self {
             servicer: s,
             reader: r,
         })
     }
 
     // serve the log over vsock
-    async fn serve_log(incoming: impl Stream<Item=VsockStream>, lr: LogReader) -> Result<()> {
+    async fn serve_log(incoming: impl Stream<Item = VsockStream>, lr: LogReader) -> Result<()> {
         use futures::stream::StreamExt;
 
         let mut incoming = Box::pin(incoming);
@@ -243,17 +241,17 @@ impl AppLog {
     // launch a task to service the pipe and serve the log over vsock
     pub fn start_serving(mut self, port: u32) -> JoinHandle<Result<()>> {
         match enclaver::vsock::serve(port) {
-            Ok(incoming) => {
-                tokio::task::spawn(async move {
-                    tokio::try_join!(self.servicer.run(), AppLog::serve_log(incoming, self.reader))?;
-                    Ok(())
-                })
-            },
+            Ok(incoming) => tokio::task::spawn(async move {
+                tokio::try_join!(
+                    self.servicer.run(),
+                    AppLog::serve_log(incoming, self.reader)
+                )?;
+                Ok(())
+            }),
             Err(e) => tokio::task::spawn(async move { Err(e) }),
         }
     }
 }
-
 
 enum EntrypointStatus {
     Running,
@@ -265,10 +263,12 @@ impl EntrypointStatus {
     fn as_json(&self) -> String {
         match self {
             Self::Running => "{ \"status\": \"running\" }\n".to_string(),
-            Self::Exited(exit_status) => {
-                match exit_status {
-                    ExitStatus::Exited(code) => format!("{{ \"status\": \"exited\", \"code\": {code} }}\n"),
-                    ExitStatus::Signaled(sig) => format!("{{ \"status\": \"signaled\", \"signal\": \"{sig}\" }}\n"),
+            Self::Exited(exit_status) => match exit_status {
+                ExitStatus::Exited(code) => {
+                    format!("{{ \"status\": \"exited\", \"code\": {code} }}\n")
+                }
+                ExitStatus::Signaled(sig) => {
+                    format!("{{ \"status\": \"signaled\", \"signal\": \"{sig}\" }}\n")
                 }
             },
             Self::Fatal(err) => format!("{{ \"status\": \"fatal\", \"error\": \"{err}\" }}\n"),
@@ -283,7 +283,7 @@ struct AppStatusInner {
 
 impl AppStatusInner {
     fn new() -> Self {
-        Self{
+        Self {
             status: EntrypointStatus::Running,
             watches: WatchSet::new(),
         }
@@ -307,7 +307,7 @@ pub struct AppStatus {
 
 impl AppStatus {
     pub fn new() -> Self {
-        Self{
+        Self {
             inner: Arc::new(Mutex::new(AppStatusInner::new())),
         }
     }
@@ -336,8 +336,8 @@ impl AppStatus {
                     }
                     Ok(())
                 })
-            },
-            Err(e) => tokio::task::spawn(async move { Err(e) })
+            }
+            Err(e) => tokio::task::spawn(async move { Err(e) }),
         }
     }
 
@@ -362,7 +362,7 @@ struct WatchSet {
 
 impl WatchSet {
     fn new() -> Self {
-        Self{
+        Self {
             watches: Vec::new(),
         }
     }
@@ -386,13 +386,13 @@ impl WatchSet {
 
 #[cfg(test)]
 mod tests {
+    use anyhow::{anyhow, Result};
     use assert2::assert;
+    use enclaver::constants::STATUS_PORT;
     use json::{object, JsonValue};
     use nix::sys::signal::Signal;
-    use tokio::io::{BufReader, Lines, AsyncBufRead, AsyncBufReadExt};
+    use tokio::io::{AsyncBufRead, AsyncBufReadExt, BufReader, Lines};
     use tokio_vsock::VsockStream;
-    use anyhow::{Result, anyhow};
-    use enclaver::constants::STATUS_PORT;
 
     use super::{ByteLog, LogCursor};
     use crate::launcher::ExitStatus;
@@ -406,7 +406,7 @@ mod tests {
         loop {
             match log.read(&mut c, &mut buf) {
                 0 => break,
-                nread =>  {
+                nread => {
                     for actual in &buf[..nread] {
                         assert!(*actual == expected);
                         expected = expected.wrapping_add(1u8);
@@ -473,7 +473,7 @@ mod tests {
             s.run().await.unwrap();
         });
 
-        let mut expected = vec![0u8; super::APP_LOG_CAPACITY*3];
+        let mut expected = vec![0u8; super::APP_LOG_CAPACITY * 3];
         rand::thread_rng().fill_bytes(&mut expected);
 
         // write all in small chunks
@@ -506,9 +506,7 @@ mod tests {
     }
 
     async fn read_json<R: AsyncBufRead + Unpin>(lines: &mut Lines<R>) -> Result<JsonValue> {
-        let line = lines.next_line()
-            .await?
-            .ok_or(anyhow!("unexpected EOF"))?;
+        let line = lines.next_line().await?.ok_or(anyhow!("unexpected EOF"))?;
 
         Ok(json::parse(&line)?)
     }
@@ -529,7 +527,7 @@ mod tests {
         let mut client2 = app_status_lines().await.unwrap();
 
         // Running
-        let mut expected = object!{ status: "running" };
+        let mut expected = object! { status: "running" };
 
         let mut status = read_json(&mut client1).await.unwrap();
 
@@ -540,7 +538,7 @@ mod tests {
 
         // Exited
         app_status.exited(ExitStatus::Exited(2));
-        expected = object!{ status: "exited", code: 2 };
+        expected = object! { status: "exited", code: 2 };
 
         status = read_json(&mut client1).await.unwrap();
         assert!(status == expected);
@@ -550,7 +548,7 @@ mod tests {
 
         // Signaled
         app_status.exited(ExitStatus::Signaled(Signal::SIGTERM));
-        expected = object!{ status: "signaled", signal: "SIGTERM" };
+        expected = object! { status: "signaled", signal: "SIGTERM" };
 
         status = read_json(&mut client1).await.unwrap();
         assert!(status == expected);

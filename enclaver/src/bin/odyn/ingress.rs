@@ -1,9 +1,9 @@
-use tokio::task::JoinHandle;
 use anyhow::Result;
 use log::info;
+use tokio::task::JoinHandle;
 
-use enclaver::proxy::ingress::EnclaveProxy;
 use crate::config::{Configuration, ListenerConfig};
+use enclaver::proxy::ingress::EnclaveProxy;
 
 pub struct IngressService {
     proxies: Vec<JoinHandle<()>>,
@@ -19,18 +19,16 @@ impl IngressService {
                     info!("Startng TCP ingress on port {}", *port);
                     let proxy = EnclaveProxy::bind(*port)?;
                     tasks.push(tokio::spawn(proxy.serve()));
-                },
+                }
                 ListenerConfig::TLS(tls_cfg) => {
                     info!("Startng TLS ingress on port {}", *port);
                     let proxy = EnclaveProxy::bind_tls(*port, tls_cfg.clone())?;
                     tasks.push(tokio::spawn(proxy.serve()));
-                },
+                }
             }
         }
 
-        Ok(Self{
-            proxies: tasks,
-        })
+        Ok(Self { proxies: tasks })
     }
 
     pub async fn stop(self) {
@@ -43,4 +41,3 @@ impl IngressService {
         }
     }
 }
-

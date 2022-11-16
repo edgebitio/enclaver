@@ -1,23 +1,23 @@
-use std::convert::Infallible;
-use std::net::{SocketAddr, Ipv4Addr};
-use std::time::SystemTime;
-use std::sync::Arc;
-use log::{trace, debug};
-use hyper::server::conn::AddrIncoming;
-use hyper::{Body, Request, Response, Method, Server, StatusCode};
-use hyper::body::Bytes;
-use hyper::service::{make_service_fn, service_fn};
-use http::{Uri};
-use http::uri::{Scheme, Authority};
-use http::header::{HeaderName, HeaderValue};
-use anyhow::{anyhow, Result, Error};
-use json::{JsonValue, object};
-use aws_types::credentials::Credentials;
-use aws_sigv4::http_request::{SigningSettings, SignableRequest, SignableBody};
-use aws_sigv4::SigningParams;
-use lazy_static::lazy_static;
-use regex::Regex;
+use anyhow::{anyhow, Error, Result};
 use async_trait::async_trait;
+use aws_sigv4::http_request::{SignableBody, SignableRequest, SigningSettings};
+use aws_sigv4::SigningParams;
+use aws_types::credentials::Credentials;
+use http::header::{HeaderName, HeaderValue};
+use http::uri::{Authority, Scheme};
+use http::Uri;
+use hyper::body::Bytes;
+use hyper::server::conn::AddrIncoming;
+use hyper::service::{make_service_fn, service_fn};
+use hyper::{Body, Method, Request, Response, Server, StatusCode};
+use json::{object, JsonValue};
+use lazy_static::lazy_static;
+use log::{debug, trace};
+use regex::Regex;
+use std::convert::Infallible;
+use std::net::{Ipv4Addr, SocketAddr};
+use std::sync::Arc;
+use std::time::SystemTime;
 
 use crate::keypair::KeyPair;
 use crate::nsm::Nsm;
@@ -28,7 +28,11 @@ static X_AMZ_JSON: HeaderValue = HeaderValue::from_static("application/x-amz-jso
 
 const X_AMZ_CREDENTIAL: &str = "X-Amz-Credential";
 
-const ATTESTING_ACTIONS: [&str; 3] = [ "TrentService.Decrypt", "TrentService.GenerateDataKey", "TrentService.GenerateRandom" ];
+const ATTESTING_ACTIONS: [&str; 3] = [
+    "TrentService.Decrypt",
+    "TrentService.GenerateDataKey",
+    "TrentService.GenerateRandom",
+];
 
 const KMS_SERVICE_NAME: &str = "kms";
 
@@ -61,10 +65,12 @@ impl CredentialScope {
 
         debug!("CredentialScope: {cred}");
 
-        let groups = re.captures(&cred)
-            .ok_or(anyhow!("{} header has an invalid format", http::header::AUTHORIZATION))?;
+        let groups = re.captures(&cred).ok_or(anyhow!(
+            "{} header has an invalid format",
+            http::header::AUTHORIZATION
+        ))?;
 
-        Ok(Self{
+        Ok(Self {
             region: groups.get(1).unwrap().as_str().to_string(),
             service: groups.get(2).unwrap().as_str().to_string(),
         })
@@ -72,7 +78,10 @@ impl CredentialScope {
 
     fn validate(&self) -> Result<()> {
         if self.service != KMS_SERVICE_NAME {
-            return Err(anyhow!("Received request signed for a non-KMS ({}) service", self.service));
+            return Err(anyhow!(
+                "Received request signed for a non-KMS ({}) service",
+                self.service
+            ));
         }
 
         Ok(())
@@ -89,7 +98,7 @@ impl KmsRequestIncoming {
         let (head, body) = req.into_parts();
         let body = hyper::body::to_bytes(body).await?;
 
-        Ok(Self{ head, body })
+        Ok(Self { head, body })
     }
 
     fn method(&self) -> &http::Method {
@@ -119,7 +128,7 @@ impl KmsRequestIncoming {
                     let action = target.to_str().unwrap();
                     return ATTESTING_ACTIONS
                         .iter()
-                        .any(|a| a.eq_ignore_ascii_case(action))
+                        .any(|a| a.eq_ignore_ascii_case(action));
                 }
             }
         }
@@ -153,12 +162,11 @@ impl KmsRequestOutgoing {
             .header(hyper::header::CONTENT_TYPE, &X_AMZ_JSON)
             .body(body_bytes)?;
 
-        Ok(Self{ inner })
+        Ok(Self { inner })
     }
 
     fn from_incoming(req_in: KmsRequestIncoming, authority: Authority) -> Result<Self> {
-        let action = req_in.target()
-            .ok_or(anyhow!("KMS Action is missing"))?;
+        let action = req_in.target().ok_or(anyhow!("KMS Action is missing"))?;
 
         let uri = Uri::builder()
             .scheme(Scheme::HTTPS)
@@ -173,7 +181,7 @@ impl KmsRequestOutgoing {
             .header(hyper::header::CONTENT_TYPE, req_in.content_type())
             .body(req_in.body)?;
 
-        Ok(Self{ inner })
+        Ok(Self { inner })
     }
 
     fn sign(mut self, credentials: &Credentials, region: &str) -> Result<Request<Body>> {
@@ -196,7 +204,8 @@ impl KmsRequestOutgoing {
             &self.inner.method(),
             &self.inner.uri(),
             &self.inner.headers(),
-            SignableBody::Bytes(&self.inner.body()));
+            SignableBody::Bytes(&self.inner.body()),
+        );
 
         // Sign and then apply the signature to the request
         let signed = aws_sigv4::http_request::sign(signable_request, &signing_params)
@@ -210,7 +219,14 @@ impl KmsRequestOutgoing {
 
         let req = Request::from_parts(head, Body::from(bytes_body));
 
-        trace!("Signed request auth: {}", req.headers().get("authorization").unwrap().to_str().unwrap());
+        trace!(
+            "Signed request auth: {}",
+            req.headers()
+                .get("authorization")
+                .unwrap()
+                .to_str()
+                .unwrap()
+        );
         Ok(req)
     }
 }
@@ -244,31 +260,27 @@ impl KmsProxy {
         let listen_addr = SocketAddr::from((Ipv4Addr::LOCALHOST, listen_port));
         let incoming = AddrIncoming::bind(&listen_addr)?;
 
-        Ok(Self{
-            config,
-            incoming,
-        })
+        Ok(Self { config, incoming })
     }
 
     pub async fn serve(self) -> Result<()> {
-        let handler = Arc::new(KmsProxyHandler{
+        let handler = Arc::new(KmsProxyHandler {
             config: self.config,
         });
 
         // thanks https://www.fpcomplete.com/blog/ownership-puzzle-rust-async-hyper/
         let make_svc = make_service_fn(move |_conn| {
             // service_fn converts our function into a `Service`
-           let handler = handler.clone();
-           async {
-               Ok::<_, Infallible>(service_fn(move |req: Request<Body>| {
-                   let handler = handler.clone();
-                   async move { handler.handle(req).await }
-               }))
-           }
+            let handler = handler.clone();
+            async {
+                Ok::<_, Infallible>(service_fn(move |req: Request<Body>| {
+                    let handler = handler.clone();
+                    async move { handler.handle(req).await }
+                }))
+            }
         });
 
-        Server::builder(self.incoming)
-            .serve(make_svc).await?;
+        Server::builder(self.incoming).serve(make_svc).await?;
 
         Ok(())
     }
@@ -279,7 +291,10 @@ struct KmsProxyHandler {
 }
 
 impl KmsProxyHandler {
-    async fn handle(&self, req: Request<Body>) -> std::result::Result<Response<Body>, hyper::Error> {
+    async fn handle(
+        &self,
+        req: Request<Body>,
+    ) -> std::result::Result<Response<Body>, hyper::Error> {
         debug!("Request: {:?}", req);
 
         let req_in = KmsRequestIncoming::recv(req).await?;
@@ -310,10 +325,13 @@ impl KmsProxyHandler {
 
         let attestation_doc = self.get_attestation()?;
 
-        body_obj.insert("Recipient", object!{
-            "AttestationDocument": json::JsonValue::String(base64::encode(&attestation_doc)),
-            "KeyEncryptionAlgorithm": "RSAES_OAEP_SHA_256",
-        })?;
+        body_obj.insert(
+            "Recipient",
+            object! {
+                "AttestationDocument": json::JsonValue::String(base64::encode(&attestation_doc)),
+                "KeyEncryptionAlgorithm": "RSAES_OAEP_SHA_256",
+            },
+        )?;
 
         let req_out = KmsRequestOutgoing::new(authority, req_in.target().unwrap(), body_obj)?;
 
@@ -325,7 +343,9 @@ impl KmsProxyHandler {
     }
 
     fn get_attestation(&self) -> Result<Vec<u8>> {
-        self.config.attester.attestation(self.config.keypair.public_key_as_der()?)
+        self.config
+            .attester
+            .attestation(self.config.keypair.public_key_as_der()?)
     }
 
     async fn handle_response(&self, resp: Response<Body>) -> Result<Response<Body>> {
@@ -342,10 +362,12 @@ impl KmsProxyHandler {
         let body_val = json::parse(std::str::from_utf8(&body)?)?;
 
         if let JsonValue::Object(mut body_obj) = body_val {
-            let b64ciphertext = body_obj.remove("CiphertextForRecipient")
+            let b64ciphertext = body_obj
+                .remove("CiphertextForRecipient")
                 .ok_or(anyhow!("Response body is missing 'CiphertextForRecipient'"))?;
 
-            let b64ciphertext = b64ciphertext.as_str()
+            let b64ciphertext = b64ciphertext
+                .as_str()
                 .ok_or(anyhow!("CiphertextForRecipient is not a string"))?;
 
             let ciphertext = base64::decode(b64ciphertext)?;
@@ -386,15 +408,21 @@ impl KmsProxyHandler {
 // trait but it uses `&mut self` and would require a needless mutex.
 #[async_trait]
 pub trait HttpClient {
-    async fn request(&self, req: Request<Body>) -> std::result::Result<Response<Body>, hyper::Error>;
+    async fn request(
+        &self,
+        req: Request<Body>,
+    ) -> std::result::Result<Response<Body>, hyper::Error>;
 }
 
 #[async_trait]
 impl<C> HttpClient for hyper::client::Client<C>
 where
-    C: hyper::client::connect::Connect + Clone + Send + Sync + 'static
+    C: hyper::client::connect::Connect + Clone + Send + Sync + 'static,
 {
-    async fn request(&self, req: Request<Body>) -> std::result::Result<Response<Body>, hyper::Error> {
+    async fn request(
+        &self,
+        req: Request<Body>,
+    ) -> std::result::Result<Response<Body>, hyper::Error> {
         hyper::client::Client::request(self, req).await
     }
 }
@@ -444,8 +472,7 @@ fn internal_srv_err(msg: String) -> Response<Body> {
 }
 
 fn amz_credential_query(uri: &Uri) -> Option<String> {
-    let q = uri.path_and_query()?
-        .query()?;
+    let q = uri.path_and_query()?.query()?;
 
     for (k, v) in form_urlencoded::parse(q.as_bytes()) {
         if X_AMZ_CREDENTIAL.eq_ignore_ascii_case(&k) {
@@ -459,16 +486,18 @@ fn amz_credential_query(uri: &Uri) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rsa::RsaPrivateKey;
-    use pkcs8::DecodePrivateKey;
     use assert2::assert;
+    use pkcs8::DecodePrivateKey;
+    use rsa::RsaPrivateKey;
 
     // Attestation document is passed through verbatim so can test with just random bytes
-    const ATTESTATION_DOC: &[u8] = &[245, 174, 153, 213, 192, 166, 9, 203, 152, 176, 158, 67, 233, 45, 229, 228];
+    const ATTESTATION_DOC: &[u8] = &[
+        245, 174, 153, 213, 192, 166, 9, 203, 152, 176, 158, 67, 233, 45, 229, 228,
+    ];
     const KEY_ID: &str = "e6ed9116-53d7-11ed-8eee-5b6905c751a7";
 
     lazy_static! {
-        static ref KEYS: JsonValue = object!{
+        static ref KEYS: JsonValue = object! {
             "Keys": [
                 {
                     "KeyArn": "arn:aws:kms:us-east-1:072396882261:key/e6ed9116-53d7-11ed-8eee-5b6905c751a7",
@@ -482,14 +511,14 @@ mod tests {
 
     #[async_trait]
     impl HttpClient for Mock {
-        async fn request(&self, req: Request<Body>) -> std::result::Result<Response<Body>, hyper::Error> {
-            let action = req.headers()
-                .get(X_AMZ_TARGET)
-                .unwrap()
-                .to_str()
-                .unwrap();
+        async fn request(
+            &self,
+            req: Request<Body>,
+        ) -> std::result::Result<Response<Body>, hyper::Error> {
+            let action = req.headers().get(X_AMZ_TARGET).unwrap().to_str().unwrap();
 
-            let authz = req.headers()
+            let authz = req
+                .headers()
                 .get(hyper::header::AUTHORIZATION)
                 .unwrap()
                 .to_str()
@@ -508,18 +537,24 @@ mod tests {
     }
 
     impl Mock {
-        async fn list_keys(&self, _req: Request<Body>) -> std::result::Result<Response<Body>, hyper::Error> {
+        async fn list_keys(
+            &self,
+            _req: Request<Body>,
+        ) -> std::result::Result<Response<Body>, hyper::Error> {
             Ok(kms_response(KEYS.clone()))
         }
 
-        async fn decrypt(&self, req: Request<Body>) -> std::result::Result<Response<Body>, hyper::Error> {
+        async fn decrypt(
+            &self,
+            req: Request<Body>,
+        ) -> std::result::Result<Response<Body>, hyper::Error> {
             let body = body_as_json(req.into_body()).await.unwrap();
 
             // make sure the attestation document has been attached
             let att_doc = body["Recipient"]["AttestationDocument"].as_str().unwrap();
             assert!(att_doc == base64::encode(ATTESTATION_DOC));
 
-            let resp = kms_response(object!{
+            let resp = kms_response(object! {
                 "EncryptionAlgorithm": "SYMMETRIC_DEFAULT",
                 "KeyId": KEY_ID,
                 "CiphertextForRecipient": crate::proxy::pkcs7::tests::INPUT,
@@ -549,7 +584,10 @@ mod tests {
             .uri("/")
             .header(X_AMZ_TARGET, action)
             .header(hyper::header::CONTENT_TYPE, &X_AMZ_JSON)
-            .header(hyper::header::AUTHORIZATION, "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/kms/aws4_request, ")
+            .header(
+                hyper::header::AUTHORIZATION,
+                "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/kms/aws4_request, ",
+            )
             .body(Body::from(body_bytes))
             .unwrap()
     }
@@ -574,19 +612,21 @@ mod tests {
             client: Box::new(Mock),
             credentials: Credentials::from_keys("TESTKEY", "TESTSECRET", None),
             keypair: Arc::new(KeyPair::from_private(priv_key)),
-            attester: Box::new(Mock{}),
-            endpoints: Arc::new(Mock{}),
-
+            attester: Box::new(Mock {}),
+            endpoints: Arc::new(Mock {}),
         };
 
-        KmsProxyHandler{ config }
+        KmsProxyHandler { config }
     }
 
     #[test]
     fn test_credential_scope() {
         let req1 = Request::builder()
             .uri("http://kms.us-east-1.amazonaws.com")
-            .header(http::header::AUTHORIZATION, "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/kms/aws4_request, ")
+            .header(
+                http::header::AUTHORIZATION,
+                "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/kms/aws4_request, ",
+            )
             .body(())
             .unwrap();
 
@@ -612,7 +652,7 @@ mod tests {
     async fn test_forwarding_action() {
         let handler = new_test_handler();
 
-        let req = kms_request("TrentService.ListKeys", object!{});
+        let req = kms_request("TrentService.ListKeys", object! {});
         let resp = handler.handle(req).await.unwrap();
 
         let (head, body) = resp.into_parts();
@@ -627,9 +667,12 @@ mod tests {
     async fn test_attesting_action() {
         let handler = new_test_handler();
 
-        let req = kms_request("TrentService.Decrypt", object!{
-           "CiphertextBlob": base64::encode("~~~ ENCRYPTED Hello, World ~~~"),
-        });
+        let req = kms_request(
+            "TrentService.Decrypt",
+            object! {
+               "CiphertextBlob": base64::encode("~~~ ENCRYPTED Hello, World ~~~"),
+            },
+        );
 
         let resp = handler.handle(req).await.unwrap();
 
