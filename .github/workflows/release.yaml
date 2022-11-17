@@ -109,17 +109,17 @@ jobs:
         run: |
           gcloud auth configure-docker us-docker.pkg.dev
 
-      - name: Authenticate to AWS
-        uses: aws-actions/configure-aws-credentials@v1-node16
-        with:
-          aws-region: us-east-1
-          role-to-assume: arn:aws:iam::970625735569:role/GitHubActionsECRPush
+      #- name: Authenticate to AWS
+        #uses: aws-actions/configure-aws-credentials@v1-node16
+        #with:
+        #aws-region: us-east-1
+        #role-to-assume: arn:aws:iam::970625735569:role/GitHubActionsECRPush
 
-      - name: Configure AWS Docker Auth
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
-        with:
-          registry-type: public
+      #- name: Configure AWS Docker Auth
+      #  id: login-ecr
+      #  uses: aws-actions/amazon-ecr-login@v1
+      #  with:
+      #    registry-type: public
 
       - name: Generate Odyn Image Metadata
         id: odyn-metadata
