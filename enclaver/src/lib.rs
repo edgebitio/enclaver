@@ -21,6 +21,9 @@ pub mod run;
 #[cfg(feature = "odyn")]
 pub mod nsm;
 
+#[cfg(feature = "odyn")]
+pub mod api;
+
 #[cfg(feature = "proxy")]
 pub mod proxy;
 
@@ -31,3 +34,5 @@ pub mod vsock;
 pub mod tls;
 
 pub mod utils;
+
+pub mod http_util;

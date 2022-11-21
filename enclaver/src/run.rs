@@ -186,6 +186,7 @@ impl Enclave {
 
         for item in ingress {
             let listen_port = item.listen_port;
+            info!("starting ingress proxy on port {listen_port}");
             let proxy = HostProxy::bind(listen_port).await?;
             self.tasks.push(tokio::task::spawn(async move {
                 proxy.serve(cid, listen_port.into()).await;

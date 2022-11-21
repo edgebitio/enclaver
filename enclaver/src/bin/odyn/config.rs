@@ -109,6 +109,10 @@ impl Configuration {
     pub fn kms_proxy_port(&self) -> Option<u16> {
         self.manifest.kms_proxy.as_ref().map(|kp| kp.listen_port)
     }
+
+    pub fn api_port(&self) -> Option<u16> {
+        self.manifest.api.as_ref().map(|a| a.listen_port)
+    }
 }
 
 impl KmsEndpointProvider for Configuration {
