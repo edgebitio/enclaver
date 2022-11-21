@@ -1,5 +1,5 @@
 version: v1
 name: "example-enclave"
-target: "us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:enclaver"
+target: "registry.edgebit.io/no-fly-list:enclaver"
 sources:
-  app: "us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:latest"
+  app: "registry.edgebit.io/no-fly-list:latest"

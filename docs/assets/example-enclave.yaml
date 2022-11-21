@@ -20,9 +20,9 @@ spec:
       nodeSelector:
         edgebit.io/enclave: nitro
       containers:
-      - name: enclave 
-        image: us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:enclave-latest
-        ports: 
+      - name: enclave
+        image: registry.edgebit.io/no-fly-list:enclave-latest
+        ports:
            - containerPort: 8001
              name: enclave-app
         volumeMounts:
@@ -47,4 +47,3 @@ spec:
       - name: hugepages
         emptyDir:
           medium: HugePages
-        
