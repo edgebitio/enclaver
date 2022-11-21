@@ -188,13 +188,13 @@ TimeoutStartSec=0
 Restart=always
 ExecStartPre=-/usr/bin/docker exec %n stop
 ExecStartPre=-/usr/bin/docker rm %n
-ExecStartPre=/usr/bin/docker pull us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:enclave-latest
+ExecStartPre=/usr/bin/docker pull registry.edgebit.io/no-fly-list:enclave-latest
 ExecStart=/usr/bin/docker run \
     --rm \
     --name %n \
     --device=/dev/nitro_enclaves:/dev/nitro_enclaves:rw \
     -p 8001:8001 \
-    us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:enclave-latest
+    registry.edgebit.io/no-fly-list:enclave-latest
 
 [Install]
 WantedBy=multi-user.target

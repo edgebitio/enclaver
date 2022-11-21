@@ -28,7 +28,7 @@ Here's an example of an attestation:
 TODO: Implement trust command. See [issue #38](https://github.com/edgebitio/enclaver/issues/38).
 
 ```sh
-$ enclaver trust us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:enclave-latest
+$ enclaver trust registry.edgebit.io/no-fly-list:enclave-latest
 TODO: add real attestation
 ```
 </details>
@@ -68,7 +68,7 @@ If we throw away the plaintext of key A, the envelope only contains encrypted da
     | 1  |UhOUXlT2an029Xqva...|kDAgEQgDu...|vQFPsDGU...|QE2J4n...|
 1. Encrypted data keys are stored with the data, so there isn't additional key management needed to store and track them.
 1. Envelope encryption normalizes using unique keys for your data instead of one single key that can be compromised.
-1. Different encryption schemes can be used to maximize performance. Data keys typically need to encrypt large objects, so they need to be performant and use symmetric key algorithms. Using public key algorithms are slower but carry the convinience of the public/private key separation. Envelope encryption allows using both schemes where each are well-suited for the task.  
+1. Different encryption schemes can be used to maximize performance. Data keys typically need to encrypt large objects, so they need to be performant and use symmetric key algorithms. Using public key algorithms are slower but carry the convinience of the public/private key separation. Envelope encryption allows using both schemes where each are well-suited for the task.
 1. Possible to encrypt the same data key under multiple master keys without re-encrypting the raw data.
 </details>
 
@@ -87,7 +87,7 @@ Here's what the actual envelope used by the app looks like:
 
 Inside of the enclave, we have a policy that allows us to decrypt the data key. Since it's recorded in the file, it's easy to know which one to request from KMS. When we get that, we can use it to decrypt the main part of our file.
 
-While we don't explore it here, the powerful part is that we could locally decrypt large or numerous files without having to transmit the ciphertext through KMS, because we have the plaintext data key already. The isolation guarantees of the enclave make it safe to cache the plaintext data key, unlike if you were keeping it in RAM or on disk in a regular VM. 
+While we don't explore it here, the powerful part is that we could locally decrypt large or numerous files without having to transmit the ciphertext through KMS, because we have the plaintext data key already. The isolation guarantees of the enclave make it safe to cache the plaintext data key, unlike if you were keeping it in RAM or on disk in a regular VM.
 
 The concept of multiple data keys is called "field level encryption" and passing around these envelopes around is "app-level encryption".
 
@@ -105,7 +105,7 @@ version: v1
 name: "test"
 target: "no-fly-list:enclave-latest"
 sources:
-  app: "us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:latest"
+  app: "registry.edgebit.io/no-fly-list:latest"
 defaults:
   memory_mb: 4096
 kms_proxy:
@@ -168,7 +168,7 @@ $ docker run \
     --name enclave \
     --device=/dev/nitro_enclaves:/dev/nitro_enclaves:rw \
     -p 8001:8001 \
-    us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:enclave-latest
+    registry.edgebit.io/no-fly-list:enclave-latest
 ```
 
 Check to see that the enclave was run successfully:

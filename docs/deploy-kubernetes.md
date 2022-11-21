@@ -40,9 +40,9 @@ spec:
       nodeSelector:
         edgebit.io/enclave: nitro
       containers:
-      - name: enclave 
-        image: us-docker.pkg.dev/edgebit-containers/containers/no-fly-list:enclave-latest
-        ports: 
+      - name: enclave
+        image: registry.edgebit.io/no-fly-list:enclave-latest
+        ports:
            - containerPort: 8001
              name: enclave-app
         volumeMounts:
@@ -78,7 +78,7 @@ There are a few essential parts of each Deployment:
 
 ## Add Qualified Nodes to your EKS Cluster
 
-This guide assumes you already have an EKS cluster. It doesn't matter if it has other NodeGroups attached to it. 
+This guide assumes you already have an EKS cluster. It doesn't matter if it has other NodeGroups attached to it.
 
 Only certain [EC2 instance types][instance-req] can run Nitro Enclaves. `c6a.xlarge` is the cheapest qualifying instance type as of this writing) and Docker installed.  See [the Deploying on AWS](deploy-aws.md) for more details. Create the CloudFormation stack before continuing:
 
