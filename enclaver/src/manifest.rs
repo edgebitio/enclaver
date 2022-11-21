@@ -18,6 +18,7 @@ pub struct Manifest {
     pub egress: Option<Egress>,
     pub defaults: Option<Defaults>,
     pub kms_proxy: Option<KmsProxy>,
+    pub api: Option<Api>,
 }
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -62,6 +63,12 @@ pub struct Defaults {
 pub struct KmsProxy {
     pub listen_port: u16,
     pub endpoints: Option<HashMap<String, String>>,
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Api {
+    pub listen_port: u16,
 }
 
 fn parse_manifest(buf: &[u8]) -> Result<Manifest> {

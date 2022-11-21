@@ -7,20 +7,17 @@ use http::header::{HeaderName, HeaderValue};
 use http::uri::{Authority, Scheme};
 use http::Uri;
 use hyper::body::Bytes;
-use hyper::server::conn::AddrIncoming;
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Method, Request, Response, Server, StatusCode};
+use hyper::{Body, Method, Request, Response, StatusCode};
 use json::{object, JsonValue};
 use lazy_static::lazy_static;
 use log::{debug, trace};
 use regex::Regex;
-use std::convert::Infallible;
-use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use crate::http_util::HttpHandler;
 use crate::keypair::KeyPair;
-use crate::nsm::Nsm;
+use crate::nsm::{AttestationParams, AttestationProvider};
 
 const X_AMZ_TARGET: HeaderName = HeaderName::from_static("x-amz-target");
 
@@ -250,64 +247,13 @@ impl KmsProxyConfig {
     }
 }
 
-pub struct KmsProxy {
-    config: KmsProxyConfig,
-    incoming: AddrIncoming,
-}
-
-impl KmsProxy {
-    pub fn bind(listen_port: u16, config: KmsProxyConfig) -> Result<Self> {
-        let listen_addr = SocketAddr::from((Ipv4Addr::LOCALHOST, listen_port));
-        let incoming = AddrIncoming::bind(&listen_addr)?;
-
-        Ok(Self { config, incoming })
-    }
-
-    pub async fn serve(self) -> Result<()> {
-        let handler = Arc::new(KmsProxyHandler {
-            config: self.config,
-        });
-
-        // thanks https://www.fpcomplete.com/blog/ownership-puzzle-rust-async-hyper/
-        let make_svc = make_service_fn(move |_conn| {
-            // service_fn converts our function into a `Service`
-            let handler = handler.clone();
-            async {
-                Ok::<_, Infallible>(service_fn(move |req: Request<Body>| {
-                    let handler = handler.clone();
-                    async move { handler.handle(req).await }
-                }))
-            }
-        });
-
-        Server::builder(self.incoming).serve(make_svc).await?;
-
-        Ok(())
-    }
-}
-
-struct KmsProxyHandler {
+pub struct KmsProxyHandler {
     config: KmsProxyConfig,
 }
 
 impl KmsProxyHandler {
-    async fn handle(
-        &self,
-        req: Request<Body>,
-    ) -> std::result::Result<Response<Body>, hyper::Error> {
-        debug!("Request: {:?}", req);
-
-        let req_in = KmsRequestIncoming::recv(req).await?;
-
-        // TODO: Check the signature!!!
-
-        let resp_res = if req_in.is_attesting_action() {
-            self.handle_attesting_action(req_in).await
-        } else {
-            self.handle_forward(req_in).await
-        };
-
-        resp_res.or_else(|err| Ok(internal_srv_err(err.to_string())))
+    pub fn new(config: KmsProxyConfig) -> Self {
+        Self { config }
     }
 
     async fn handle_attesting_action(&self, req_in: KmsRequestIncoming) -> Result<Response<Body>> {
@@ -343,9 +289,11 @@ impl KmsProxyHandler {
     }
 
     fn get_attestation(&self) -> Result<Vec<u8>> {
-        self.config
-            .attester
-            .attestation(self.config.keypair.public_key_as_der()?)
+        self.config.attester.attestation(AttestationParams {
+            nonce: None,
+            user_data: None,
+            public_key: Some(self.config.keypair.public_key_as_der()?),
+        })
     }
 
     async fn handle_response(&self, resp: Response<Body>) -> Result<Response<Body>> {
@@ -404,6 +352,23 @@ impl KmsProxyHandler {
     }
 }
 
+#[async_trait]
+impl HttpHandler for KmsProxyHandler {
+    async fn handle(&self, req: Request<Body>) -> Result<Response<Body>> {
+        debug!("Request: {:?}", req);
+
+        let req_in = KmsRequestIncoming::recv(req).await?;
+
+        // TODO: Check the signature!!!
+
+        if req_in.is_attesting_action() {
+            self.handle_attesting_action(req_in).await
+        } else {
+            self.handle_forward(req_in).await
+        }
+    }
+}
+
 // hyper::client::Client implements tower::Service and would make a perfect
 // trait but it uses `&mut self` and would require a needless mutex.
 #[async_trait]
@@ -427,26 +392,6 @@ where
     }
 }
 
-pub trait AttestationProvider {
-    fn attestation(&self, public_key: Vec<u8>) -> Result<Vec<u8>>;
-}
-
-pub struct NsmAttestationProvider {
-    nsm: Arc<Nsm>,
-}
-
-impl NsmAttestationProvider {
-    pub fn new(nsm: Arc<Nsm>) -> Self {
-        Self { nsm }
-    }
-}
-
-impl AttestationProvider for NsmAttestationProvider {
-    fn attestation(&self, public_key: Vec<u8>) -> Result<Vec<u8>> {
-        self.nsm.attestation(Some(public_key))
-    }
-}
-
 fn body_from_slice(bytes: &[u8]) -> Body {
     Body::from(Bytes::copy_from_slice(&bytes))
 }
@@ -464,13 +409,6 @@ fn json_response(head: http::response::Parts, json_val: JsonValue) -> Response<B
     Response::from_parts(head, json_body(json_val))
 }
 
-fn internal_srv_err(msg: String) -> Response<Body> {
-    Response::builder()
-        .status(StatusCode::INTERNAL_SERVER_ERROR)
-        .body(Body::from(msg))
-        .unwrap()
-}
-
 fn amz_credential_query(uri: &Uri) -> Option<String> {
     let q = uri.path_and_query()?.query()?;
 
@@ -486,6 +424,7 @@ fn amz_credential_query(uri: &Uri) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::nsm::StaticAttestationProvider;
     use assert2::assert;
     use pkcs8::DecodePrivateKey;
     use rsa::RsaPrivateKey;
@@ -564,12 +503,6 @@ mod tests {
         }
     }
 
-    impl AttestationProvider for Mock {
-        fn attestation(&self, _public_key: Vec<u8>) -> Result<Vec<u8>> {
-            Ok(ATTESTATION_DOC.to_vec())
-        }
-    }
-
     impl KmsEndpointProvider for Mock {
         fn endpoint(&self, _region: &str) -> String {
             "test.local".to_string()
@@ -612,7 +545,7 @@ mod tests {
             client: Box::new(Mock),
             credentials: Credentials::from_keys("TESTKEY", "TESTSECRET", None),
             keypair: Arc::new(KeyPair::from_private(priv_key)),
-            attester: Box::new(Mock {}),
+            attester: Box::new(StaticAttestationProvider::new(ATTESTATION_DOC.to_vec())),
             endpoints: Arc::new(Mock {}),
         };
 

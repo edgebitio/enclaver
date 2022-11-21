@@ -5,10 +5,11 @@ use aws_types::credentials::ProvideCredentials;
 use log::{error, info};
 use tokio::task::JoinHandle;
 
+use enclaver::http_util::HttpServer;
 use enclaver::keypair::KeyPair;
-use enclaver::nsm::Nsm;
+use enclaver::nsm::{Nsm, NsmAttestationProvider};
 use enclaver::proxy::aws_util;
-use enclaver::proxy::kms::{KmsProxy, KmsProxyConfig, NsmAttestationProvider};
+use enclaver::proxy::kms::{KmsProxyConfig, KmsProxyHandler};
 
 use crate::config::Configuration;
 
@@ -49,13 +50,14 @@ impl KmsProxyService {
                     endpoints: config,
                 };
 
-                let proxy = KmsProxy::bind(port, kms_config)?;
+                let proxy = HttpServer::bind(port)?;
+                let handler = KmsProxyHandler::new(kms_config);
 
                 // Set and env var to avoid configuring the port in two places
                 std::env::set_var("AWS_KMS_ENDPOINT", format!("http://127.0.0.1:{port}"));
 
                 Some(tokio::task::spawn(async move {
-                    if let Err(err) = proxy.serve().await {
+                    if let Err(err) = proxy.serve(handler).await {
                         error!("Error serving KMS proxy: {err}");
                     }
                 }))

@@ -1,3 +1,4 @@
+pub mod api;
 pub mod config;
 pub mod console;
 pub mod egress;
@@ -15,6 +16,7 @@ use std::sync::Arc;
 use enclaver::constants::{APP_LOG_PORT, STATUS_PORT};
 use enclaver::nsm::Nsm;
 
+use api::ApiService;
 use config::Configuration;
 use console::{AppLog, AppStatus};
 use egress::EgressService;
@@ -49,6 +51,7 @@ async fn launch(args: &CliArgs) -> Result<launcher::ExitStatus> {
     let egress = EgressService::start(&config).await?;
     let ingress = IngressService::start(&config)?;
     let kms_proxy = KmsProxyService::start(config.clone(), nsm.clone()).await?;
+    let api = ApiService::start(&config, nsm.clone())?;
 
     let creds = launcher::Credentials { uid: 0, gid: 0 };
 
@@ -56,6 +59,7 @@ async fn launch(args: &CliArgs) -> Result<launcher::ExitStatus> {
     let exit_status = launcher::start_child(args.entrypoint.clone(), creds).await??;
     info!("Entrypoint {}", exit_status);
 
+    api.stop().await;
     kms_proxy.stop().await;
     ingress.stop().await;
     egress.stop().await;
