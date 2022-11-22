@@ -6,7 +6,7 @@ mod images;
 
 pub mod constants;
 
-mod nitro_cli;
+pub mod nitro_cli;
 
 pub mod manifest;
 

@@ -5,6 +5,7 @@ use enclaver::{
     run_container::RunWrapper,
 };
 use log::{debug, error};
+use tokio::io::{stdout, AsyncWriteExt};
 
 #[derive(Debug, Parser)]
 #[clap(author, version)]
@@ -74,9 +75,13 @@ async fn run(args: Cli) -> Result<()> {
         } => {
             let builder = EnclaveArtifactBuilder::new(force_pull)?;
             let (eif_info, release_img, tag) = builder.build_release(&manifest_file).await?;
+            let eif_info_bytes = serde_json::to_vec_pretty(&eif_info)?;
 
             println!("Built Release Image: {release_img} ({tag})");
-            println!("EIF Info: {:#?}", eif_info);
+            println!("EIF Info:");
+
+            stdout().write_all(&eif_info_bytes).await?;
+            println!("");
 
             Ok(())
         }
@@ -88,11 +93,14 @@ async fn run(args: Cli) -> Result<()> {
             force_pull,
         } => {
             let builder = EnclaveArtifactBuilder::new(force_pull)?;
-
             let (eif_info, eif_path) = builder.build_eif_only(&manifest_file, &eif_file).await?;
+            let eif_info_bytes = serde_json::to_vec_pretty(&eif_info)?;
 
             println!("Built EIF: {}", eif_path.display());
-            println!("EIF Info: {:#?}", eif_info);
+            println!("EIF Info:");
+
+            stdout().write_all(&eif_info_bytes).await?;
+            println!("");
 
             Ok(())
         }

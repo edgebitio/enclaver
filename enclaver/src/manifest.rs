@@ -70,7 +70,7 @@ fn parse_manifest(buf: &[u8]) -> Result<Manifest> {
     Ok(manifest)
 }
 
-pub async fn load_manifest<P: AsRef<Path>>(path: P) -> Result<Manifest> {
+pub async fn load_manifest_raw<P: AsRef<Path>>(path: P) -> Result<(Vec<u8>, Manifest)> {
     let mut file = match File::open(&path).await {
         Ok(file) => file,
         Err(err) => {
@@ -84,8 +84,16 @@ pub async fn load_manifest<P: AsRef<Path>>(path: P) -> Result<Manifest> {
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).await?;
 
-    parse_manifest(&buf)
-        .map_err(|e| anyhow!("invalid configuration in {}: {e}", path.as_ref().display()))
+    let manifest = parse_manifest(&buf)
+        .map_err(|e| anyhow!("invalid configuration in {}: {e}", path.as_ref().display()))?;
+
+    Ok((buf, manifest))
+}
+
+pub async fn load_manifest<P: AsRef<Path>>(path: P) -> Result<Manifest> {
+    let (_, manifest) = load_manifest_raw(path).await?;
+
+    Ok(manifest)
 }
 
 #[cfg(test)]
