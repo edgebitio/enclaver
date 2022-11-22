@@ -2,8 +2,20 @@
 
 set -eu
 
-rust_target="x86_64-unknown-linux-musl"
-docker_target="amd64"
+local_arch=$(uname -m)
+case $local_arch in
+	x86_64)
+		rust_target="x86_64-unknown-linux-musl"
+		;;
+	aarch64)
+		rust_target="aarch64-unknown-linux-musl"
+		;;
+	*)
+		echo "Unsupported architecture: $local_arch"
+		exit 1
+		;;
+esac
+
 enclaver_dir="$(dirname $(dirname ${BASH_SOURCE[0]}))/enclaver"
 rust_target_dir="./target/${rust_target}/debug"
 
