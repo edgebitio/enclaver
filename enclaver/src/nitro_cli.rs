@@ -68,6 +68,13 @@ impl NitroCLI {
         }
     }
 
+    pub async fn describe_eif(&self, eif_path: &PathBuf) -> Result<EIFInfo> {
+        self.run_and_deserialize_output(DescribeEifArgs {
+            eif_path: eif_path.to_path_buf(),
+        })
+        .await
+    }
+
     pub async fn console(&self, enclave_id: &str) -> Result<ChildStdout> {
         let cmd_args = AttachConsoleArgs {
             enclave_id: enclave_id.to_string(),
@@ -213,6 +220,20 @@ impl NitroCLIArgs for AttachConsoleArgs {
             OsString::from("console"),
             OsString::from("--enclave-id"),
             OsString::from(&self.enclave_id),
+        ])
+    }
+}
+
+pub struct DescribeEifArgs {
+    pub eif_path: PathBuf,
+}
+
+impl NitroCLIArgs for DescribeEifArgs {
+    fn to_args(&self) -> Result<Vec<OsString>> {
+        Ok(vec![
+            OsString::from("describe-eif"),
+            OsString::from("--eif-path"),
+            OsString::from(&self.eif_path),
         ])
     }
 }
