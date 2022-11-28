@@ -120,15 +120,24 @@ Resources:
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
-          - Effect: "Allow" # Allow access to request the KMS key, which is protected by the attestation PCR0
+          - Effect: "Allow" # Allow access to request the old KMS key, which is protected by the attestation PCR0
             Action:
               - 'kms:Decrypt'
               - 'kms:DescribeKey'
             Resource: "arn:aws:kms:us-east-1:841252696414:key/mrk-b3152356da604a7dac485a0a272957c7"
-          - Effect: "Allow" # Allow access to request the encrypted envelope from S3, which is publicly available
+          - Effect: "Allow" # Allow access to request the KMS key, which is protected by the attestation PCR0
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:DescribeKey'
+            Resource: "arn:aws:kms:us-east-1:970625735569:key/mrk-39c14bd4d71f40e390fc158fab0697dd"
+          - Effect: "Allow" # Allow access to request the encrypted envelope from old S3 bucket, which is publicly available
             Action:
               - 's3:getObject'
             Resource: "arn:aws:s3:::no-fly-list/no-fly-envelope.txt"
+          - Effect: "Allow" # Allow access to request the encrypted envelope from S3 bucket, which is publicly available
+            Action:
+              - 's3:getObject'
+            Resource: "arn:aws:s3:::edgebit-no-fly-list/no-fly-envelope.txt"
       Roles:
         - Ref: "DemoIAMRole"
 Outputs:
