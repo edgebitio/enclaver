@@ -48,6 +48,8 @@ $ systemctl start docker && sudo systemctl enable docker
 
 Starting the Nitro allocator at boot is important because hugepages needs to find contiguous sections of RAM, which is easy when nothing is using your RAM yet.
 
+Unless you started your instance with a modified `HttpPutResponseHopLimit` from 1 to 2, you will need to run your container with host networking (`--net=host`) instead of the example shown below in order to connect to the instance metadata service.
+
 </details>
 
 ## Run via Systemd Unit
