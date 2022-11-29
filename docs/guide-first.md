@@ -85,8 +85,6 @@ sources:
   app: "app:latest"
 defaults:
   memory_mb: 1000
-egress:
-  - host
 ingress:
   - listen_port: 8000
 ```
