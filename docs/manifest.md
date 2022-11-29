@@ -35,6 +35,8 @@ ingress:
 
 An enclave is not required to have both ingress or egress, but without one of these it is not very useful. All egress locations, including internal VPC addresses or hostnames for AWS services must be declared.
 
+The `host` hostname can be used to refer to localhost on the parent EC2 machine, if allowed under the `egress` section.
+
 Enclaver uses an HTTP/HTTPS proxy for enforcement and the usual `http_proxy`, `https_proxy` and `no_proxy` environment variables are set correctly.
 
 In the future, a more transparent TCP proxy mode will be added to ease integration with applications. See [Issue #69](https://github.com/edgebitio/enclaver/issues/69) for more details.
