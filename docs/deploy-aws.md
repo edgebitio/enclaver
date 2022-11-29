@@ -22,7 +22,7 @@ The example CloudFormation increases the allowed hops for the Instance Metadata 
 
 ## Run via Systemd Unit
 
-On the EC2 machine, add this systemd unit which runs the Enclaver tool in a container, then runs your specified enclave image:
+On the EC2 machine, add this systemd unit to `/etc/systemd/system/enclave.service` which runs the Enclaver tool in a container, then runs your specified enclave image:
 
 ```systemd
 [Unit]
