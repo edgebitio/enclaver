@@ -52,7 +52,7 @@ In the future, a more transparent TCP proxy mode will be added to ease integrati
 - **kms_proxy** (object): Configuration for the KMS proxy listening inside of the enclave, which dynamically [adds attestation information to requests][kms] that benefit from it.
   - **listen_port** (integer): Required. Valid port number for the proxy to listen for traffic on. The environment variable `AWS_KMS_ENDPOINT` is available for your application to connect to the proxy.
 - **egress** (object): Information about egress traffic leaving the enclave. The policy is deny by default and supports `*` single wildcards for matching a specific position of a subdomain (`web.*.example.com`) or `**` greedy wildcards that match all (`**.example.com`).
-  - **allow**: (list of strings): List of allowed hostnames, IP addresses, or CIDR ranges that traffic may flow out of the enclave to. The enforcement is strict, so any redirects must list _all_ of the encountered addresses.
+  - **allow**: (list of strings): List of allowed hostnames, IP addresses, or CIDR ranges that traffic may flow out of the enclave to. The enforcement is strict, so any redirects must list _all_ of the encountered addresses. `host` can be used as a reference to localhost on the parent machine.
   - **deny**: (list of strings): List of denied hostnames, IP addresses, or CIDR ranges that traffic may _not_ flow out of the enclave to. Deny rules take precedence over allow rules.
 - **ingress** (list of objects): Information about ingress traffic entering the enclave. Applications can listen on multiple ports.
   - **listen_port** (integer): Required. Valid port number for the proxy to listen for traffic on.
