@@ -1,0 +1,17 @@
+{
+  "name": "example",
+  "version": "1.0.0",
+  "description": "Enclaver Example App",
+  "main": "app.js",
+  "repository": "https://github.com/edgebitio/enclaver",
+  "author": "EdgeBit.io",
+  "license": "Apache 2",
+  "private": false,
+  "main": "app.js",
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}
