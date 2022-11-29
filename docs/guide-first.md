@@ -126,3 +126,5 @@ To clean up, you can `^C` the `enclaver run` and it will shut down.
 This example walked through running an simple application in an enclave. Next, experiement with running a specific microservice or a security-centric function within an enclave.
 
 Check out the [example Python app that talks to KMS](guide-app.md).
+
+[instance-req]: https://docs.aws.amazon.com/enclaves/latest/user/nitro-enclave.html#nitro-enclave-reqs
