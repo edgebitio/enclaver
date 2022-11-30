@@ -30,7 +30,7 @@ $ amazon-linux-extras install aws-nitro-enclaves-cli
 $ yum install aws-nitro-enclaves-cli-devel -y
 ```
 
-Then, give your user assess to the Nitro Enclaves and Docker groups:
+Then, give your user access to the Nitro Enclaves and Docker groups:
 
 ```
 $ usermod -aG ne ec2-user
