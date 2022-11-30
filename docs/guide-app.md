@@ -159,6 +159,8 @@ $ ssh ec2-user@<ip address>
 
 After the image is fetched, it is broken apart into [the outside][outside] and [inside components][inside]. The outer components are started first, then the enclave, with the inner components inside, is started.
 
+<div style="background: #F5BF4F; padding: 5px 10px;">Note: you must use the container image shipped by EdgeBit for the demo to work correctly. The build above is shown for educational purposes but your build will cause the PCR measurements to differ from the key access policy.</div>
+
 We will start it manually using Docker, but you can also set up a [systemd unit][unit].
 
 ```sh

@@ -20,9 +20,41 @@ Due to Amazon restrictions, each EC2 machine can only run a single enclave at a 
 
 The example CloudFormation increases the allowed hops for the Instance Metadata Service v2 from 1 to 2 to account for the `docker0` bridge. Reflect this change in any customized CloudFormation that you might use.
 
+<details>
+  <summary>View instructions to configure your machine manually</summary>
+
+First, install the Nitro Enclave packages:
+
+```
+$ amazon-linux-extras install aws-nitro-enclaves-cli
+$ yum install aws-nitro-enclaves-cli-devel -y
+```
+
+Then, give your user access to the Nitro Enclaves and Docker groups:
+
+```
+$ usermod -aG ne ec2-user
+$ usermod -aG docker ec2-user
+```
+
+Last, configure the resources to dedicate to your enclaves:
+
+```
+$ sed -i 's/cpu_count: 2/cpu_count: 1/g' /etc/nitro_enclaves/allocator.yaml
+$ sed -i 's/memory_mib: 512/memory_mib: 3072/g' /etc/nitro_enclaves/allocator.yaml
+$ systemctl start nitro-enclaves-allocator.service && sudo systemctl enable nitro-enclaves-allocator.service
+$ systemctl start docker && sudo systemctl enable docker
+```
+
+Starting the Nitro allocator at boot is important because hugepages needs to find contiguous sections of RAM, which is easy when nothing is using your RAM yet.
+
+Unless you started your instance with a modified `HttpPutResponseHopLimit` from 1 to 2, you will need to run your container with host networking (`--net=host`) instead of the example shown below in order to connect to the instance metadata service.
+
+</details>
+
 ## Run via Systemd Unit
 
-On the EC2 machine, add this systemd unit which runs the Enclaver tool in a container, then runs your specified enclave image:
+On the EC2 machine, add this systemd unit to `/etc/systemd/system/enclave.service` which runs the Enclaver tool in a container, then runs your specified enclave image:
 
 ```systemd
 [Unit]
