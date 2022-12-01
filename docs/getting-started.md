@@ -20,7 +20,11 @@ Refer to [the architecture](architecture.md) for a complete understanding of Enc
 
 ## Tutorials
 
-### [No-Fly-List Python app][no-fly-app]
+### [Run Your First Enclave][first]
+
+Build and run your first enclave. All you need is a new EC2 machine and we'll walk through everything else.
+
+### [No-Fly-List Python + KMS app][no-fly-app]
 
 Deploy the No-Fly-List app, which checks passengers attempting to fly on an airline against a no-fly list. It’s a fairly simple Python application that requires protection “in-use” for its data, because we don’t want anyone to be able to see the full no-fly list.
 
@@ -36,6 +40,7 @@ This guide is model for running off-the-shelf or commercial software in an encla
 
 Straightforward guide to getting started with Enclaver on AWS with EC2 machines that are enabled to run Nitro Enclaves.
 
+[first]: guide-first.md
 [no-fly-app]: guide-app.md
 [vault]: guide-vault.md
 [aws]: deploy-aws.md
