@@ -2,6 +2,8 @@
 
 Enclaver is an open source toolkit created to enable easy adoption of software enclaves, for new and existing backend software.
 
+<a href="https://discord.gg/a5CvXkNWYF"><img src="docs/img/edgebit-discord.svg" height="30" /></a>
+
 Enclaves provide several critical features for operating software which processes sensitive data, including:
 
  - **Isolation:** Enclaves enable a deny-by-default approach to accessing process memory. Software running in an enclave can expose interfaces for accessing specific data, while disallowing humans or other software on the same computer from reading arbitrary data from memory.
