@@ -1,5 +1,5 @@
 ---
-title: "Running a Python App"
+title: "Running a Python + KMS App"
 layout: docs-enclaver-single
 category: guides
 ---

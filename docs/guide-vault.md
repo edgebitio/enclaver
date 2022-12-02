@@ -327,7 +327,7 @@ Let's review what we accomplished. We have an instance of Vault that can automat
 
 This example walked through running an entire application in an enclave. Next, experiement with running a specific microservice or a security-centric function within an enclave.
 
-Check out the [example Python app](guide-app.md) for a walkthrough.
+Check out the [example Python + KMS app](guide-app.md) for a walkthrough.
 
 [deploy-aws]: deploy-aws.md
 [manifest]: manifest.md
