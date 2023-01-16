@@ -20,9 +20,9 @@ name = "enclaver"
 anyhow = { version = "1.0", features = ["std"] }
 lazy_static = "1.4"
 regex = "1.6"
-tokio = { version = "1.20", features = ["full"] }
+tokio = { version = "1.24.1", features = ["full"] }
 tokio-pipe = "0.2"
-tokio-vsock = { git = "https://github.com/eyakubovich/tokio-vsock.git", rev = "5ac66443f1dcbe2658440ade78b7a42406e8c019", optional = true }
+tokio-vsock = { version = "0.4", optional = true }
 tokio-rustls = { version = "0.23", features = ["dangerous_configuration"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 tokio-tar = "0.3"
