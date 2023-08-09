@@ -63,7 +63,7 @@ aws-sigv4 = "0.49"
 rsa = "0.7"
 pkcs8 = { version = "0.9", features = ["pem"] }
 zeroize = "1.5.7"
-asn1-rs = { git = "https://github.com/rusticata/asn1-rs.git", rev = "bc877237161cde337bfa442b5654af8701fb1d59", features = ["std"] }
+asn1-rs = "0.5.2"
 cbc = { version = "0.1", features = [ "std", "block-padding" ] }
 aes = "0.8"
 sha2 = "0.10"
