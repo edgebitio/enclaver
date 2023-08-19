@@ -36,6 +36,6 @@ async fn lo_up() -> Result<()> {
 
 fn seed_rng(nsm: &Nsm) -> Result<()> {
     let seed = nsm.get_random()?;
-    std::fs::write(&DEV_RANDOM, seed)?;
+    std::fs::write(DEV_RANDOM, seed)?;
     Ok(())
 }

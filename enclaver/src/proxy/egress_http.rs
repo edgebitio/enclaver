@@ -61,8 +61,8 @@ struct ConnectRequest {
 impl ConnectRequest {
     fn new(host: String, port: u16) -> Self {
         Self {
-            host: host,
-            port: port,
+            host,
+            port,
         }
     }
 }
@@ -456,7 +456,7 @@ mod tests {
             _ = pretty_env_logger::try_init();
 
             return Self {
-                base_port: base_port,
+                base_port,
                 enclave_proxy_task: start_enclave_proxy(base_port, base_port as u32).await,
                 host_proxy_task: start_host_proxy(base_port as u32),
                 echo_task: start_echo_server(base_port + 1, use_tls),
@@ -519,7 +519,7 @@ mod tests {
 
         // Connection failure
         let resp2 = client
-            .post(format!("http://adfadfadfadfadsfa.local/echo"))
+            .post("http://adfadfadfadfadsfa.local/echo".to_string())
             .body(expected.clone())
             .send()
             .await
@@ -558,7 +558,7 @@ mod tests {
 
         // Connection failure
         let resp_result = client
-            .post(format!("https://adfadfadfadfadsfa.local/echo"))
+            .post("https://adfadfadfadfadsfa.local/echo".to_string())
             .body(expected.clone())
             .send()
             .await;

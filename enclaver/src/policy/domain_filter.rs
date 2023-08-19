@@ -148,13 +148,13 @@ mod tests {
         for tc in &cases {
             let pat = Pattern::new(tc.pattern);
 
-            let pos = tc.positives.iter().map(|d| Domain::new(*d));
+            let pos = tc.positives.iter().map(|d| Domain::new(d));
 
             for d in pos {
                 assert!(pat.matches(&d));
             }
 
-            let neg = tc.negatives.iter().map(|d| Domain::new(*d));
+            let neg = tc.negatives.iter().map(|d| Domain::new(d));
 
             for d in neg {
                 assert!(!pat.matches(&d));

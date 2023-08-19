@@ -17,7 +17,7 @@ fn load_keys(path: &Path) -> Result<Vec<PrivateKey>> {
     let mut key_bufs = rustls_pemfile::pkcs8_private_keys(&mut BufReader::new(File::open(path)?))
         .map_err(|_| anyhow!("invalid key"))?;
 
-    let keys: Vec<PrivateKey> = key_bufs.drain(..).map(|buf| PrivateKey(buf)).collect();
+    let keys: Vec<PrivateKey> = key_bufs.drain(..).map(PrivateKey).collect();
 
     info!("Loaded {} TLS keys", keys.len());
 

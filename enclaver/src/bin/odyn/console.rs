@@ -19,7 +19,7 @@ struct LogCursor {
 
 impl LogCursor {
     fn new() -> Self {
-        return Self { pos: 0usize };
+        Self { pos: 0usize }
     }
 }
 
@@ -130,7 +130,7 @@ fn new_app_log() -> Result<(LogWriter, LogServicer, LogReader)> {
         log: log.clone(),
     };
 
-    let lr = LogReader { log: log };
+    let lr = LogReader { log };
 
     Ok((lw, ls, lr))
 }

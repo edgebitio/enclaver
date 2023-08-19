@@ -71,9 +71,9 @@ struct AttestationRequest {
 impl AttestationRequest {
     fn into_params(self) -> Result<AttestationParams> {
         Ok(AttestationParams {
-            nonce: self.nonce.map(|s| base64::decode(&s)).transpose()?,
+            nonce: self.nonce.map(base64::decode).transpose()?,
             public_key: self.public_key.map(|s| pem_decode(&s)).transpose()?,
-            user_data: self.user_data.map(|s| base64::decode(&s)).transpose()?,
+            user_data: self.user_data.map(base64::decode).transpose()?,
         })
     }
 }
