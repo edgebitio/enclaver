@@ -772,6 +772,7 @@ dependencies = [
  "http-body",
  "hyper",
  "hyper-proxy",
+ "ignore-result",
  "ipnetwork",
  "json",
  "lazy_static",
@@ -1231,6 +1232,12 @@ dependencies = [
  "unicode-bidi",
  "unicode-normalization",
 ]
+
+[[package]]
+name = "ignore-result"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "665ff4dce8edd10d490641ccb78949832f1ddbff02c584fb1f85ab888fe0e50c"
 
 [[package]]
 name = "indexmap"
