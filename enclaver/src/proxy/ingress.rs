@@ -90,7 +90,7 @@ impl HostProxy {
         while let Ok((sock, _)) = self.listener.accept().await {
             // TODO: don't use detached tasks
             tokio::task::spawn(async move {
-                HostProxy::service_conn(sock, target_cid, target_port).await;;
+                HostProxy::service_conn(sock, target_cid, target_port).await;
             });
         }
     }

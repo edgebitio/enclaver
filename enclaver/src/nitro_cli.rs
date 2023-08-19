@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use log::debug;
 use serde::{Deserialize, Serialize};
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use tokio::process::{ChildStdout, Command};
 
@@ -68,7 +68,7 @@ impl NitroCLI {
         }
     }
 
-    pub async fn describe_eif(&self, eif_path: &PathBuf) -> Result<EIFInfo> {
+    pub async fn describe_eif(&self, eif_path: &Path) -> Result<EIFInfo> {
         self.run_and_deserialize_output(DescribeEifArgs {
             eif_path: eif_path.to_path_buf(),
         })
