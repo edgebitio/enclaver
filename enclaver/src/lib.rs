@@ -1,3 +1,5 @@
+#![allow(clippy::new_without_default)]
+
 extern crate core;
 
 pub mod build;
