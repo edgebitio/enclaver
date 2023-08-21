@@ -100,7 +100,7 @@ async fn run(args: Cli) -> Result<()> {
             println!("EIF Info:");
 
             stdout().write_all(&eif_info_bytes).await?;
-            println!();
+            println!();;
 
             Ok(())
         }
