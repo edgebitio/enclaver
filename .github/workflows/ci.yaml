@@ -2,6 +2,9 @@ name: CI
 
 on: [push, pull_request]
 
+permissions:
+    checks: write
+
 env:
   RUSTFLAGS: "-Dwarnings"
 
@@ -18,14 +21,16 @@ jobs:
       - run: rustup component add clippy
 
       # Check with --all-features (ie a Linux build)
-      - uses: actions-rs/clippy@master
+      - uses: actions-rs/clippy-check@v1.0.7
         with:
           args: --all-features --manifest-path enclaver/Cargo.toml
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       # Check with only default features (ie a Mac build)
-      - uses: actions-rs/clippy@master
+      - uses: actions-rs/clippy-check@v1.0.7
         with:
           args: --manifest-path enclaver/Cargo.toml
+          token: ${{ secrets.GITHUB_TOKEN }}
 
 
   ## TODO: Add test job here?
