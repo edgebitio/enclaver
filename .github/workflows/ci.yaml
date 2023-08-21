@@ -9,7 +9,7 @@ env:
   RUSTFLAGS: "-Dwarnings"
 
 jobs:
-  clippy-check:
+  clippy:
     runs-on: ubuntu-latest
 
     steps:
