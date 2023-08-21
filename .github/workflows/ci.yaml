@@ -2,6 +2,9 @@ name: CI
 
 on: [push, pull_request]
 
+env:
+  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse"
+
 jobs:
   clippy-check:
     runs-on: ubuntu-latest
