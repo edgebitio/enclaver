@@ -34,7 +34,7 @@ pub struct ContentInfo<'a> {
 
 impl<'a> ContentInfo<'a> {
     pub fn parse_ber(ber: &'a [u8]) -> Result<Self> {
-        let (rem, ci) = Self::from_ber(&ber)?;
+        let (rem, ci) = Self::from_ber(ber)?;
 
         if !rem.is_empty() {
             return Err(anyhow!(
@@ -62,10 +62,10 @@ impl<'a> ContentInfo<'a> {
 
     pub fn decrypt_content(&self, priv_key: &RsaPrivateKey) -> Result<Vec<u8>> {
         let datakey = self.decrypt_key(priv_key)?;
-        Ok(self
+        self
             .content
             .encrypted_content_info
-            .decrypt_content(&datakey)?)
+            .decrypt_content(&datakey)
     }
 
     fn decrypt_key(&self, priv_key: &RsaPrivateKey) -> Result<Vec<u8>> {

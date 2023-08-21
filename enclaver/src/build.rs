@@ -350,7 +350,7 @@ impl EnclaveArtifactBuilder {
         }
 
         // If we make it this far, do a little bit of cleanup
-        let _ = self
+        self
             .docker
             .remove_container(&build_container_id, None)
             .await?;

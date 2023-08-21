@@ -8,10 +8,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v1
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly-2022-10-24
-          components: clippy
+
+      # Install the MSRV toolchain and clippy
+      - run: sed -n 's/^rust-version = "\(.*\)"$/RUSTUP_TOOLCHAIN=\1/p' enclaver/Cargo.toml >> $GITHUB_ENV
+      - run: rustup toolchain install $RUSTUP_TOOLCHAIN
+      - run: rustup component add clippy
 
       # Check with --all-features (ie a Linux build)
       - uses: actions-rs/clippy@master

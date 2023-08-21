@@ -46,7 +46,7 @@ impl Nsm {
     fn process_request(&self, req: Request) -> Result<Response> {
         match aws_nitro_enclaves_nsm_api::driver::nsm_process_request(self.fd, req) {
             Response::Error(err) => Err(anyhow!("nsm request failed with: {:?}", err)),
-            resp @ _ => Ok(resp),
+            resp => Ok(resp),
         }
     }
 }

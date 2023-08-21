@@ -119,14 +119,12 @@ impl KmsRequestIncoming {
     }
 
     fn is_attesting_action(&self) -> bool {
-        if self.head.method == Method::POST {
-            if self.head.uri.path() == "/" {
-                if let Some(target) = self.target() {
-                    let action = target.to_str().unwrap();
-                    return ATTESTING_ACTIONS
-                        .iter()
-                        .any(|a| a.eq_ignore_ascii_case(action));
-                }
+        if self.head.method == Method::POST && self.head.uri.path() == "/" {
+            if let Some(target) = self.target() {
+                let action = target.to_str().unwrap();
+                return ATTESTING_ACTIONS
+                    .iter()
+                    .any(|a| a.eq_ignore_ascii_case(action));
             }
         }
 
@@ -191,22 +189,22 @@ impl KmsRequestOutgoing {
             .time(SystemTime::now())
             .settings(signing_settings);
 
-        if let Some(ref token) = credentials.session_token() {
+        if let Some(token) = credentials.session_token() {
             signing_builder = signing_builder.security_token(token);
         }
 
         let signing_params = signing_builder.build()?;
 
         let signable_request = SignableRequest::new(
-            &self.inner.method(),
-            &self.inner.uri(),
-            &self.inner.headers(),
-            SignableBody::Bytes(&self.inner.body()),
+            self.inner.method(),
+            self.inner.uri(),
+            self.inner.headers(),
+            SignableBody::Bytes(self.inner.body()),
         );
 
         // Sign and then apply the signature to the request
         let signed = aws_sigv4::http_request::sign(signable_request, &signing_params)
-            .map_err(|e| Error::msg(e))?;
+            .map_err(Error::msg)?;
 
         let (signing_instructions, _signature) = signed.into_parts();
         signing_instructions.apply_to_request(&mut self.inner);
@@ -321,7 +319,7 @@ impl KmsProxyHandler {
             let ciphertext = base64::decode(b64ciphertext)?;
             let plaintext = self.decrypt_cms(&ciphertext)?;
 
-            body_obj["Plaintext"] = json::JsonValue::String(base64::encode(&plaintext));
+            body_obj["Plaintext"] = json::JsonValue::String(base64::encode(plaintext));
             Ok(json_response(head, JsonValue::Object(body_obj)))
         } else {
             Err(anyhow!("The response body is not a JSON object"))
@@ -348,7 +346,7 @@ impl KmsProxyHandler {
 
     fn decrypt_cms(&self, cms: &[u8]) -> Result<Vec<u8>> {
         let content_info = super::pkcs7::ContentInfo::parse_ber(cms)?;
-        Ok(content_info.decrypt_content(&self.config.keypair.private)?)
+        content_info.decrypt_content(&self.config.keypair.private)
     }
 }
 
@@ -393,7 +391,7 @@ where
 }
 
 fn body_from_slice(bytes: &[u8]) -> Body {
-    Body::from(Bytes::copy_from_slice(&bytes))
+    Body::from(Bytes::copy_from_slice(bytes))
 }
 
 fn json_body(json_val: JsonValue) -> Body {
@@ -402,7 +400,7 @@ fn json_body(json_val: JsonValue) -> Body {
 }
 
 fn bytes_response(head: http::response::Parts, body: &[u8]) -> Response<Body> {
-    Response::from_parts(head, body_from_slice(&body))
+    Response::from_parts(head, body_from_slice(body))
 }
 
 fn json_response(head: http::response::Parts, json_val: JsonValue) -> Response<Body> {
