@@ -1,6 +1,7 @@
 use anyhow::Result;
 use circbuf::CircBuf;
 use futures::Stream;
+use ignore_result::Ignore;
 use std::os::unix::io::AsRawFd;
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -47,7 +48,7 @@ impl ByteLog {
         let avail = self.buffer.avail();
         if avail < data.len() {
             trim_cnt = data.len() - avail;
-            self.buffer.advance_read(trim_cnt);
+            self.buffer.advance_read(trim_cnt).ignore();
             self.head += trim_cnt;
         }
         assert!(self.buffer.avail() >= data.len());

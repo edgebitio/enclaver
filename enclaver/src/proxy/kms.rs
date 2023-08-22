@@ -19,7 +19,7 @@ use crate::http_util::HttpHandler;
 use crate::keypair::KeyPair;
 use crate::nsm::{AttestationParams, AttestationProvider};
 
-const X_AMZ_TARGET: HeaderName = HeaderName::from_static("x-amz-target");
+static X_AMZ_TARGET: HeaderName = HeaderName::from_static("x-amz-target");
 
 static X_AMZ_JSON: HeaderValue = HeaderValue::from_static("application/x-amz-json-1.1");
 
@@ -107,7 +107,7 @@ impl KmsRequestIncoming {
     }
 
     fn target(&self) -> Option<&HeaderValue> {
-        self.head.headers.get(X_AMZ_TARGET)
+        self.head.headers.get(&X_AMZ_TARGET)
     }
 
     fn content_type(&self) -> &HeaderValue {
@@ -131,7 +131,7 @@ impl KmsRequestIncoming {
         false
     }
 
-    fn credential_scope<'a>(&'a self) -> Result<CredentialScope> {
+    fn credential_scope(&self) -> Result<CredentialScope> {
         CredentialScope::from_request(&self.head)
     }
 }
@@ -153,7 +153,7 @@ impl KmsRequestOutgoing {
         let inner = Request::builder()
             .method(Method::POST)
             .uri(uri)
-            .header(X_AMZ_TARGET, action)
+            .header(&X_AMZ_TARGET, action)
             .header(hyper::header::CONTENT_TYPE, &X_AMZ_JSON)
             .body(body_bytes)?;
 
@@ -172,7 +172,7 @@ impl KmsRequestOutgoing {
         let inner = Request::builder()
             .method(req_in.method())
             .uri(uri)
-            .header(X_AMZ_TARGET, action)
+            .header(&X_AMZ_TARGET, action)
             .header(hyper::header::CONTENT_TYPE, req_in.content_type())
             .body(req_in.body)?;
 

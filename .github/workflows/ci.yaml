@@ -4,10 +4,14 @@ on: [push, pull_request]
 
 env:
   CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse"
+  RUSTFLAGS: "-Dwarnings"
 
 jobs:
   clippy-check:
     runs-on: ubuntu-latest
+
+    permissions:
+      checks: write
 
     steps:
       - uses: actions/checkout@v1
@@ -18,14 +22,16 @@ jobs:
       - run: rustup component add clippy
 
       # Check with --all-features (ie a Linux build)
-      - uses: actions-rs/clippy@master
+      - uses: actions-rs/clippy-check@v1.0.7
         with:
           args: --all-features --manifest-path enclaver/Cargo.toml
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       # Check with only default features (ie a Mac build)
-      - uses: actions-rs/clippy@master
+      - uses: actions-rs/clippy-check@v1.0.7
         with:
           args: --manifest-path enclaver/Cargo.toml
+          token: ${{ secrets.GITHUB_TOKEN }}
 
 
   ## TODO: Add test job here?

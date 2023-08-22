@@ -68,6 +68,7 @@ asn1-rs = "0.5.2"
 cbc = { version = "0.1", features = [ "std", "block-padding" ] }
 aes = "0.8"
 sha2 = "0.10"
+ignore-result = "0.2.0"
 
 
 [dev-dependencies]
