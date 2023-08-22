@@ -19,53 +19,52 @@ See [the Deploying on AWS](deploy-aws.md) for more details and an example CloudF
 
 First, SSH to your EC2 machine:
 
-```sh
+```console
 $ ssh ec2-user@<ip address>
 ```
 
 Install the Nitro Enclave packages:
 
-```
-$ sudo amazon-linux-extras install aws-nitro-enclaves-cli -y
-$ sudo yum install aws-nitro-enclaves-cli-devel git -y
+```console
+$ sudo amazon-linux-extras install --assumeyes aws-nitro-enclaves-cli
+$ sudo yum install --assumeyes aws-nitro-enclaves-cli-devel git
 ```
 
 Configure the resources to dedicate to your enclaves:
 
-```
-$ sudo sed -i 's/memory_mib: 512/memory_mib: 3072/g' /etc/nitro_enclaves/allocator.yaml
-$ sudo systemctl start nitro-enclaves-allocator.service && sudo systemctl enable nitro-enclaves-allocator.service
-$ sudo systemctl start docker && sudo systemctl enable docker
+```console
+$ sudo sed --in-place 's/memory_mib: 512/memory_mib: 3072/g' /etc/nitro_enclaves/allocator.yaml
+$ sudo systemctl enable --now nitro-enclaves-allocator.service
+$ sudo systemctl enable --now docker
 ```
 
 Clone Enclaver, which contains the example app code:
 
-```sh
+```console
 $ git clone https://github.com/edgebitio/enclaver
 ```
 
 Download the latest Enclaver binary:
 
-```sh
-$ curl -sL $(curl -s https://api.github.com/repos/edgebitio/enclaver/releases/latest | jq -r '.assets[] | select(.name|match("^enclaver-linux-x86_64(.*)tar.gz$")) | .browser_download_url') --output enclaver.tar.gz
-$ tar -xvf enclaver.tar.gz
-$ chmod +x enclaver-linux-x86_64-v0.2.0/enclaver
-$ sudo cp enclaver-linux-x86_64-v0.2.0/enclaver /usr/bin/enclaver
+```console
+$ curl --silent --location $(curl -s https://api.github.com/repos/edgebitio/enclaver/releases/latest | jq --raw-output ".assets[] | select(.name|match(\"^enclaver-linux-x86_64(.*)tar.gz$\")) | .browser_download_url") --output enclaver.tar.gz
+$ tar --extract --verbose --file enclaver.tar.gz
+$ sudo install enclaver-linux-$(uname -m)-v0.2.0/enclaver /usr/bin
 ```
 
 ## Build the App
 
 Enclaver uses a source "app" container image and transforms that image into an enclave image. Build the source app:
 
-```sh
+```console
 $ cd enclaver/example
-$ sudo docker build -t app .
+$ sudo docker build --tag app .
 ```
 
 This app echos a string back to you with each HTTP request:
 
-```sh
-$ sudo docker run --rm -d --name app -p 8000:8000 app
+```console
+$ sudo docker run --rm --detach --name app --publish 8000:8000 app
 $ curl localhost:8000
 Hello World!
 $ sudo docker stop app
@@ -91,7 +90,7 @@ ingress:
 
 Build our enclave image:
 
-```sh
+```console
 $ sudo enclaver build --file enclaver.yaml
 ```
 
@@ -99,20 +98,20 @@ $ sudo enclaver build --file enclaver.yaml
 
 Run your enclave image by referencing it by it's given `target` name:
 
-```sh
-$ sudo enclaver run -p 8000:8000 enclave:latest
+```console
+$ sudo enclaver run --publish 8000:8000 enclave:latest
 ```
 
 Open a new shell and send a request to the service:
 
-```sh
+```console
 $ curl localhost:8000
 Hello World!
 ```
 
 In your first shell you should see that the enclave received the request:
 
-```
+```console
  INFO  enclave         > Example app listening on port 8000
  INFO  enclave         > Request received!
 ```
