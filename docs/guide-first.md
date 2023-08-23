@@ -38,12 +38,6 @@ $ sudo systemctl enable --now nitro-enclaves-allocator.service
 $ sudo systemctl enable --now docker
 ```
 
-Clone Enclaver, which contains the example app code:
-
-```console
-$ git clone https://github.com/edgebitio/enclaver
-```
-
 Download the latest Enclaver binary:
 
 ```console
@@ -53,6 +47,12 @@ $ sudo install enclaver-linux-$(uname -m)-v0.2.0/enclaver /usr/bin
 ```
 
 ## Build the App
+
+Clone Enclaver, which contains the example app code:
+
+```console
+$ git clone https://github.com/edgebitio/enclaver
+```
 
 Enclaver uses a source "app" container image and transforms that image into an enclave image. Build the source app:
 
