@@ -26,8 +26,7 @@ $ ssh ec2-user@<ip address>
 Install the Nitro Enclave packages:
 
 ```console
-$ sudo amazon-linux-extras install --assumeyes aws-nitro-enclaves-cli
-$ sudo yum install --assumeyes aws-nitro-enclaves-cli-devel git
+$ sudo yum install --assumeyes aws-nitro-enclaves-cli aws-nitro-enclaves-cli-devel git
 ```
 
 Configure the resources to dedicate to your enclaves:
