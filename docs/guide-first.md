@@ -42,7 +42,7 @@ Download the latest Enclaver binary:
 ```console
 $ curl --silent --location $(curl -s https://api.github.com/repos/edgebitio/enclaver/releases/latest | jq --raw-output ".assets[] | select(.name|match(\"^enclaver-linux-$(uname -m)-(.*)tar.gz$\")) | .browser_download_url") --output enclaver.tar.gz
 $ tar --extract --verbose --file enclaver.tar.gz
-$ sudo install enclaver-linux-$(uname -m)-v0.2.0/enclaver /usr/bin
+$ sudo install enclaver-linux-$(uname -m)-v*/enclaver /usr/bin
 ```
 
 ## Build the App
