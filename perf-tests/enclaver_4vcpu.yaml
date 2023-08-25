@@ -1,0 +1,13 @@
+version: v1
+name: "4vcpu"
+target: "enclave_image_4vcpu"
+sources:
+  app: "docker-go"
+defaults:
+  memory_mb: 3000
+  cpu_count: 4
+egress:
+  allow:
+   - "**"
+ingress:
+  -  listen_port: 8082
