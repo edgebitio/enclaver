@@ -79,6 +79,6 @@ aws-types = { version = "0.49", features = ["hardcoded-credentials"] }
 
 [features]
 run_enclave = ["proxy"]
-odyn = ["vsock"]
+odyn = ["vsock", "proxy"]
 proxy = ["vsock"]
 vsock = ["dep:tokio-vsock", "dep:rtnetlink"]
