@@ -17,7 +17,7 @@ can be distributed and run using existing container registries, Docker, Kubernet
 
 ## Build
 
-```sh
+```console
 $ enclaver build [options]
 ```
 
@@ -31,7 +31,7 @@ Builds an OCI container image in [Enclaver image format][format] containing the 
 
 ## Run
 
-```sh
+```console
 $ enclaver run [OPTIONS] [image]
 ```
 
@@ -40,9 +40,7 @@ Run a packaged Enclaver container image without typing long Docker commands.
 This command is a convenience utility that runs a pre-existing Enclaver image in the local Docker
 Daemon. It is equivalent to running the image with Docker, and passing:
 
-```sh
     --device=/dev/nitro_enclaves:/dev/nitro_enclaves:rwm
-```
 
 Requires a local Docker Daemon to be running, and that this computer is an AWS instance configured
 to support Nitro Enclaves.

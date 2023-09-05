@@ -95,7 +95,7 @@ Due to Amazon restrictions, each EC2 machine can only run a single enclave at a 
 
 The CloudFormation will label your Nodes with `edgebit.io/enclave=nitro` so that your Deployment can target the qualified Nodes.
 
-```sh
+```console
 $ kubectl get nodes --selector=edgebit.io/enclave=nitro
 NAME                            STATUS   ROLES    AGE     VERSION
 ip-172-31-37-102.ec2.internal   Ready    <none>   5m      v1.23.9-eks-ba74326
@@ -110,19 +110,19 @@ You may also Taint your Nodes so other workloads don't land on it, but in most c
 
 Submit the sample enclave application to the cluster ([download here][k8s-deployment]):
 
-```sh
+```console
 $ kubectl create -f example-enclave.yaml
 ```
 
 The example app answers web requests on port 8001. You can make a Service and Load Balancer to address all of the Pods, or for a simple test, port-forward to the Pod:
 
-```sh
+```console
 $ kubectl port-forward <podname> 8001:8001
 ```
 
 Then send a request to the forward port, which will be answered from within the enclave:
 
-```sh
+```console
 $ curl localhost:8001
 "https://edgebit.io/enclaver/docs/0.x/guide-app/"
 ```
@@ -136,7 +136,7 @@ Jump over to the [simple Python app][app] guide (the URL printed above) that exp
 
 If your pods are pending, check that hugepages is enabled on your Nodes. Here's what the status block of a pending Node looks like:
 
-```sh
+```console
 $ kubectl get pods/example-enclave-5fbddb6cc8-nspgw -o yaml
 ...
 status:
@@ -153,7 +153,7 @@ status:
 
 Check that Kubernetes is reading the available hugepages by looking at one of your Nitro Enclave Nodes. Here you can see that `hugepages-1Gi` has capacity for `3Gi`. If your Node is not configured correctly, you might see a `0` for both hugepages entries.
 
-```sh
+```console
 $ kubectl get nodes/ip-172-31-37-102.ec2.internal -o yaml
 ...
   allocatable:

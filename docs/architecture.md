@@ -28,7 +28,7 @@ These use-cases directly map to `enclaver` commands. Refer to the [full list of 
 
 In this example, our manifest file contains the source app container `edgebit-containers/containers/no-fly-list` (see [sample Python app][app-guide]) and the resulting enclave image is saved as `no-fly-list:enclave-latest`:
 
-```sh
+```console
 $ enclaver build --file enclaver.yaml
  INFO  enclaver::images > latest: Pulling from edgebit-containers/containers/no-fly-list
  INFO  enclaver::images > latest: Pulling from edgebit-containers/containers/odyn
@@ -66,7 +66,7 @@ Images built by Enclaver can be run using Docker, or another container runtime. 
 
 All of this happens transparently to you, so the experience you get is very close to running the app outside of an enclave:
 
-```sh
+```console
 $ enclaver run no-fly-list:enclave-latest -p 8001:8001
  INFO  enclaver::run   > starting egress proxy on vsock port 17002
  INFO  enclaver::vsock > Listening on vsock port 17002
@@ -122,7 +122,7 @@ To minimize the attack surface of enclave applications, it is not possible to pa
 <details>
     <summary>TODO: Implement enclaver trust command. See [issue #38](https://github.com/edgebitio/enclaver/issues/38).</summary>
 
-```sh
+```console
 $ enclaver trust registry.example.com/my-app:v1.0
 {
   "Measurements": {

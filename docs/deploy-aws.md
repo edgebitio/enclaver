@@ -25,21 +25,21 @@ The example CloudFormation increases the allowed hops for the Instance Metadata 
 
 First, install the Nitro Enclave packages:
 
-```
+```console
 $ amazon-linux-extras install aws-nitro-enclaves-cli
 $ yum install aws-nitro-enclaves-cli-devel -y
 ```
 
 Then, give your user access to the Nitro Enclaves and Docker groups:
 
-```
+```console
 $ usermod -aG ne ec2-user
 $ usermod -aG docker ec2-user
 ```
 
 Last, configure the resources to dedicate to your enclaves:
 
-```
+```console
 $ sed -i 's/cpu_count: 2/cpu_count: 1/g' /etc/nitro_enclaves/allocator.yaml
 $ sed -i 's/memory_mib: 512/memory_mib: 3072/g' /etc/nitro_enclaves/allocator.yaml
 $ systemctl start nitro-enclaves-allocator.service && sudo systemctl enable nitro-enclaves-allocator.service
@@ -83,7 +83,7 @@ WantedBy=multi-user.target
 
 Be sure to swap out `registry.edgebit.io/no-fly-list:enclave-latest` for your image location. Afterwards, start the unit and enable the unit so it starts again after a reboot:
 
-```sh
+```console
 $ systemctl start enclave.service && systemctl enable enclave.service
 ```
 
@@ -91,7 +91,7 @@ $ systemctl start enclave.service && systemctl enable enclave.service
 
 The example app answers web requests on port 8001 of the EC2 machine:
 
-```sh
+```console
 $ curl localhost:8001
 "https://edgebit.io/enclaver/docs/0.x/guide-app/"
 ```
