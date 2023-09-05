@@ -84,7 +84,7 @@ WantedBy=multi-user.target
 Be sure to swap out `registry.edgebit.io/no-fly-list:enclave-latest` for your image location. Afterwards, start the unit and enable the unit so it starts again after a reboot:
 
 ```console
-$ systemctl start enclave.service && systemctl enable enclave.service
+$ systemctl enable --now enclave.service
 ```
 
 ## Testing the Enclave
