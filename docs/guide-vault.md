@@ -25,7 +25,7 @@ For this example you’ll need an EC2 instance with support for Nitro Enclaves e
 
 After you've launched the CloudFormation stack, ssh onto the EC2 instance and clone the following git repo to get the files we'll be using in this guide:
 
-```sh
+```console
 $ sudo yum install git
 $ git clone https://github.com/edgebitio/vault.git
 $ cd vault
@@ -37,7 +37,7 @@ In this guide, we'll be using Consul as the storage backend for Vault. Since Vau
 
 If you don't have a Consul instance running, it's easy to start one using Docker. This command will run a Consul cluster of size one and the `DATA_DIR` environment variable is set to a directory for Consul to store its data.
 
-```sh
+```console
 $ docker run --rm -d --net=host \
     --name consul \
     -v $DATA_DIR:/consul/data \
@@ -76,13 +76,13 @@ To get started, create a new symmetric KMS key which we will use to encrypt the 
 
 Once the key is created, copy the KeyId (it's a UUID) and set `AWS_KEY_ID` environment variable to that value.
 
-```sh
+```console
 $ export AWS_KEY_ID=822bd842-ad07-4ca2-b8af-97fcd13fa670
 ```
 
 Also configure the region where your key is stored:
 
-```sh
+```console
 $ export AWS_DEFAULT_REGION="us-east-1"
 ```
 
@@ -92,7 +92,7 @@ In this guide, we'll generate a self-signed TLS certificate for Vault to use. If
 
 The `generate-cert.sh` script first generates a certificate for the provided hostname, eg `vault.local` and then encrypts the corresponding private key using the KMS key created above.
 
-```sh
+```console
 $ ./generate-cert.sh "vault.local" $AWS_KEY_ID
 ```
 
@@ -104,7 +104,7 @@ We'll make use of the official Vault Docker image but will layer in the bits to 
 
 The `Dockerfile` installs the AWS CLI, copies in the certificate and the key files, then installs a new entrypoint which performs the decryption before passing control to the original entrypoint.
 
-```sh
+```console
 $ docker build --build-arg AWS_KEY_ID --build-arg AWS_DEFAULT_REGION -t vault:enclave-src .
 ```
 
@@ -152,13 +152,13 @@ This allows an application, such as Vault, to take advantage of the attestation 
 
 Now, we’ll ask Enclaver to build a new container image using this policy:
 
-```sh
+```console
 $ enclaver build -f enclaver.yaml
 ```
 
 Once completed, it will output part of the [attestation][attestation] of the image, which are hashes ("measurements") that look like:
 
-```sh
+```
 EIF Info: EIFInfo {
     measurements: EIFMeasurements {
         pcr0: "bbd4eed4d2e87687ed2c802d49002f42b1ce7a3ee376252415fccf7460267b5ef60da3d651f940b20bd36364d9329a27",
@@ -194,45 +194,44 @@ Let's modify the policy to only allow the Vault enclave with the matching hash t
 
 3. Locate the "Allow use of the key" statement and remove the `kms:::Decrypt` action so the statement looks as follows:
 
-    ```
-    	{
-    		"Sid": "Allow use of the key",
-    		"Effect": "Allow",
-    		"Principal": {
-    			"AWS": [
-    				"arn:aws:iam::077296892761:user/eyakubovich",
-    				"arn:aws:iam::077296892761:role/Enclaver-Demo-DemoIAMRole-175IWIYZRKO8F"
-    			]
-    		},
-    		"Action": [
-    			"kms:Encrypt",
-    			"kms:ReEncrypt*",
-    			"kms:GenerateDataKey*",
-    			"kms:DescribeKey"
-    		],
-    		"Resource": "*"
-    	},
-    ```
+   ```json
+   {
+       "Sid": "Allow use of the key",
+       "Effect": "Allow",
+       "Principal": {
+           "AWS": [
+               "arn:aws:iam::077296892761:user/eyakubovich",
+               "arn:aws:iam::077296892761:role/Enclaver-Demo-DemoIAMRole-175IWIYZRKO8F"
+           ]
+       },
+       "Action": [
+           "kms:Encrypt",
+           "kms:ReEncrypt*",
+           "kms:GenerateDataKey*",
+           "kms:DescribeKey"
+       ],
+       "Resource": "*"
+   }
+   ```
 
 4. Add another statement that grants the `Decrypt` ability soley to the Vault image running inside the enclave:
 
-    ```
-    	{
-    		"Sid": "Allow decryption by Vault only",
-    		"Effect": "Allow",
-    		"Principal": {
-    			"AWS": "arn:aws:iam::077296892761:role/Enclaver-Demo-DemoIAMRole-175IWIYZRKO8F"
-    		},
-    		"Action": "kms:Decrypt",
-    		"Resource": "*",
-    		"Condition": {
-    			"StringEqualsIgnoreCase": {
-    				"kms:RecipientAttestation:PCR0": "bbd4eed4d2e87687ed2c802d49002f42b1ce7a3ee376252415fccf7460267b5ef60da3d651f940b20bd36364d9329a27"
-    			}
-    		}
-
-    	},
-    ```
+   ```json
+   {
+       "Sid": "Allow decryption by Vault only",
+       "Effect": "Allow",
+       "Principal": {
+           "AWS": "arn:aws:iam::077296892761:role/Enclaver-Demo-DemoIAMRole-175IWIYZRKO8F"
+       },
+       "Action": "kms:Decrypt",
+       "Resource": "*",
+       "Condition": {
+           "StringEqualsIgnoreCase": {
+               "kms:RecipientAttestation:PCR0": "bbd4eed4d2e87687ed2c802d49002f42b1ce7a3ee376252415fccf7460267b5ef60da3d651f940b20bd36364d9329a27"
+           }
+       }
+   }
+   ```
 
 Be sure to put in the PCR0 value that `enclaver build` printed at the end.
 
@@ -244,7 +243,7 @@ The result of the build step was a new Docker image named `vault:enclave`. Runni
 
 On your EC2 machine, start the enclave with Enclaver:
 
-```sh
+```console
 $ docker run --rm -it \
   --net=host \
   --name=vault \
@@ -254,9 +253,8 @@ $ docker run --rm -it \
 
 It's normal to see this failure towards the end, because we haven't initialized Vault yet.
 
-```
-failed to unseal core: error="stored unseal keys are supported, but none were found"
-```
+    failed to unseal core: error="stored unseal keys are supported, but none were found"
+
 
 *Note:* This used the interactive (vs detached) mode to run the container to easily see the logs. Once you've confirmed that everything look OK, you can restart the container in the detached (`-d`) mode.
 
@@ -266,7 +264,7 @@ Before the Vault can be used, it needs to be initialized. You can use the offici
 
 Since the Vault client needs to talk TLS with the Vault server, we need to be sure to mount the directory that contains the certificate.
 
-```sh
+```console
 $ docker run --rm -it --net=host \
   -v $(pwd):/opt/ \
   -e VAULT_ADDR=https://127.0.0.1:8200 \
@@ -276,14 +274,14 @@ $ docker run --rm -it --net=host \
 
 The output will contain the recovery keys and the initial root token. Save the token to the environment variable and create an alias to run Vault commands:
 
-```sh
+```console
 $ export VAULT_TOKEN=hvs.AGVp3Rc9AShUXGf3iJVnM2JP
 $ alias vault-cli="docker run --rm -it --net=host -v $(pwd):/opt/ -e VAULT_ADDR=https://127.0.0.1:8200 -e VAULT_CACERT=/opt/cert.pem -e VAULT_TOKEN=$VAULT_TOKEN vault:latest"
 ```
 
 Confirm that the vault has been initialized and unsealed:
 
-```sh
+```console
 $ vault-cli vault:latest status
 Key                      Value
 ---                      -----
@@ -309,15 +307,10 @@ You should be able to restart the Vault container now and use the status command
 
 Let's use the newly running Vault to store some key/value secrets.
 
-```sh
-# create secret
+```console
 $ vault-cli vault secrets enable -path=secret/ kv-v2
-$ echo 'path "secret/data/*" {
-    capabilities = ["create", "update", "read"]
-}' > policy.hcl
-# create policy
+$ echo 'path "secret/data/*" { capabilities = ["create", "update", "read"] }' > policy.hcl
 $ vault-cli vault policy write my-policy /opt/policy.hcl
-# save secret values
 $ vault-cli kv put -mount=secret creds username=john password=supersecret
 ```
 

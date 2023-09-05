@@ -11,7 +11,7 @@ Enclaver relies on a manifest file to understand how to transform your container
 
 The file is YAML formatted and passed to Enclaver via the `-f` flag. By default, Enclaver looks for `enclaver.yaml` in the current directory.
 
-```sh
+```console
 $ enclaver build -f enclaver.yaml
 ```
 

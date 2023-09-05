@@ -27,7 +27,7 @@ Here's an example of an attestation:
 
 TODO: Implement trust command. See [issue #38](https://github.com/edgebitio/enclaver/issues/38).
 
-```sh
+```console
 $ enclaver trust registry.edgebit.io/no-fly-list:enclave-latest
 TODO: add real attestation
 ```
@@ -129,7 +129,7 @@ It's pretty straightforward. The `sources.app` parameter specifies the source co
 
 We're passing in our manifest file from above to the build:
 
-```sh
+```console
 $ enclaver build --file enclaver.yaml
  INFO  enclaver::images > latest: Pulling from edgebit-containers/containers/no-fly-list
  INFO  enclaver::images > latest: Pulling from edgebit-containers/containers/odyn
@@ -153,7 +153,7 @@ EIF Info: EIFInfo {
 
 `enclaver run` executes on an EC2 machine to fetch, unpack and run your enclave image. First, SSH to your EC2 machine:
 
-```sh
+```console
 $ ssh ec2-user@<ip address>
 ```
 
@@ -163,7 +163,7 @@ After the image is fetched, it is broken apart into [the outside][outside] and [
 
 We will start it manually using Docker, but you can also set up a [systemd unit][unit].
 
-```sh
+```console
 $ docker run \
     --rm \
     --detach \
@@ -175,7 +175,7 @@ $ docker run \
 
 Check to see that the enclave was run successfully:
 
-```sh
+```console
 $ docker logs enclave
  INFO  enclaver::run   > starting egress proxy on vsock port 17002
  INFO  enclaver::vsock > Listening on vsock port 17002
@@ -212,7 +212,7 @@ Now the fun part. Let's see who can fly and who can't. Remember, a key part of t
 
 We know that members of Sesame Street might not be allowed to fly. Test it out for yourself from the EC2 machine:
 
-```sh
+```console
 $ curl localhost:8001/enclave/passenger?name=foo
 foo is cleared to fly. Enjoy your flight!
 ```

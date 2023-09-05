@@ -11,7 +11,7 @@ weight: 30
 
 By default, minimal logs are returned from the enclave, as a security precaution. The `--debug-mode` flag will enable debug mode on the enclave, and translate `/dev/console` output to log lines.
 
-```sh
+```console
 $ enclaver run --debug-mode
 ```
 
@@ -23,7 +23,7 @@ Enclaves running on x86 instances must have whole numbers of vCPUs, in multiples
 
 The minimum core count is 2. The following error appears to be about memory, but is actually due to 1 core being specified instead of 2.
 
-```sh
+```console
 $ enclaver run ...
 error: nitro-cli failed: Start allocating memory...
 ```
