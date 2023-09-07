@@ -25,6 +25,7 @@ wrapper_base_tag="enclaver-wrapper-base:latest"
 cd $enclaver_dir
 
 docker_build_dir=$(mktemp -d)
+trap "rm --force --recursive ${docker_build_dir}" EXIT
 
 cargo build --target $rust_target --all-features
 
