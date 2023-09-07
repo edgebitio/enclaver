@@ -1,0 +1,24 @@
+name: Generate an SBOM from source code
+
+on:
+  - pull_request
+
+jobs:
+  generate-sbom:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Download Syft
+        id: syft
+        uses: anchore/sbom-action/download-syft@v0.14.2
+
+      - name: Generate SBOM from source code
+        run: "${{ steps.syft.outputs.cmd }} --config .github/edgebit/source-syft.yaml --file /tmp/sbom.syft.json ."
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v3
+        with:
+          name: edgebit-sbom
+          path: /tmp/sbom.syft.json
