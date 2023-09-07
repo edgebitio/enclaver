@@ -54,20 +54,15 @@ enum CLISuccess {
 
 impl Termination for CLISuccess {
     fn report(self) -> ExitCode {
+        use CLISuccess::*;
+        use EnclaveExitStatus::*;
+
         match self {
-            CLISuccess::EnclaveStatus(EnclaveExitStatus::Exited(code)) => {
-                ExitCode::from(code as u8)
-            }
-            CLISuccess::EnclaveStatus(EnclaveExitStatus::Signaled(_signal)) => {
-                ExitCode::from(ENCLAVE_SIGNALED_EXIT_CODE)
-            }
-            CLISuccess::EnclaveStatus(EnclaveExitStatus::Fatal(_err)) => {
-                ExitCode::from(ENCLAVE_FATAL)
-            }
-            CLISuccess::EnclaveStatus(EnclaveExitStatus::Cancelled) => {
-                ExitCode::from(ENCLAVER_INTERRUPTED)
-            },
-            CLISuccess::Ok => ExitCode::SUCCESS,
+            EnclaveStatus(Exited(code)) => ExitCode::from(code as u8),
+            EnclaveStatus(Signaled(_signal)) => ExitCode::from(ENCLAVE_SIGNALED_EXIT_CODE),
+            EnclaveStatus(Fatal(_err)) => ExitCode::from(ENCLAVE_FATAL),
+            EnclaveStatus(Cancelled) => ExitCode::from(ENCLAVER_INTERRUPTED),
+            Ok => ExitCode::SUCCESS,
         }
     }
 }
