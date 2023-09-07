@@ -26,42 +26,76 @@ runs within the enclave and burns some CPU every time the endpoint
 
 [first-enclave]: ../docs/guide-first.md
 
-## JMeter setup
+## Test setup
 
-SSH into your machine and run the following commands
+Install the Apache HTTP server benchmarking tool (`ab`):
 
 ```console
-$ mkdir jmeter
-$ cd jmeter
-$ wget --quiet https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.5.tgz
-$ tar --extract --file apache-jmeter-5.5.tgz
-$ sudo yum install --assumeyes java-11-amazon-corretto-headless
+$ sudo yum install --assumeyes httpd-tools
 ```
 
 ## Running the tests
 
 [`run_enclave.sh`](run_enclave.sh) contains the commands to start the
 nitro enclave. The first argument specifies the number of vCPUs to use
-for the enclave (defaults to `4`). [`run_jmeter.sh`](run_jmeter.sh)
-runs the JMeter test suite and prints the summary of the results.
+for the enclave (defaults to `4`).
 
-The two scripts can be invoked in one line:
+After starting the enclave, run `ab` to benchmark the
+performance. This can be done in one line (with a delay to allow the
+enclave to start):
 
 ```console
-$ sudo ./run_enclave.sh && ./run_jmeter.sh
+$ sudo ./run_enclave.sh && sleep 5; ab -n 10000 -c 100 localhost:8082/busy
 ```
 
 ## Sample results
 
+The following test results were gathered on a c6a.2xlarge instance.
+
 With four vCPUs:
-```
-summary = 12000 in 00:00:42 = 283.7/s Avg: 155 Min: 12 Max: 2707 Err: 0 (0.00%)
+
+```console
+$ sudo ./run_enclave.sh 4 && sleep 5; ab -n 10000 -c 100 localhost:8082/busy
+...
+Concurrency Level:      100
+Time taken for tests:   2.841 seconds
+Complete requests:      10000
+Failed requests:        0
+Total transferred:      1470000 bytes
+HTML transferred:       300000 bytes
+Requests per second:    3520.03 [#/sec] (mean)
+Time per request:       28.409 [ms] (mean)
+Time per request:       0.284 [ms] (mean, across all concurrent requests)
+Transfer rate:          505.32 [Kbytes/sec] received
+
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:        0    1   0.8      0      11
+Processing:     1   28  24.6     24     292
+Waiting:        1   27  24.6     23     291
+Total:          1   28  24.7     24     293
 ```
 
 With two vCPUs:
-```
-summary = 12000 in 00:00:41 = 290.3/s Avg: 108 Min: 14 Max: 1755 Err: 0 (0.00%)
-```
 
-At the moment, there is no significant difference in TPS by increasing
-the number of vCPUs.
+```console
+$ sudo ./run_enclave.sh 2 && sleep 5; ab -n 10000 -c 100 localhost:8082/busy
+...
+Concurrency Level:      100
+Time taken for tests:   5.743 seconds
+Complete requests:      10000
+Failed requests:        0
+Total transferred:      1470000 bytes
+HTML transferred:       300000 bytes
+Requests per second:    1741.36 [#/sec] (mean)
+Time per request:       57.426 [ms] (mean)
+Time per request:       0.574 [ms] (mean, across all concurrent requests)
+Transfer rate:          249.98 [Kbytes/sec] received
+
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:        0    0   0.2      0       2
+Processing:     1   57  30.8     54     334
+Waiting:        1   57  30.6     54     334
+Total:          1   57  30.9     54     335
+```
