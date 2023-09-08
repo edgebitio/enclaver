@@ -27,7 +27,7 @@ cd $enclaver_dir
 docker_build_dir=$(mktemp -d)
 trap "rm --force --recursive ${docker_build_dir}" EXIT
 
-cargo build --target $rust_target --all-features
+cargo build --target $rust_target --features run_enclave,odyn
 
 cp $rust_target_dir/odyn $docker_build_dir/
 cp $rust_target_dir/enclaver-run $docker_build_dir/
