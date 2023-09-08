@@ -32,12 +32,12 @@ cargo build --target $rust_target --features run_enclave,odyn
 cp $rust_target_dir/odyn $docker_build_dir/
 cp $rust_target_dir/enclaver-run $docker_build_dir/
 
-docker build \
+docker buildx build \
 	-f ../build/dockerfiles/odyn-dev.dockerfile \
 	-t ${odyn_tag} \
 	${docker_build_dir}
 
-docker build \
+docker buildx build \
 	-f ../build/dockerfiles/runtimebase-dev.dockerfile \
 	-t ${wrapper_base_tag} \
 	${docker_build_dir}
