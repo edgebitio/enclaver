@@ -1,7 +1,7 @@
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::sync::Arc;
 
-use crate::vsock;
+use crate::{utils, vsock};
 use anyhow::Result;
 use futures::{Stream, StreamExt};
 use log::{debug, error};
@@ -53,9 +53,10 @@ where
         let mut incoming = Box::into_pin(self.incoming);
 
         while let Some(stream) = incoming.next().await {
-            tokio::task::spawn(async move {
+            utils::spawn!("ingress stream", async move {
                 EnclaveProxy::service_conn(stream, addr).await;
-            });
+            })
+            .expect("spawn ingress stream");
         }
     }
 
@@ -89,9 +90,10 @@ impl HostProxy {
     pub async fn serve(self, target_cid: u32, target_port: u32) {
         while let Ok((sock, _)) = self.listener.accept().await {
             // TODO: don't use detached tasks
-            tokio::task::spawn(async move {
+            utils::spawn!(&format!("host proxy ({target_port})"), async move {
                 HostProxy::service_conn(sock, target_cid, target_port).await;
-            });
+            })
+            .expect("spawn host proxy");
         }
     }
 

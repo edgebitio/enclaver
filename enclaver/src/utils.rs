@@ -9,6 +9,24 @@ use tokio_util::codec::{FramedRead, LinesCodec};
 
 const LOG_LINE_MAX_LEN: usize = 4 * 1024;
 
+#[cfg(feature = "tracing")]
+#[macro_export]
+macro_rules! spawn {
+    ($name:expr, $body:expr) => {{
+        tokio::task::Builder::new().name($name).spawn($body)
+    }};
+}
+
+#[cfg(not(feature = "tracing"))]
+#[macro_export]
+macro_rules! spawn {
+    ($name:expr, $body:expr) => {{
+        Result::<_, anyhow::Error>::Ok(tokio::task::spawn($body))
+    }};
+}
+
+pub use spawn;
+
 pub fn init_logging() {
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", "info");
@@ -54,12 +72,11 @@ pub async fn register_shutdown_signal_handler() -> Result<impl Future> {
     let mut sigint = signal(SignalKind::interrupt())?;
     let mut sigterm = signal(SignalKind::terminate())?;
 
-    let f = tokio::task::spawn(async move {
+    spawn!("signal handler", async move {
         tokio::select! {
             _ = sigint.recv() => (),
             _ = sigterm.recv() => (),
         }
-    });
-
-    Ok(f)
+    })
+    .map_err(Into::into)
 }

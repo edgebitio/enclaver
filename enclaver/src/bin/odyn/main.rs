@@ -101,6 +101,12 @@ async fn main() {
     enclaver::utils::init_logging();
     let args = CliArgs::parse();
 
+    #[cfg(feature = "tracing")]
+    console_subscriber::ConsoleLayer::builder()
+        .with_default_env()
+        .server_addr(([0, 0, 0, 0], 51000))
+        .init();
+
     if let Err(err) = run(&args).await {
         error!("Error: {err:#}");
         std::process::exit(1);

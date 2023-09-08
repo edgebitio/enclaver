@@ -160,5 +160,10 @@ async fn main() -> Result<()> {
 
     let args = Cli::parse();
 
+    #[cfg(feature = "tracing")]
+    console_subscriber::ConsoleLayer::builder()
+        .with_default_env()
+        .server_addr(([127, 0, 0, 1], 51002));
+
     run(args).await
 }

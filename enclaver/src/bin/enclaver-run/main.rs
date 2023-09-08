@@ -4,6 +4,7 @@ use enclaver::constants::{MANIFEST_FILE_NAME, RELEASE_BUNDLE_DIR, EIF_FILE_NAME}
 use enclaver::run::{Enclave, EnclaveExitStatus, EnclaveOpts};
 use enclaver::manifest::load_manifest_raw;
 use enclaver::nitro_cli::NitroCLI;
+use enclaver::utils;
 use log::info;
 use std::{
     path::PathBuf,
@@ -85,11 +86,11 @@ async fn run(args: Cli) -> Result<CLISuccess> {
     // enclave run.
     let cancel_task = {
         let cancellation = cancellation.clone();
-        tokio::task::spawn(async move {
+        utils::spawn!("shutdown handler", async move {
             shutdown_signal.await;
             cancellation.cancel();
             info!("shutdown signal received, terminating enclave");
-        })
+        })?
     };
 
     let status = enclave.run(cancellation).await?;
@@ -121,6 +122,12 @@ async fn describe_eif() -> Result<CLISuccess> {
 #[tokio::main]
 async fn main() -> Result<CLISuccess> {
     enclaver::utils::init_logging();
+
+    #[cfg(feature = "tracing")]
+    console_subscriber::ConsoleLayer::builder()
+        .with_default_env()
+        .server_addr(([0, 0, 0, 0], 51001))
+        .init();
 
     let args = Cli::parse();
 
