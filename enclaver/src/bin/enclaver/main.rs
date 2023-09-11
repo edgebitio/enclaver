@@ -13,6 +13,9 @@ use tokio::io::{stdout, AsyncWriteExt};
 struct Cli {
     #[clap(subcommand)]
     subcommand: Commands,
+
+    #[clap(long = "verbose", short = 'v', parse(from_occurrences))]
+    verbosity: u8,
 }
 
 #[derive(Debug, Subcommand)]
@@ -156,9 +159,9 @@ async fn run(args: Cli) -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    enclaver::utils::init_logging();
-
     let args = Cli::parse();
+    enclaver::utils::init_logging(args.verbosity);
+
 
     #[cfg(feature = "tracing")]
     console_subscriber::ConsoleLayer::builder()
