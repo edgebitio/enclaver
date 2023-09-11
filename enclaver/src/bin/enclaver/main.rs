@@ -28,8 +28,8 @@ enum Commands {
         /// Only build the EIF file, do not package it into a self-executing image.
         eif_file: Option<String>,
 
-        #[clap(long = "--pull")]
-        /// Pull any Docker images this depends on bef
+        #[clap(long = "pull")]
+        /// Pull every container image to ensure the latest version
         force_pull: bool,
     },
 
