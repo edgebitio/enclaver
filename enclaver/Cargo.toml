@@ -3,6 +3,7 @@ name = "enclaver"
 version = "0.2.0"
 edition = "2021"
 rust-version = "1.68"
+default-run = "enclaver"
 
 [[bin]]
 name = "odyn"
@@ -69,7 +70,7 @@ cbc = { version = "0.1", features = [ "std", "block-padding" ] }
 aes = "0.8"
 sha2 = "0.10"
 ignore-result = "0.2.0"
-
+console-subscriber = { version = "0.1.10", optional = true }
 
 [dev-dependencies]
 assert2 = "0.3"
@@ -82,3 +83,4 @@ run_enclave = ["proxy"]
 odyn = ["vsock", "proxy"]
 proxy = ["vsock"]
 vsock = ["dep:tokio-vsock", "dep:rtnetlink"]
+tracing = ["dep:console-subscriber", "tokio/tracing"]

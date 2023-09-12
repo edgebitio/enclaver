@@ -144,7 +144,7 @@ impl Enclave {
             self.attach_debug_console(&enclave_info.id).await?;
         }
 
-        self.start_odyn_log_stream(enclave_info.cid);
+        self.start_odyn_log_stream(enclave_info.cid)?;
 
         self.start_ingress_proxies(enclave_info.cid).await?;
 
@@ -188,9 +188,9 @@ impl Enclave {
             let listen_port = item.listen_port;
             info!("starting ingress proxy on port {listen_port}");
             let proxy = HostProxy::bind(listen_port).await?;
-            self.tasks.push(tokio::task::spawn(async move {
+            self.tasks.push(utils::spawn!("ingress proxy", async move {
                 proxy.serve(cid, listen_port.into()).await;
-            }))
+            })?)
         }
 
         Ok(())
@@ -206,15 +206,15 @@ impl Enclave {
 
         info!("starting egress proxy on vsock port {HTTP_EGRESS_VSOCK_PORT}");
         let proxy = HostHttpProxy::bind(HTTP_EGRESS_VSOCK_PORT)?;
-        self.tasks.push(tokio::task::spawn(async move {
+        self.tasks.push(utils::spawn!("egress proxy", async move {
             proxy.serve().await;
-        }));
+        })?);
 
         Ok(())
     }
 
-    fn start_odyn_log_stream(&mut self, cid: u32) {
-        self.tasks.push(tokio::task::spawn(async move {
+    fn start_odyn_log_stream(&mut self, cid: u32) -> Result<()> {
+        self.tasks.push(utils::spawn!("odyn log stream", async move {
             info!("waiting for enclave to boot to stream logs");
             let conn = loop {
                 match VsockStream::connect(cid, APP_LOG_PORT).await {
@@ -231,7 +231,9 @@ impl Enclave {
             if let Err(e) = utils::log_lines_from_stream("enclave", conn).await {
                 error!("error reading log lines from enclave: {e}");
             }
-        }));
+        })?);
+
+        Ok(())
     }
 
     async fn await_exit(cid: u32) -> Result<EnclaveExitStatus> {

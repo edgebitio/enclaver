@@ -4,6 +4,7 @@ use enclaver::constants::{MANIFEST_FILE_NAME, RELEASE_BUNDLE_DIR, EIF_FILE_NAME}
 use enclaver::run::{Enclave, EnclaveExitStatus, EnclaveOpts};
 use enclaver::manifest::load_manifest_raw;
 use enclaver::nitro_cli::NitroCLI;
+use enclaver::utils;
 use log::info;
 use std::{
     path::PathBuf,
@@ -54,20 +55,15 @@ enum CLISuccess {
 
 impl Termination for CLISuccess {
     fn report(self) -> ExitCode {
+        use CLISuccess::*;
+        use EnclaveExitStatus::*;
+
         match self {
-            CLISuccess::EnclaveStatus(EnclaveExitStatus::Exited(code)) => {
-                ExitCode::from(code as u8)
-            }
-            CLISuccess::EnclaveStatus(EnclaveExitStatus::Signaled(_signal)) => {
-                ExitCode::from(ENCLAVE_SIGNALED_EXIT_CODE)
-            }
-            CLISuccess::EnclaveStatus(EnclaveExitStatus::Fatal(_err)) => {
-                ExitCode::from(ENCLAVE_FATAL)
-            }
-            CLISuccess::EnclaveStatus(EnclaveExitStatus::Cancelled) => {
-                ExitCode::from(ENCLAVER_INTERRUPTED)
-            },
-            CLISuccess::Ok => ExitCode::SUCCESS,
+            EnclaveStatus(Exited(code)) => ExitCode::from(code as u8),
+            EnclaveStatus(Signaled(_signal)) => ExitCode::from(ENCLAVE_SIGNALED_EXIT_CODE),
+            EnclaveStatus(Fatal(_err)) => ExitCode::from(ENCLAVE_FATAL),
+            EnclaveStatus(Cancelled) => ExitCode::from(ENCLAVER_INTERRUPTED),
+            Ok => ExitCode::SUCCESS,
         }
     }
 }
@@ -90,11 +86,11 @@ async fn run(args: Cli) -> Result<CLISuccess> {
     // enclave run.
     let cancel_task = {
         let cancellation = cancellation.clone();
-        tokio::task::spawn(async move {
+        utils::spawn!("shutdown handler", async move {
             shutdown_signal.await;
             cancellation.cancel();
             info!("shutdown signal received, terminating enclave");
-        })
+        })?
     };
 
     let status = enclave.run(cancellation).await?;
@@ -126,6 +122,12 @@ async fn describe_eif() -> Result<CLISuccess> {
 #[tokio::main]
 async fn main() -> Result<CLISuccess> {
     enclaver::utils::init_logging();
+
+    #[cfg(feature = "tracing")]
+    console_subscriber::ConsoleLayer::builder()
+        .with_default_env()
+        .server_addr(([0, 0, 0, 0], 51001))
+        .init();
 
     let args = Cli::parse();
 

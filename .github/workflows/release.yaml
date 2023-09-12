@@ -15,11 +15,11 @@ jobs:
           - target: 'x86_64-unknown-linux-musl'
             host: 'ubuntu-latest'
             uses_musl: true
-            extra_cargo_args: '--all-features'
+            extra_cargo_args: '--features=run_enclave,odyn'
           - target: 'aarch64-unknown-linux-musl'
             host: 'ubuntu-latest'
             uses_musl: true
-            extra_cargo_args: '--all-features'
+            extra_cargo_args: '--features=run_enclave,odyn'
           - target: 'x86_64-apple-darwin'
             host: 'macos-latest'
           - target: 'aarch64-apple-darwin'

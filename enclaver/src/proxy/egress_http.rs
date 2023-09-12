@@ -1,6 +1,7 @@
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::sync::Arc;
 
+use crate::utils;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::{Stream, StreamExt};
@@ -100,9 +101,10 @@ impl EnclaveHttpProxy {
                 Ok((sock, _)) => {
                     let egress_policy = egress_policy.clone();
 
-                    tokio::task::spawn(async move {
+                    utils::spawn!("egress stream", async move {
                         EnclaveHttpProxy::service_conn(sock, egress_port, egress_policy).await;
-                    });
+                    })
+                    .expect("spawn egress stream");
                 }
                 Err(err) => {
                     error!("Accept failed: {err}");

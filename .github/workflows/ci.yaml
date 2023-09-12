@@ -21,10 +21,18 @@ jobs:
       - run: rustup toolchain install $RUSTUP_TOOLCHAIN
       - run: rustup component add clippy
 
-      # Check with --all-features (ie a Linux build)
+      # Check all binaries (ie a Linux build)
       - uses: actions-rs/clippy-check@v1.0.7
         with:
-          args: --all-features --manifest-path enclaver/Cargo.toml
+          args: --features=run_enclave,odyn --manifest-path enclaver/Cargo.toml
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Check with tracing enabled
+      - uses: actions-rs/clippy-check@v1.0.7
+        env:
+          RUSTFLAGS: "-Dwarnings --cfg=tokio_unstable"
+        with:
+          args: --features=run_enclave,odyn,tracing --manifest-path enclaver/Cargo.toml
           token: ${{ secrets.GITHUB_TOKEN }}
 
       # Check with only default features (ie a Mac build)

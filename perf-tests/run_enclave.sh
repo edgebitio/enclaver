@@ -25,9 +25,9 @@ cat > ${config} <<- EOF
 	  cpu_count: ${VCPUS}
 	egress:
 	  allow:
-	   - "**"
+	  - "**"
 	ingress:
-	  -  listen_port: 8082
+	- listen_port: 8082
 EOF
 
 enclaver build -f ${config}
