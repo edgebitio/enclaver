@@ -1,8 +1,8 @@
 use anyhow::{anyhow, Error, Result};
 use async_trait::async_trait;
+use aws_credential_types::Credentials;
 use aws_sigv4::http_request::{SignableBody, SignableRequest, SigningSettings};
 use aws_sigv4::SigningParams;
-use aws_types::credentials::Credentials;
 use http::header::{HeaderName, HeaderValue};
 use http::uri::{Authority, Scheme};
 use http::Uri;

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use aws_types::credentials::ProvideCredentials;
+use aws_credential_types::provider::ProvideCredentials;
 use log::{error, info};
 use tokio::task::JoinHandle;
 
