@@ -14,7 +14,7 @@ struct Cli {
     #[clap(subcommand)]
     subcommand: Commands,
 
-    #[clap(long = "verbose", short = 'v', parse(from_occurrences))]
+    #[clap(long = "verbose", short = 'v', action = clap::ArgAction::Count)]
     verbosity: u8,
 }
 
@@ -27,7 +27,7 @@ enum Commands {
         /// Path to the Enclaver manifest file to build from.
         manifest_file: String,
 
-        #[clap(long = "eif-only", hidden = true)]
+        #[clap(long = "eif-only", hide = true)]
         /// Only build the EIF file, do not package it into a self-executing image.
         eif_file: Option<String>,
 
