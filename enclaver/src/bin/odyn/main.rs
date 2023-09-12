@@ -38,6 +38,9 @@ struct CliArgs {
 
     #[clap(required = true)]
     entrypoint: Vec<OsString>,
+
+    #[clap(long = "verbose", short = 'v', parse(from_occurrences))]
+    verbosity: u8,
 }
 
 async fn launch(args: &CliArgs) -> Result<launcher::ExitStatus> {
@@ -98,8 +101,8 @@ async fn run(args: &CliArgs) -> Result<()> {
 
 #[tokio::main]
 async fn main() {
-    enclaver::utils::init_logging();
     let args = CliArgs::parse();
+    enclaver::utils::init_logging(args.verbosity);
 
     #[cfg(feature = "tracing")]
     console_subscriber::ConsoleLayer::builder()

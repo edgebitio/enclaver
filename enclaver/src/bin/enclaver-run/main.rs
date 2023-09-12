@@ -37,6 +37,9 @@ struct Cli {
 
     #[clap(subcommand)]
     sub_command: Option<SubCommand>,
+
+    #[clap(long = "verbose", short = 'v', parse(from_occurrences))]
+    verbosity: u8,
 }
 
 #[derive(Debug, Subcommand)]
@@ -121,15 +124,14 @@ async fn describe_eif() -> Result<CLISuccess> {
 
 #[tokio::main]
 async fn main() -> Result<CLISuccess> {
-    enclaver::utils::init_logging();
+    let args = Cli::parse();
+    enclaver::utils::init_logging(args.verbosity);
 
     #[cfg(feature = "tracing")]
     console_subscriber::ConsoleLayer::builder()
         .with_default_env()
         .server_addr(([0, 0, 0, 0], 51001))
         .init();
-
-    let args = Cli::parse();
 
     match args.sub_command {
         None => run(args).await,

@@ -13,6 +13,9 @@ use tokio::io::{stdout, AsyncWriteExt};
 struct Cli {
     #[clap(subcommand)]
     subcommand: Commands,
+
+    #[clap(long = "verbose", short = 'v', parse(from_occurrences))]
+    verbosity: u8,
 }
 
 #[derive(Debug, Subcommand)]
@@ -28,8 +31,8 @@ enum Commands {
         /// Only build the EIF file, do not package it into a self-executing image.
         eif_file: Option<String>,
 
-        #[clap(long = "--pull")]
-        /// Pull any Docker images this depends on bef
+        #[clap(long = "pull")]
+        /// Pull every container image to ensure the latest version
         force_pull: bool,
     },
 
@@ -156,9 +159,9 @@ async fn run(args: Cli) -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    enclaver::utils::init_logging();
-
     let args = Cli::parse();
+    enclaver::utils::init_logging(args.verbosity);
+
 
     #[cfg(feature = "tracing")]
     console_subscriber::ConsoleLayer::builder()

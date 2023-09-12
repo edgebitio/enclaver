@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use futures_util::stream::StreamExt;
-use log::info;
+use log::{info, LevelFilter};
 use std::future::Future;
 use std::path::PathBuf;
 use tokio::io::AsyncRead;
@@ -27,11 +27,23 @@ macro_rules! spawn {
 
 pub use spawn;
 
-pub fn init_logging() {
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info");
+pub fn init_logging(verbosity: u8) {
+    fn level_filter(verbosity: u8) -> LevelFilter {
+        match verbosity {
+            0 => LevelFilter::Info,
+            1 => LevelFilter::Debug,
+            _ => LevelFilter::Trace,
+        }
     }
-    pretty_env_logger::init();
+
+    pretty_env_logger::formatted_builder()
+        .filter_module("bollard", level_filter(verbosity.saturating_sub(1)))
+        .filter_module("hyper", level_filter(verbosity.saturating_sub(2)))
+        .filter_module("tokio", level_filter(verbosity.saturating_sub(3)))
+        .filter_module("tracing", level_filter(verbosity.saturating_sub(3)))
+        .filter_level(level_filter(verbosity))
+        .format_timestamp(None)
+        .init();
 }
 
 pub trait StringablePathExt {
