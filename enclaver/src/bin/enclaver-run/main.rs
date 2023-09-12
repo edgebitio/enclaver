@@ -20,10 +20,10 @@ const ENCLAVER_INTERRUPTED: u8 = 109;
 #[derive(Debug, Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Cli {
-    #[clap(long, parse(from_os_str))]
+    #[clap(long, value_parser)]
     eif_file: Option<PathBuf>,
 
-    #[clap(long, parse(from_os_str))]
+    #[clap(long, value_parser)]
     manifest_file: Option<PathBuf>,
 
     #[clap(long)]
@@ -38,7 +38,7 @@ struct Cli {
     #[clap(subcommand)]
     sub_command: Option<SubCommand>,
 
-    #[clap(long = "verbose", short = 'v', parse(from_occurrences))]
+    #[clap(long = "verbose", short = 'v', action = clap::ArgAction::Count)]
     verbosity: u8,
 }
 

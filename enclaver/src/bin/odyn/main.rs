@@ -39,7 +39,7 @@ struct CliArgs {
     #[clap(required = true)]
     entrypoint: Vec<OsString>,
 
-    #[clap(long = "verbose", short = 'v', parse(from_occurrences))]
+    #[clap(long = "verbose", short = 'v', action = clap::ArgAction::Count)]
     verbosity: u8,
 }
 
