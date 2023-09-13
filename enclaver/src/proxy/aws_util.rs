@@ -8,9 +8,9 @@ use aws_config::imds;
 use aws_config::imds::credentials::ImdsCredentialsProvider;
 use aws_config::imds::region::ImdsRegionProvider;
 use aws_config::provider_config::ProviderConfig;
+use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_smithy_client::{bounds::SmithyConnector, erase::DynConnector, hyper_ext};
 use aws_smithy_http::result::ConnectorError;
-use aws_types::credentials::SharedCredentialsProvider;
 use aws_types::sdk_config::SdkConfig;
 
 const IMDS_URL: &str = "http://169.254.169.254:80/";
