@@ -452,7 +452,7 @@ mod tests {
             &self,
             req: Request<Body>,
         ) -> std::result::Result<Response<Body>, hyper::Error> {
-            let action = req.headers().get(X_AMZ_TARGET).unwrap().to_str().unwrap();
+            let action = req.headers().get(&X_AMZ_TARGET).unwrap().to_str().unwrap();
 
             let authz = req
                 .headers()
@@ -513,7 +513,7 @@ mod tests {
         Request::builder()
             .method(Method::POST)
             .uri("/")
-            .header(X_AMZ_TARGET, action)
+            .header(&X_AMZ_TARGET, action)
             .header(hyper::header::CONTENT_TYPE, &X_AMZ_JSON)
             .header(
                 hyper::header::AUTHORIZATION,
