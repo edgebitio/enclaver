@@ -367,7 +367,7 @@ impl EnclaveArtifactBuilder {
         }
 
         if manifest.egress.is_none() {
-            info!("no egress specified in manifest; this enclave will have outbound network access");
+            info!("no egress specified in manifest; this enclave will have no outbound network access");
         }
     }
 
