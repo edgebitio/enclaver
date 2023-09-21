@@ -153,7 +153,7 @@ If an attestation matches, engineers can guarantee that its configuration is _ex
 
 | Register | Description |
 |----------|-------------|
-| PCR0 | Measures the length of our EIF file. Since it's critical that our enclave code is not modified, this is important to check. |
+| PCR0 | Measures the contents of our EIF file. Since it's critical that our enclave code is not modified, this is important to check. |
 | PCR1 | Measures our enclave's kernel and boot RamFS data. Again, we don't want our kernel image modified or the kernel parameters changed. |
 | PCR3 | Measures the IAM instance role assigned to your EC2 machine. |
 | PCR4 | Measures the instance ID of a specific EC2 machine. |
