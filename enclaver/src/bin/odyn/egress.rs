@@ -16,7 +16,7 @@ pub struct EgressService {
 impl EgressService {
     pub async fn start(config: &Configuration) -> Result<Self> {
         let task = if let Some(proxy_uri) = config.egress_proxy_uri() {
-            info!("Startng egress");
+            info!("Starting egress");
 
             let policy = Arc::new(EgressPolicy::new(config.manifest.egress.as_ref().unwrap()));
 
