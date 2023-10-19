@@ -8,6 +8,7 @@ use log::{debug, error};
 use rustls::ServerConfig;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::watch;
 use tokio_vsock::VsockStream;
 
 use crate::vsock::TlsServerStream;
@@ -48,16 +49,25 @@ impl<S> EnclaveProxy<S>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-    pub async fn serve(self) {
+    pub async fn serve(self, mut shutdown: watch::Receiver<()>) {
         let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, self.port);
         let mut incoming = Box::into_pin(self.incoming);
 
-        while let Some(stream) = incoming.next().await {
-            utils::spawn!("ingress stream", async move {
-                EnclaveProxy::service_conn(stream, addr).await;
-            })
-            .expect("spawn ingress stream");
+        let mut proxies = Vec::new();
+        loop {
+            tokio::select!(
+                Some(stream) = incoming.next() => {
+                    proxies.push(
+                        utils::spawn!("ingress stream", async move {
+                            EnclaveProxy::service_conn(stream, addr).await;
+                        })
+                            .expect("spawn ingress stream"),
+                    )
+                }
+                Ok(()) = shutdown.changed() => break,
+            )
         }
+        futures::future::join_all(proxies).await;
     }
 
     async fn service_conn(mut vsock: S, target: SocketAddrV4) {
