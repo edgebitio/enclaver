@@ -65,6 +65,10 @@ enum Commands {
         #[clap(short = 'p', long = "publish")]
         /// Port to expose on the host machine, for example: 8080:80.
         port_forwards: Vec<String>,
+
+        #[clap(short, long)]
+        /// Run the enclave supervisor in debug mode
+        debug_mode: bool,
     },
 }
 
@@ -113,6 +117,7 @@ async fn run(args: Cli) -> Result<()> {
             manifest_file,
             image_name,
             port_forwards,
+            debug_mode,
         } => {
             let image_name = match (manifest_file, image_name) {
                 // If an image was specified, use it
@@ -138,7 +143,7 @@ async fn run(args: Cli) -> Result<()> {
             let shutdown_signal = enclaver::utils::register_shutdown_signal_handler().await?;
 
             tokio::select! {
-                res = runner.run_enclaver_image(&image_name, port_forwards) => {
+                res = runner.run_enclaver_image(&image_name, port_forwards, debug_mode) => {
                     debug!("enclave exited");
                     match res {
                         Ok(_) => debug!("enclave exited successfully"),
@@ -161,7 +166,6 @@ async fn run(args: Cli) -> Result<()> {
 async fn main() -> Result<()> {
     let args = Cli::parse();
     enclaver::utils::init_logging(args.verbosity);
-
 
     #[cfg(feature = "tracing")]
     console_subscriber::ConsoleLayer::builder()

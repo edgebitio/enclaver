@@ -31,6 +31,7 @@ impl RunWrapper {
         &mut self,
         image_name: &str,
         port_forwards: Vec<String>,
+        debug_mode: bool,
     ) -> Result<()> {
         if self.container_id.is_some() {
             return Err(anyhow!("container already running"));
@@ -66,7 +67,11 @@ impl RunWrapper {
                 None,
                 Config {
                     image: Some(image_name.to_string()),
-                    cmd: Some(vec![]), // TODO(russell_h): pass through additional args
+                    cmd: match debug_mode {
+                        // TODO(russell_h): pass through additional args
+                        true => Some(vec!["--debug-mode".into()]),
+                        false => None,
+                    },
                     attach_stderr: Some(true),
                     attach_stdout: Some(true),
                     host_config: Some(HostConfig {
