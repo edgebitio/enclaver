@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use anyhow::{anyhow, Result};
-use log::debug;
+use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -39,10 +39,22 @@ impl NitroCLI {
         if output.status.success() {
             Ok(serde_json::from_slice(&output.stdout)?)
         } else {
-            Err(anyhow!(
-                "nitro-cli failed: {}",
-                String::from_utf8(output.stderr)?
-            ))
+            error!("nitro-cli failed ({})", output.status);
+
+            let stderr = String::from_utf8(output.stderr)?;
+            error!("stderr:\n{}", stderr);
+
+            for path in stderr.lines().filter_map(|line| {
+                line.strip_prefix(
+                    "If you open a support ticket, please provide the error log found at \"",
+                )
+                .and_then(|l| l.strip_suffix('"'))
+            }) {
+                let contents = std::fs::read_to_string(path)?;
+                error!("{path}:\n{contents}");
+            }
+
+            Err(anyhow!("failed to run enclave"))
         }
     }
 
