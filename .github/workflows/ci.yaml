@@ -9,37 +9,29 @@ env:
 jobs:
   clippy-check:
     runs-on: ubuntu-latest
-
-    permissions:
-      checks: write
-
     steps:
-      - uses: actions/checkout@v1
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      # Install the MSRV toolchain and clippy
-      - run: sed -n 's/^rust-version = "\(.*\)"$/RUSTUP_TOOLCHAIN=\1/p' enclaver/Cargo.toml >> $GITHUB_ENV
-      - run: rustup toolchain install $RUSTUP_TOOLCHAIN
-      - run: rustup component add clippy
+      - name: Parse MSRV
+        run: sed -n 's/^rust-version = "\(.*\)"$/RUSTUP_TOOLCHAIN=\1/p' enclaver/Cargo.toml >> $GITHUB_ENV
+      - name: Install Rust Toolchain
+        run: rustup toolchain install $RUSTUP_TOOLCHAIN
+      - name: Install Clippy and Rustfmt
+        run: rustup component add clippy rustfmt
 
-      # Check all binaries (ie a Linux build)
-      - uses: actions-rs/clippy-check@v1.0.7
-        with:
-          args: --features=run_enclave,odyn --manifest-path enclaver/Cargo.toml
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check with default features
+        run: |
+          cargo clippy --quiet --no-deps --manifest-path enclaver/Cargo.toml
 
-      # Check with tracing enabled
-      - uses: actions-rs/clippy-check@v1.0.7
+      - name: Check all binaries
+        run: |
+          cargo clippy --quiet --no-deps --manifest-path enclaver/Cargo.toml --features=run_enclave,odyn
+
+      - name: Check with tracing enabled
         env:
-          RUSTFLAGS: "-Dwarnings --cfg=tokio_unstable"
-        with:
-          args: --features=run_enclave,odyn,tracing --manifest-path enclaver/Cargo.toml
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      # Check with only default features (ie a Mac build)
-      - uses: actions-rs/clippy-check@v1.0.7
-        with:
-          args: --manifest-path enclaver/Cargo.toml
-          token: ${{ secrets.GITHUB_TOKEN }}
-
+          RUSTFLAGS: "--cfg=tokio_unstable"
+        run: |
+          cargo clippy --quiet --no-deps --manifest-path enclaver/Cargo.toml --features=run_enclave,odyn,tracing
 
   ## TODO: Add test job here?
