@@ -1,7 +1,10 @@
 name: Generate an SBOM from source code
 
 on:
-  - pull_request
+  pull_request:
+  push:
+    branches:
+      - 'main'
 
 jobs:
   generate-sbom:
@@ -17,8 +20,12 @@ jobs:
       - name: Generate SBOM from source code
         run: "${{ steps.syft.outputs.cmd }} --config .github/edgebit/source-syft.yaml --file /tmp/sbom.syft.json ."
 
-      - name: Upload SBOM
-        uses: actions/upload-artifact@v3
+      - name: Upload SBOM to EdgeBit
+        uses: edgebitio/edgebit-build@v1
         with:
-          name: edgebit-sbom
-          path: /tmp/sbom.syft.json
+          edgebit-url: "https://edgebit.edgebit.io"
+          token: ${{ secrets.EDGEBIT_TOKEN }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          sbom-file: /tmp/sbom.syft.json
+          component: "edgebitio-sbom-server"
+          tags: ${{ github.ref == 'refs/heads/main' && 'latest' || '' }}
