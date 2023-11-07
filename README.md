@@ -19,7 +19,7 @@ These demos show off how your apps can use these unique features to improve priv
 
 ## Project State
 
-Enclaver is currently in alpha and not intended for use in production. Enclaver currently only supports [AWS Nitro Enclaves](https://aws.amazon.com/ec2/nitro/nitro-enclaves/); support for Azure Confidential VMs, GCP Confidential VMs, and arbitrary SGX and OP-TEE enclaves is on the roadmap.
+Enclaver is currently in beta and should be used cautiously in production. Enclaver currently only supports [AWS Nitro Enclaves](https://aws.amazon.com/ec2/nitro/nitro-enclaves/); support for Azure Confidential VMs, GCP Confidential VMs, and arbitrary SGX and OP-TEE enclaves is on the roadmap.
 
  - [Getting started guide](docs/getting-started.md)
  - [Deploy an enclave on AWS](docs/deploy-aws.md)
