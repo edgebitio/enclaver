@@ -27,5 +27,5 @@ jobs:
           token: ${{ secrets.EDGEBIT_TOKEN }}
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           sbom-file: /tmp/sbom.syft.json
-          component: "edgebitio-sbom-server"
+          component: "enclaver"
           tags: ${{ github.ref == 'refs/heads/main' && 'latest' || '' }}
