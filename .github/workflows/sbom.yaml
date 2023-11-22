@@ -13,19 +13,23 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Download Syft
-        id: syft
-        uses: anchore/sbom-action/download-syft@v0.14.2
-
       - name: Generate SBOM from source code
-        run: "${{ steps.syft.outputs.cmd }} --config .github/edgebit/source-syft.yaml --file /tmp/sbom.syft.json ."
-
-      - name: Upload SBOM to EdgeBit
-        uses: edgebitio/edgebit-build@v1
+        uses: eyakubovich/sbom-action@ey/add-config-input
         with:
-          edgebit-url: "https://edgebit.edgebit.io"
-          token: ${{ secrets.EDGEBIT_TOKEN }}
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          sbom-file: /tmp/sbom.syft.json
-          component: "enclaver"
-          tags: ${{ github.ref == 'refs/heads/main' && 'latest' || '' }}
+          artifact-name: sbom.spdx.json
+          upload-artifact: true
+          config: .github/edgebit/source-syft.yaml
+
+      - name: Save metadata to an artifact
+        run: |
+          cat > /tmp/metadata.json <<EOF
+            {
+              "pr-number": "${{ github.event.number }}",
+              "tags": "${{ github.ref == 'refs/heads/main' && 'latest' || '' }}"
+            }
+          EOF
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: metadata.json
+          path: /tmp/metadata.json
