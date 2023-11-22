@@ -1,5 +1,3 @@
-output: syft
-
 check-for-app-update: false
 
 catalogers:
