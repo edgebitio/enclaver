@@ -24,7 +24,7 @@ enum Commands {
     /// Package a Docker image into a self-executing Enclaver container image.
     Build {
         #[clap(long = "file", short = 'f', default_value = "enclaver.yaml")]
-        /// Path to the Enclaver manifest file to build from.
+        /// Path to the Enclaver manifest file, or - to read it from stdin.
         manifest_file: String,
 
         #[clap(long = "eif-only", hide = true)]

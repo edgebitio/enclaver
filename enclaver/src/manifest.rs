@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::pin::Pin;
 use tokio::fs::File;
+use tokio::io::AsyncRead;
 
 use tokio::io::AsyncReadExt;
 
@@ -78,13 +80,12 @@ fn parse_manifest(buf: &[u8]) -> Result<Manifest> {
 }
 
 pub async fn load_manifest_raw<P: AsRef<Path>>(path: P) -> Result<(Vec<u8>, Manifest)> {
-    let mut file = match File::open(&path).await {
-        Ok(file) => file,
-        Err(err) => {
-            return Err(anyhow::anyhow!(
-                "failed to open {}: {err}",
-                path.as_ref().display()
-            ))
+    let mut file: Pin<Box<dyn AsyncRead>> = if path.as_ref() == Path::new("-") {
+        Box::pin(tokio::io::stdin())
+    } else {
+        match File::open(&path).await {
+            Ok(file) => Box::pin(file),
+            Err(err) => anyhow::bail!("failed to open {}: {err}", path.as_ref().display()),
         }
     };
 
