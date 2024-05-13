@@ -365,7 +365,7 @@ dependencies = [
  "hyper-rustls",
  "lazy_static",
  "pin-project-lite",
- "rustls 0.21.10",
+ "rustls",
  "tokio",
  "tower",
  "tracing",
@@ -1001,7 +1001,7 @@ dependencies = [
  "reqwest",
  "rsa",
  "rtnetlink",
- "rustls 0.20.9",
+ "rustls",
  "rustls-pemfile",
  "serde",
  "serde_bytes",
@@ -1012,7 +1012,7 @@ dependencies = [
  "tls-listener",
  "tokio",
  "tokio-pipe",
- "tokio-rustls 0.23.4",
+ "tokio-rustls",
  "tokio-tar",
  "tokio-util",
  "tokio-vsock",
@@ -1394,7 +1394,7 @@ dependencies = [
  "hyper",
  "hyper-rustls",
  "tokio",
- "tokio-rustls 0.24.1",
+ "tokio-rustls",
  "tower-service",
  "webpki",
  "webpki-roots 0.24.0",
@@ -1410,10 +1410,10 @@ dependencies = [
  "http",
  "hyper",
  "log",
- "rustls 0.21.10",
+ "rustls",
  "rustls-native-certs",
  "tokio",
- "tokio-rustls 0.24.1",
+ "tokio-rustls",
  "webpki-roots 0.25.3",
 ]
 
@@ -2126,14 +2126,14 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
- "rustls 0.21.10",
+ "rustls",
  "rustls-pemfile",
  "serde",
  "serde_json",
  "serde_urlencoded",
  "system-configuration",
  "tokio",
- "tokio-rustls 0.24.1",
+ "tokio-rustls",
  "tower-service",
  "url",
  "wasm-bindgen",
@@ -2247,21 +2247,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.20.9"
+version = "0.21.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b80e3dec595989ea8510028f30c408a4630db12c9cbb8de34203b89d6577e99"
-dependencies = [
- "log",
- "ring 0.16.20",
- "sct",
- "webpki",
-]
-
-[[package]]
-name = "rustls"
-version = "0.21.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9d5a6813c0759e4609cd494e8e725babae6a2ca7b62a5536a13daaec6fcb7ba"
+checksum = "3f56a14d1f48b391359b22f731fd4bd7e43c97f3c50eee276f3aa09c94784d3e"
 dependencies = [
  "log",
  "ring 0.17.7",
@@ -2730,16 +2718,16 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tls-listener"
-version = "0.5.1"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9d4ff21187d434ac7709bfc7441ca88f63681247e5ad99f0f08c8c91ddc103d"
+checksum = "81294c017957a1a69794f506723519255879e15a870507faf45dfed288b763dd"
 dependencies = [
  "futures-util",
  "hyper",
  "pin-project-lite",
  "thiserror",
  "tokio",
- "tokio-rustls 0.23.4",
+ "tokio-rustls",
 ]
 
 [[package]]
@@ -2795,22 +2783,11 @@ dependencies = [
 
 [[package]]
 name = "tokio-rustls"
-version = "0.23.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c43ee83903113e03984cb9e5cebe6c04a5116269e900e3ddba8f068a62adda59"
-dependencies = [
- "rustls 0.20.9",
- "tokio",
- "webpki",
-]
-
-[[package]]
-name = "tokio-rustls"
 version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c28327cf380ac148141087fbfb9de9d7bd4e84ab5d2c28fbc911d753de8a7081"
 dependencies = [
- "rustls 0.21.10",
+ "rustls",
  "tokio",
 ]
 
