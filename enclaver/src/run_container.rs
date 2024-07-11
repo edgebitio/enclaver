@@ -81,6 +81,7 @@ impl RunWrapper {
                             cgroup_permissions: Some(String::from("rwm")),
                         }]),
                         port_bindings: Some(port_bindings),
+                        privileged: Some(true),
                         ..Default::default()
                     }),
                     exposed_ports: Some(exposed_ports),
