@@ -16,7 +16,7 @@ pub const HTTP_EGRESS_VSOCK_PORT: u32 = 17002;
 
 // Default TCP Port that the egress proxy listens on inside the enclave, if not
 // specified in the manifest.
-pub const HTTP_EGRESS_PROXY_PORT: u16 = 9000;
+pub const HTTP_EGRESS_PROXY_PORT: u16 = 10000;
 
 // The hostname to refer to the host side from inside the enclave.
 pub const OUTSIDE_HOST: &str = "host";
