@@ -62,8 +62,7 @@ impl<'a> ContentInfo<'a> {
 
     pub fn decrypt_content(&self, priv_key: &RsaPrivateKey) -> Result<Vec<u8>> {
         let datakey = self.decrypt_key(priv_key)?;
-        self
-            .content
+        self.content
             .encrypted_content_info
             .decrypt_content(&datakey)
     }

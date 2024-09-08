@@ -121,11 +121,7 @@ impl KmsEndpointProvider for Configuration {
             .manifest
             .kms_proxy
             .as_ref()
-            .and_then(|kp| {
-                kp.endpoints
-                    .as_ref()
-                    .map(|eps| eps.get(region).cloned())
-            })
+            .and_then(|kp| kp.endpoints.as_ref().map(|eps| eps.get(region).cloned()))
             .flatten();
 
         ep.unwrap_or_else(|| format!("kms.{region}.amazonaws.com"))

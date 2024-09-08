@@ -203,8 +203,8 @@ impl KmsRequestOutgoing {
         );
 
         // Sign and then apply the signature to the request
-        let signed = aws_sigv4::http_request::sign(signable_request, &signing_params)
-            .map_err(Error::msg)?;
+        let signed =
+            aws_sigv4::http_request::sign(signable_request, &signing_params).map_err(Error::msg)?;
 
         let (signing_instructions, _signature) = signed.into_parts();
         signing_instructions.apply_to_request(&mut self.inner);
