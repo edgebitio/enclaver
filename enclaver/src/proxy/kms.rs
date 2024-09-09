@@ -25,9 +25,11 @@ static X_AMZ_JSON: HeaderValue = HeaderValue::from_static("application/x-amz-jso
 
 const X_AMZ_CREDENTIAL: &str = "X-Amz-Credential";
 
-const ATTESTING_ACTIONS: [&str; 3] = [
+const ATTESTING_ACTIONS: [&str; 5] = [
     "TrentService.Decrypt",
+    "TrentService.DeriveSharedSecret",
     "TrentService.GenerateDataKey",
+    "TrentService.GenerateDataKeyPair",
     "TrentService.GenerateRandom",
 ];
 
@@ -203,8 +205,8 @@ impl KmsRequestOutgoing {
         );
 
         // Sign and then apply the signature to the request
-        let signed = aws_sigv4::http_request::sign(signable_request, &signing_params)
-            .map_err(Error::msg)?;
+        let signed =
+            aws_sigv4::http_request::sign(signable_request, &signing_params).map_err(Error::msg)?;
 
         let (signing_instructions, _signature) = signed.into_parts();
         signing_instructions.apply_to_request(&mut self.inner);

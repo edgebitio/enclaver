@@ -1,17 +1,17 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use enclaver::constants::{MANIFEST_FILE_NAME, RELEASE_BUNDLE_DIR, EIF_FILE_NAME};
-use enclaver::run::{Enclave, EnclaveExitStatus, EnclaveOpts};
+use enclaver::constants::{EIF_FILE_NAME, MANIFEST_FILE_NAME, RELEASE_BUNDLE_DIR};
 use enclaver::manifest::load_manifest_raw;
 use enclaver::nitro_cli::NitroCLI;
+use enclaver::run::{Enclave, EnclaveExitStatus, EnclaveOpts};
 use enclaver::utils;
 use log::info;
 use std::{
     path::PathBuf,
     process::{ExitCode, Termination},
 };
-use tokio_util::sync::CancellationToken;
 use tokio::io::{stdout, AsyncWriteExt};
+use tokio_util::sync::CancellationToken;
 
 const ENCLAVE_SIGNALED_EXIT_CODE: u8 = 107;
 const ENCLAVE_FATAL: u8 = 108;

@@ -61,10 +61,7 @@ struct ConnectRequest {
 
 impl ConnectRequest {
     fn new(host: String, port: u16) -> Self {
-        Self {
-            host,
-            port,
-        }
+        Self { host, port }
     }
 }
 

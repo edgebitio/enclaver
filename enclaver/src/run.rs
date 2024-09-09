@@ -214,24 +214,25 @@ impl Enclave {
     }
 
     fn start_odyn_log_stream(&mut self, cid: u32) -> Result<()> {
-        self.tasks.push(utils::spawn!("odyn log stream", async move {
-            info!("waiting for enclave to boot to stream logs");
-            let conn = loop {
-                match VsockStream::connect(cid, APP_LOG_PORT).await {
-                    Ok(conn) => break conn,
+        self.tasks
+            .push(utils::spawn!("odyn log stream", async move {
+                info!("waiting for enclave to boot to stream logs");
+                let conn = loop {
+                    match VsockStream::connect(cid, APP_LOG_PORT).await {
+                        Ok(conn) => break conn,
 
-                    // TODO: improve the polling frequency / backoff / timeout
-                    Err(_) => {
-                        tokio::time::sleep(LOG_VSOCK_RETRY_INTERVAL).await;
+                        // TODO: improve the polling frequency / backoff / timeout
+                        Err(_) => {
+                            tokio::time::sleep(LOG_VSOCK_RETRY_INTERVAL).await;
+                        }
                     }
-                }
-            };
+                };
 
-            info!("connected to enclave, starting log stream");
-            if let Err(e) = utils::log_lines_from_stream("enclave", conn).await {
-                error!("error reading log lines from enclave: {e}");
-            }
-        })?);
+                info!("connected to enclave, starting log stream");
+                if let Err(e) = utils::log_lines_from_stream("enclave", conn).await {
+                    error!("error reading log lines from enclave: {e}");
+                }
+            })?);
 
         Ok(())
     }
