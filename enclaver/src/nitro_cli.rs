@@ -109,7 +109,7 @@ impl NitroCLI {
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EIFInfo {
     #[serde(rename = "Measurements")]
-    pub measurements: EIFMeasurements,
+    measurements: EIFMeasurements,
 }
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
