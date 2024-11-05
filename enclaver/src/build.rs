@@ -92,7 +92,7 @@ impl EnclaveArtifactBuilder {
         let build_dir = TempDir::new()?;
 
         let eif_info = self
-            .image_to_eif(&amended_img, &build_dir, EIF_FILE_NAME)
+            .image_to_eif(&amended_img, &build_dir, EIF_FILE_NAME, &manifest, manifest_path)
             .await?;
 
         Ok(IntermediateBuildResult {
@@ -224,6 +224,8 @@ impl EnclaveArtifactBuilder {
         source_img: &ImageRef,
         build_dir: &TempDir,
         eif_name: &str,
+        manifest: &Manifest,
+        manifest_path: &str
     ) -> Result<EIFInfo> {
         let build_dir_path = build_dir.path().to_str().unwrap();
 
@@ -245,36 +247,64 @@ impl EnclaveArtifactBuilder {
 
         debug!("using nitro-cli image: {nitro_cli}");
 
+        let mut cmd = vec![
+            "build-enclave",
+            "--docker-uri",
+            &img_tag,
+            "--output-file",
+            eif_name,
+        ];
+
+        let mut mounts = vec![
+            Mount {
+                typ: Some(MountTypeEnum::BIND),
+                source: Some(String::from("/var/run/docker.sock")),
+                target: Some(String::from("/var/run/docker.sock")),
+                ..Default::default()
+            },
+            Mount {
+                typ: Some(MountTypeEnum::BIND),
+                source: Some(build_dir_path.into()),
+                target: Some(String::from("/build")),
+                ..Default::default()
+            },
+        ];
+
+        if let Some(signature) = &manifest.signature {
+            cmd.push("--signing-certificate");
+            cmd.push("/var/run/certificate");
+            cmd.push("--private-key");
+            cmd.push("/var/run/key");
+
+            let certificate_path = canonicalize(PathBuf::from(manifest_path).parent().unwrap().join(&signature.certificate)).await?;
+            let key_path = canonicalize(PathBuf::from(manifest_path).parent().unwrap().join(&signature.key)).await?;
+
+            mounts.push(Mount {
+                typ: Some(MountTypeEnum::BIND),
+                source: Some(key_path.to_string_lossy().to_string()),
+                target: Some(String::from("/var/run/key")),
+                ..Default::default()
+            });
+
+            mounts.push(Mount {
+                typ: Some(MountTypeEnum::BIND),
+                source: Some(certificate_path.to_string_lossy().to_string()),
+                target: Some(String::from("/var/run/certificate")),
+                ..Default::default()
+            });
+        }
+
         let build_container_id = self
             .docker
             .create_container::<&str, &str>(
                 None,
                 Config {
                     image: Some(nitro_cli.to_str()),
-                    cmd: Some(vec![
-                        "build-enclave",
-                        "--docker-uri",
-                        &img_tag,
-                        "--output-file",
-                        eif_name,
-                    ]),
+                    cmd: Some(cmd),
                     attach_stderr: Some(true),
                     attach_stdout: Some(true),
                     host_config: Some(HostConfig {
-                        mounts: Some(vec![
-                            Mount {
-                                typ: Some(MountTypeEnum::BIND),
-                                source: Some(String::from("/var/run/docker.sock")),
-                                target: Some(String::from("/var/run/docker.sock")),
-                                ..Default::default()
-                            },
-                            Mount {
-                                typ: Some(MountTypeEnum::BIND),
-                                source: Some(build_dir_path.into()),
-                                target: Some(String::from("/build")),
-                                ..Default::default()
-                            },
-                        ]),
+                        mounts: Some(mounts),
                         ..Default::default()
                     }),
                     ..Default::default()

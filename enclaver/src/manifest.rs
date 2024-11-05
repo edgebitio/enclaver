@@ -16,6 +16,7 @@ pub struct Manifest {
     pub name: String,
     pub target: String,
     pub sources: Sources,
+    pub signature: Option<Signature>,
     pub ingress: Option<Vec<Ingress>>,
     pub egress: Option<Egress>,
     pub defaults: Option<Defaults>,
@@ -29,6 +30,13 @@ pub struct Sources {
     pub app: String,
     pub supervisor: Option<String>,
     pub wrapper: Option<String>,
+}
+
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Signature {
+    pub certificate: String,
+    pub key: String,
 }
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
