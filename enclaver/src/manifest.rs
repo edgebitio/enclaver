@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
@@ -16,6 +17,7 @@ pub struct Manifest {
     pub name: String,
     pub target: String,
     pub sources: Sources,
+    pub signature: Option<Signature>,
     pub ingress: Option<Vec<Ingress>>,
     pub egress: Option<Egress>,
     pub defaults: Option<Defaults>,
@@ -29,6 +31,13 @@ pub struct Sources {
     pub app: String,
     pub supervisor: Option<String>,
     pub wrapper: Option<String>,
+}
+
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Signature {
+    pub certificate: PathBuf,
+    pub key: PathBuf,
 }
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]

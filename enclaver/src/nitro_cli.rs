@@ -122,6 +122,9 @@ pub struct EIFMeasurements {
 
     #[serde(rename = "PCR2")]
     pcr2: String,
+
+    #[serde(rename = "PCR8", skip_serializing_if = "Option::is_none")]
+    pcr8: Option<String>,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
