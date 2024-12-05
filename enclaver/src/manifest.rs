@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
@@ -35,8 +36,8 @@ pub struct Sources {
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Signature {
-    pub certificate: String,
-    pub key: String,
+    pub certificate: PathBuf,
+    pub key: PathBuf,
 }
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]

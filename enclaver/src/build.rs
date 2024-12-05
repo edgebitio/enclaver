@@ -91,8 +91,20 @@ impl EnclaveArtifactBuilder {
 
         let build_dir = TempDir::new()?;
 
+        let mut certificate_path: Option<PathBuf> = None;
+        let mut key_path: Option<PathBuf> = None;
+
+        if let Some(signature) = &manifest.signature {
+            if let Some(parent_path) = PathBuf::from(manifest_path).parent() {
+                certificate_path = Some(canonicalize(parent_path.join(&signature.certificate)).await?);
+                key_path = Some(canonicalize(parent_path.join(&signature.key)).await?);
+            } else {
+                return Err(anyhow!("Failed to get parent path of manifest"));
+            }
+        }
+
         let eif_info = self
-            .image_to_eif(&amended_img, &build_dir, EIF_FILE_NAME, &manifest, manifest_path)
+            .image_to_eif(&amended_img, &build_dir, EIF_FILE_NAME, key_path, certificate_path)
             .await?;
 
         Ok(IntermediateBuildResult {
@@ -224,8 +236,8 @@ impl EnclaveArtifactBuilder {
         source_img: &ImageRef,
         build_dir: &TempDir,
         eif_name: &str,
-        manifest: &Manifest,
-        manifest_path: &str
+        key: Option<PathBuf>,
+        certificate: Option<PathBuf>
     ) -> Result<EIFInfo> {
         let build_dir_path = build_dir.path().to_str().unwrap();
 
@@ -270,14 +282,12 @@ impl EnclaveArtifactBuilder {
             },
         ];
 
-        if let Some(signature) = &manifest.signature {
+        if let (Some(key_path), Some(certificate_path)) = (key, certificate) {
             cmd.push("--signing-certificate");
             cmd.push("/var/run/certificate");
             cmd.push("--private-key");
             cmd.push("/var/run/key");
 
-            let certificate_path = canonicalize(PathBuf::from(manifest_path).parent().unwrap().join(&signature.certificate)).await?;
-            let key_path = canonicalize(PathBuf::from(manifest_path).parent().unwrap().join(&signature.key)).await?;
 
             mounts.push(Mount {
                 typ: Some(MountTypeEnum::BIND),
