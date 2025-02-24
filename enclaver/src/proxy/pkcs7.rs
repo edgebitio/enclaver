@@ -1,3 +1,5 @@
+#![allow(dead_code, unused)]
+
 use anyhow::{anyhow, Result};
 use asn1_rs::{oid, BerSequence};
 use asn1_rs::{
@@ -25,7 +27,7 @@ ContentInfo ::= SEQUENCE {
 */
 
 #[derive(BerSequence, Debug)]
-pub struct ContentInfo<'a> {
+pub(crate) struct ContentInfo<'a> {
     pub content_type: Oid<'a>,
 
     #[tag_explicit(0)]
@@ -95,7 +97,7 @@ RecipientInfos ::= SET SIZE (1..MAX) OF RecipientInfo
 */
 
 #[derive(BerSequence, Debug)]
-pub struct EnvelopedData<'a> {
+pub(crate) struct EnvelopedData<'a> {
     pub version: Integer<'a>,
 
     #[optional]
@@ -140,7 +142,7 @@ OriginatorInfo ::= SEQUENCE {
 */
 
 #[derive(BerSequence, Debug)]
-pub struct OriginatorInfo<'a> {
+pub(crate) struct OriginatorInfo<'a> {
     #[optional]
     #[tag_implicit(0)]
     pub certs: Option<SetOf<Any<'a>>>,
@@ -168,7 +170,7 @@ KeyTransRecipientInfo ::= SEQUENCE {
 */
 
 #[derive(BerSequence, Debug)]
-pub struct KeyTransRecipientInfo<'a> {
+pub(crate) struct KeyTransRecipientInfo<'a> {
     pub version: Integer<'a>,
     pub rid: Any<'a>,
     pub key_encryption_algorithm: AlgorithmIdentifier<'a>,
@@ -220,7 +222,7 @@ EncryptedKey ::= OCTET STRING
 */
 
 #[derive(BerSequence, Debug)]
-pub struct AlgorithmIdentifier<'a> {
+pub(crate) struct AlgorithmIdentifier<'a> {
     pub algorithm: Oid<'a>,
 
     #[optional]
@@ -236,7 +238,7 @@ RSAES-OAEP-params  ::=  SEQUENCE  {
 */
 
 #[derive(Debug)]
-pub struct RsaesOaepParameters<'a> {
+pub(crate) struct RsaesOaepParameters<'a> {
     hash_alg: Option<AlgorithmIdentifier<'a>>,
     mask_gen_alg: Option<AlgorithmIdentifier<'a>>,
     _p_source_alg: Option<AlgorithmIdentifier<'a>>,
@@ -324,7 +326,7 @@ EncryptedContentInfo ::= SEQUENCE {
 */
 
 #[derive(BerSequence, Debug)]
-pub struct EncryptedContentInfo<'a> {
+pub(crate) struct EncryptedContentInfo<'a> {
     pub content_type: Oid<'a>,
     pub content_encryption_algorithm: AlgorithmIdentifier<'a>,
     pub encrypted_content: Any<'a>,
@@ -410,7 +412,7 @@ Attribute ::= SEQUENCE {
 */
 
 #[derive(BerSequence, Debug)]
-pub struct Attribute<'a> {
+pub(crate) struct Attribute<'a> {
     pub attr_type: Oid<'a>,
     pub attr_values: SetOf<Any<'a>>,
 }

@@ -128,7 +128,7 @@ impl ImageManager {
     ///
     /// This works by converting `layer` to a docker build operation, and executing
     /// that operation against the connected docker daemon.
-    pub async fn append_layer<'a>(&self, img: &ImageRef, layer: &LayerBuilder) -> Result<ImageRef> {
+    pub async fn append_layer(&self, img: &ImageRef, layer: &LayerBuilder) -> Result<ImageRef> {
         // We're going to realize `layer` to a docker context, in the form of a tarball.
         // Rather than realizing the full tarball into memory, we'll construct a pipe-like
         // pair of streams, and lazily write the tarball to one of them while streaming
