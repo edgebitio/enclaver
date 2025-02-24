@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Generate SBOM from source code
-        uses: eyakubovich/sbom-action@ey/add-config-input
+        uses: anchore/sbom-action
         with:
           artifact-name: sbom.spdx.json
           upload-artifact: true
@@ -35,7 +35,7 @@ jobs:
             }
           EOF
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: metadata.json
           path: /tmp/metadata.json

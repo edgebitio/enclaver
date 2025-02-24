@@ -2,7 +2,7 @@
 name = "enclaver"
 version = "0.5.0-dev"
 edition = "2021"
-rust-version = "1.70"
+rust-version = "1.72"
 default-run = "enclaver"
 
 [[bin]]
@@ -66,7 +66,7 @@ aws-sigv4 = "0.56.1"
 rsa = "0.7"
 pkcs8 = { version = "0.9", features = ["pem"] }
 zeroize = "1.8.1"
-asn1-rs = "0.5.2"
+asn1-rs = "0.7.0"
 cbc = { version = "0.1", features = [ "std", "block-padding" ] }
 aes = "0.8"
 sha2 = "0.10"
