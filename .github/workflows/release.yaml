@@ -181,12 +181,16 @@ jobs:
         include:
           - target: 'x86_64-unknown-linux-musl'
             release_name: 'enclaver-linux-x86_64'
+            delay: 60
           - target: 'aarch64-unknown-linux-musl'
             release_name: 'enclaver-linux-aarch64'
+            delay: 120
           - target: 'x86_64-apple-darwin'
             release_name: 'enclaver-macos-x86_64'
+            delay: 180
           - target: 'aarch64-apple-darwin'
             release_name: 'enclaver-macos-aarch64'
+            delay: 240
 
     steps:
       - name: Download Binaries
@@ -195,6 +199,10 @@ jobs:
       - name: Construct Release Artifact
         shell: bash
         run: |
+          echo Delaying for ${{ matrix.delay }} secs
+          sleep ${{ matrix.delay }}
+          echo Proceeding
+
           release_dir="${{ matrix.release_name }}-${{ github.ref_name }}"
 
           mkdir ${release_dir}
