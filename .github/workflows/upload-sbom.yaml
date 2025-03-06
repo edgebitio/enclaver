@@ -20,16 +20,16 @@ jobs:
     steps:
       - name: Download metadata
         id: metadata
-        uses: actions/download-artifact@v4
+        uses: dawidd6/action-download-artifact@v6
         with:
-          run-id: ${{ github.event.workflow_run.id }}
+          run_id: ${{ github.event.workflow_run.id }}
           name: metadata.json
 
       - name: Download SBOM
         id: sbom
-        uses: actions/download-artifact@v4
+        uses: dawidd6/action-download-artifact@v6
         with:
-          run-id: ${{ github.event.workflow_run.id }}
+          run_id: ${{ github.event.workflow_run.id }}
           name: sbom.spdx.json
 
       - name: Upload SBOM to EdgeBit
