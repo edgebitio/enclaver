@@ -50,7 +50,7 @@ impl KmsProxyService {
                     endpoints: config,
                 };
 
-                let proxy = HttpServer::bind(port)?;
+                let proxy = HttpServer::bind(port).await?;
                 let handler = KmsProxyHandler::new(kms_config);
 
                 // Set and env var to avoid configuring the port in two places

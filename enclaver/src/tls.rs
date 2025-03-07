@@ -1,71 +1,113 @@
-use anyhow::{anyhow, Result};
-use log::info;
-use rustls::client::{ServerCertVerified, ServerCertVerifier};
-use rustls::{Certificate, ClientConfig, PrivateKey, RootCertStore, ServerConfig};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
-fn load_certs(path: &Path) -> Result<Vec<Certificate>> {
-    rustls_pemfile::certs(&mut BufReader::new(File::open(path)?))
-        .map_err(|_| anyhow!("invalid cert"))
-        .map(|mut certs| certs.drain(..).map(Certificate).collect())
+use anyhow::{anyhow, Result};
+use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+use tokio_rustls::rustls::{ClientConfig, DigitallySignedStruct, Error, RootCertStore, ServerConfig, SignatureScheme};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName, UnixTime};
+use rustls::crypto::aws_lc_rs;
+
+
+static CRYPTO_PROVIDER_INIT: LazyLock<()> = LazyLock::new(|| {
+    aws_lc_rs::default_provider().install_default().unwrap()
+}); 
+
+fn init_crypto_provider() {
+    LazyLock::force(&CRYPTO_PROVIDER_INIT);
 }
 
-fn load_keys(path: &Path) -> Result<Vec<PrivateKey>> {
-    let mut key_bufs = rustls_pemfile::pkcs8_private_keys(&mut BufReader::new(File::open(path)?))
-        .map_err(|_| anyhow!("invalid key"))?;
-
-    let keys: Vec<PrivateKey> = key_bufs.drain(..).map(PrivateKey).collect();
-
-    info!("Loaded {} TLS keys", keys.len());
-
-    Ok(keys)
+fn load_certs(path: &Path) -> Result<Vec<CertificateDer<'static>>> {
+    let mut reader = BufReader::new(File::open(path)?);
+    Ok(rustls_pemfile::certs(&mut reader).collect::<Result<Vec<_>, _>>()?)
 }
 
-pub fn load_server_config(
-    key: impl AsRef<Path>,
-    cert: impl AsRef<Path>,
-) -> Result<Arc<ServerConfig>> {
+fn load_key(path: &Path) -> Result<PrivateKeyDer<'static>> {
+    let mut reader = BufReader::new(File::open(path)?);
+    let key = rustls_pemfile::private_key(&mut reader)?
+        .ok_or_else(|| anyhow!("no private key found in {}", path.display()))?;
+    Ok(key)
+}
+
+pub fn load_server_config<P1: AsRef<Path>, P2: AsRef<Path>>(key: P1, cert: P2) -> Result<Arc<ServerConfig>> {
+    init_crypto_provider();
+
     let certs = load_certs(cert.as_ref())?;
-    let mut keys = load_keys(key.as_ref())?;
+    let key = load_key(key.as_ref())?;
 
     Ok(Arc::new(
-        rustls::ServerConfig::builder()
-            .with_safe_defaults()
+        ServerConfig::builder()
             .with_no_client_auth()
-            .with_single_cert(certs, keys.remove(0))?,
+            .with_single_cert(certs, key)?,
     ))
 }
 
-pub fn load_client_config(cert: impl AsRef<Path>) -> Result<Arc<ClientConfig>> {
+pub fn load_client_config(cert: impl AsRef<Path> + 'static) -> Result<Arc<ClientConfig>> {
+    init_crypto_provider();
+
     let mut roots = RootCertStore::empty();
-    let certs = load_certs(cert.as_ref())?;
-    roots.add(&certs[0])?;
+    let mut certs = load_certs(cert.as_ref())?;
+    roots.add(certs.remove(0))?;
 
     Ok(Arc::new(
         ClientConfig::builder()
-            .with_safe_defaults()
             .with_root_certificates(roots)
             .with_no_client_auth(),
     ))
 }
 
 // from rustls example code
+#[derive(Debug)]
 pub struct NoCertificateVerification {}
 
 impl ServerCertVerifier for NoCertificateVerification {
     fn verify_server_cert(
         &self,
-        _end_entity: &rustls::Certificate,
-        _intermediates: &[rustls::Certificate],
-        _server_name: &rustls::ServerName,
-        _scts: &mut dyn Iterator<Item = &[u8]>,
-        _ocsp: &[u8],
-        _now: std::time::SystemTime,
-    ) -> Result<ServerCertVerified, rustls::Error> {
+        _end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _server_name: &ServerName<'_>,
+        _ocsp_response: &[u8],
+        _now: UnixTime,
+    ) -> Result<ServerCertVerified, Error> {
         Ok(ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, Error> {
+        Ok(HandshakeSignatureValid::assertion())
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, Error> {
+        Ok(HandshakeSignatureValid::assertion())
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        // Just say that we support all schemes
+        vec![
+            SignatureScheme::RSA_PKCS1_SHA1,
+            SignatureScheme::ECDSA_SHA1_Legacy,
+            SignatureScheme::RSA_PKCS1_SHA256,
+            SignatureScheme::ECDSA_NISTP256_SHA256,
+            SignatureScheme::RSA_PKCS1_SHA384,
+            SignatureScheme::ECDSA_NISTP384_SHA384,
+            SignatureScheme::RSA_PKCS1_SHA512,
+            SignatureScheme::ECDSA_NISTP521_SHA512,
+            SignatureScheme::RSA_PSS_SHA256,
+            SignatureScheme::RSA_PSS_SHA384,
+            SignatureScheme::RSA_PSS_SHA512,
+            SignatureScheme::ED25519,
+            SignatureScheme::ED448,
+        ]
     }
 }
 
@@ -73,7 +115,6 @@ pub fn load_insecure_client_config() -> Result<Arc<ClientConfig>> {
     let roots = RootCertStore::empty();
 
     let mut cfg = ClientConfig::builder()
-        .with_safe_defaults()
         .with_root_certificates(roots)
         .with_no_client_auth();
 

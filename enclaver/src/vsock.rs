@@ -1,8 +1,8 @@
 use anyhow::Result;
 use futures::{Stream, StreamExt};
 use log::{debug, error, info};
-use rustls::client::ServerName;
-use rustls::{ClientConfig, ServerConfig};
+use tokio_rustls::rustls::{ClientConfig, ServerConfig};
+use tokio_rustls::rustls::pki_types::ServerName;
 use std::sync::Arc;
 use tokio_rustls::{TlsAcceptor, TlsConnector};
 use tokio_vsock::{VsockListener, VsockStream};
@@ -76,7 +76,7 @@ pub fn tls_serve(
 pub async fn tls_connect(
     cid: u32,
     port: u32,
-    name: ServerName,
+    name: ServerName<'static>,
     tls_config: Arc<ClientConfig>,
 ) -> Result<TlsClientStream> {
     let stream = VsockStream::connect(cid, port).await?;

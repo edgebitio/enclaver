@@ -135,11 +135,8 @@ impl ImageManager {
         // the other end of the pipe into the daemon request.
         let (tar_write, tar_read) = duplex(1024);
         let byte_stream = codec::FramedRead::new(tar_read, codec::BytesCodec::new()).map(|r| {
-            let bytes = r.unwrap().freeze();
-            Ok::<_, tokio::io::Error>(bytes)
+            r.unwrap().freeze()
         });
-
-        let body = hyper::Body::wrap_stream(byte_stream);
 
         // Concurrently build the context tarball and perform the build request.
         let (realize_res, build_res) = tokio::join!(
@@ -152,7 +149,7 @@ impl ImageManager {
                         ..Default::default()
                     },
                     None,
-                    Some(body)
+                    Some(bollard::body_stream(byte_stream)),
                 )
                 .try_collect::<Vec<_>>(),
         );

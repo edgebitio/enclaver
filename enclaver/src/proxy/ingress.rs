@@ -126,14 +126,15 @@ mod tests {
     use anyhow::Result;
     use assert2::assert;
     use rand::RngCore;
-    use rustls::ServerName;
-    use rustls::{ClientConfig, ServerConfig};
+    use tokio_rustls::rustls::{ClientConfig, ServerConfig};
+    use tokio_rustls::rustls::pki_types::ServerName;
     use std::collections::hash_map::DefaultHasher;
     use std::hash::Hasher;
     use std::net::{Ipv4Addr, SocketAddrV4};
     use std::sync::Arc;
     use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
     use tokio::net::{TcpListener, TcpStream};
+    use tokio::sync::watch::Sender;
     use tokio::task::JoinHandle;
     use tokio_rustls::TlsConnector;
 
@@ -167,11 +168,13 @@ mod tests {
         v
     }
 
-    fn start_enclave_proxy(port: u16, cfg: Arc<ServerConfig>) -> JoinHandle<()> {
+    fn start_enclave_proxy(port: u16, cfg: Arc<ServerConfig>) -> (JoinHandle<()>, Sender<()>) {
         let proxy = EnclaveProxy::bind_tls(port, cfg).unwrap();
-        tokio::task::spawn(async move {
-            proxy.serve().await;
-        })
+        let (tx, rx) = tokio::sync::watch::channel(());
+        let handle = tokio::task::spawn(async move {
+            proxy.serve(rx).await;
+        });
+        (handle, tx)
     }
 
     async fn start_host_proxy(host_port: u16, enclave_port: u32) -> JoinHandle<()> {
@@ -216,7 +219,7 @@ mod tests {
         const PORT: u16 = 7777;
 
         let server_config = crate::tls::test_server_config().unwrap();
-        let proxy_task = start_enclave_proxy(PORT, server_config);
+        let (proxy_task, proxy_stop) = start_enclave_proxy(PORT, server_config);
 
         // start a simple TCP echo server
         let mut echo = TcpEchoServer::bind(PORT)
@@ -248,7 +251,7 @@ mod tests {
         echo_task.abort();
         _ = echo_task.await;
 
-        proxy_task.abort();
+        _ = proxy_stop.send(());
         _ = proxy_task.await;
     }
 
@@ -258,7 +261,7 @@ mod tests {
     async fn tls_connect(
         host: Ipv4Addr,
         port: u16,
-        name: ServerName,
+        name: ServerName<'static>,
         cfg: Arc<ClientConfig>,
     ) -> Result<TlsClientStream> {
         let addr = SocketAddrV4::new(host, port);
@@ -273,7 +276,7 @@ mod tests {
         const PORT: u16 = 7787;
 
         let server_config = crate::tls::test_server_config().unwrap();
-        let enclave_proxy_task = start_enclave_proxy(PORT + 1, server_config);
+        let (enclave_proxy_task, enclave_proxy_stop) = start_enclave_proxy(PORT + 1, server_config);
         let host_proxy_task = start_host_proxy(PORT, (PORT + 1) as u32).await;
 
         // start a simple TCP echo server
@@ -301,7 +304,7 @@ mod tests {
         echo_task.abort();
         _ = echo_task.await;
 
-        enclave_proxy_task.abort();
+        _ = enclave_proxy_stop.send(());
         _ = enclave_proxy_task.await;
 
         host_proxy_task.abort();

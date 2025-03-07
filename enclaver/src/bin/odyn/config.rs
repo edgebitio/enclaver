@@ -60,7 +60,7 @@ impl Configuration {
         ingress: &manifest::Ingress,
     ) -> Result<Arc<rustls::ServerConfig>> {
         let mut ingress_path = tls_path.to_path_buf();
-        ingress_path.push(&ingress.listen_port.to_string());
+        ingress_path.push(ingress.listen_port.to_string());
 
         let mut key_path = ingress_path.clone();
         key_path.push("key.pem");
