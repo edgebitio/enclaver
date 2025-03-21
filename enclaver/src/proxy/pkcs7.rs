@@ -113,7 +113,7 @@ pub(crate) struct EnvelopedData<'a> {
     pub unprotected_attrs: Option<SetOf<Attribute<'a>>>,
 }
 
-impl<'a> EnvelopedData<'a> {
+impl EnvelopedData<'_> {
     fn validate(&self) -> Result<()> {
         let ver = self.version.as_i32()?;
         if ver != 2 {
@@ -244,7 +244,7 @@ pub(crate) struct RsaesOaepParameters<'a> {
     _p_source_alg: Option<AlgorithmIdentifier<'a>>,
 }
 
-impl<'a> RsaesOaepParameters<'a> {
+impl RsaesOaepParameters<'_> {
     fn validate(&self) -> Result<()> {
         if let Some(ref alg) = self.hash_alg {
             if alg.algorithm != OID_NIST_SHA_256 {
@@ -332,7 +332,7 @@ pub(crate) struct EncryptedContentInfo<'a> {
     pub encrypted_content: Any<'a>,
 }
 
-impl<'a> EncryptedContentInfo<'a> {
+impl EncryptedContentInfo<'_> {
     fn validate(&self) -> Result<()> {
         if self.content_type != OID_PKCS7_DATA {
             return Err(anyhow!(

@@ -1,19 +1,21 @@
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
+
 use anyhow::{anyhow, Error, Result};
 use async_trait::async_trait;
 use aws_credential_types::Credentials;
 use aws_sigv4::http_request::{SignableBody, SignableRequest, SigningSettings};
-use aws_sigv4::SigningParams;
-use http::header::{HeaderName, HeaderValue};
-use http::uri::{Authority, Scheme};
-use http::Uri;
+use aws_sigv4::sign::v4::SigningParams;
+use aws_smithy_runtime_api::client::identity::Identity;
+use hyper::{Method, Request, Response, StatusCode, Uri};
 use hyper::body::Bytes;
-use hyper::{Body, Method, Request, Response, StatusCode};
+use hyper::header::{HeaderName, HeaderValue};
+use hyper::http::uri::{Authority, Scheme};
+use http_body_util::{Full, BodyExt};
 use json::{object, JsonValue};
 use lazy_static::lazy_static;
 use log::{debug, trace};
 use regex::Regex;
-use std::sync::Arc;
-use std::time::SystemTime;
 
 use crate::http_util::HttpHandler;
 use crate::keypair::KeyPair;
@@ -43,7 +45,7 @@ struct CredentialScope {
 }
 
 impl CredentialScope {
-    fn from_request(head: &http::request::Parts) -> Result<Self> {
+    fn from_request(head: &hyper::http::request::Parts) -> Result<Self> {
         lazy_static! {
             // e.g.: AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/iam/aws4_request, ...
             static ref HEADER_RE: Regex = Regex::new(r"AWS4\-HMAC\-SHA256 Credential=.*?/.*?/(.*?)/(.*?)/aws4_request,").unwrap();
@@ -53,7 +55,7 @@ impl CredentialScope {
         use std::ops::Deref;
 
         // Look for the signature either in the Authorization HTTP header or in a query string
-        let (cred, re) = match head.headers.get(http::header::AUTHORIZATION) {
+        let (cred, re) = match head.headers.get(hyper::header::AUTHORIZATION) {
             Some(authz) => (authz.to_str()?.to_string(), HEADER_RE.deref()),
             None => {
                 let cred = amz_credential_query(&head.uri)
@@ -88,19 +90,19 @@ impl CredentialScope {
 }
 
 struct KmsRequestIncoming {
-    head: http::request::Parts,
+    head: hyper::http::request::Parts,
     body: hyper::body::Bytes,
 }
 
 impl KmsRequestIncoming {
-    async fn recv(req: Request<Body>) -> std::result::Result<Self, hyper::Error> {
+    async fn recv(req: Request<Full<Bytes>>) -> Result<Self> {
         let (head, body) = req.into_parts();
-        let body = hyper::body::to_bytes(body).await?;
+        let body = body.collect().await?.to_bytes();
 
         Ok(Self { head, body })
     }
 
-    fn method(&self) -> &http::Method {
+    fn method(&self) -> &Method {
         &self.head.method
     }
 
@@ -181,40 +183,37 @@ impl KmsRequestOutgoing {
         Ok(Self { inner })
     }
 
-    fn sign(mut self, credentials: &Credentials, region: &str) -> Result<Request<Body>> {
+    fn sign(mut self, credentials: Credentials, region: &str) -> Result<Request<Full<Bytes>>> {
+        let expires = SystemTime::now() + Duration::from_secs(3600);
+        let identity = Identity::new(credentials, Some(expires));
+
         let signing_settings = SigningSettings::default();
-        let mut signing_builder = SigningParams::builder()
-            .access_key(credentials.access_key_id())
-            .secret_key(credentials.secret_access_key())
+        let signing_params= SigningParams::builder()
+            .identity(&identity)
             .region(region)
-            .service_name(KMS_SERVICE_NAME)
+            .name(KMS_SERVICE_NAME)
             .time(SystemTime::now())
-            .settings(signing_settings);
-
-        if let Some(token) = credentials.session_token() {
-            signing_builder = signing_builder.security_token(token);
-        }
-
-        let signing_params = signing_builder.build()?;
+            .settings(signing_settings)
+            .build()?;
 
         let signable_request = SignableRequest::new(
-            self.inner.method(),
-            self.inner.uri(),
-            self.inner.headers(),
+            self.inner.method().as_str(),
+            self.inner.uri().to_string(),
+            self.inner.headers().iter().map(|(k, v)| (k.as_str(), v.to_str().unwrap())),
             SignableBody::Bytes(self.inner.body()),
-        );
+        )?;
 
         // Sign and then apply the signature to the request
         let signed =
-            aws_sigv4::http_request::sign(signable_request, &signing_params).map_err(Error::msg)?;
+            aws_sigv4::http_request::sign(signable_request, &aws_sigv4::http_request::SigningParams::V4(signing_params)).map_err(Error::msg)?;
 
         let (signing_instructions, _signature) = signed.into_parts();
-        signing_instructions.apply_to_request(&mut self.inner);
+        signing_instructions.apply_to_request_http1x(&mut self.inner);
 
         // Convert Request<Bytes> to Request<Body>
         let (head, bytes_body) = self.inner.into_parts();
 
-        let req = Request::from_parts(head, Body::from(bytes_body));
+        let req = Request::from_parts(head, Full::new(bytes_body));
 
         trace!(
             "Signed request auth: {}",
@@ -256,7 +255,7 @@ impl KmsProxyHandler {
         Self { config }
     }
 
-    async fn handle_attesting_action(&self, req_in: KmsRequestIncoming) -> Result<Response<Body>> {
+    async fn handle_attesting_action(&self, req_in: KmsRequestIncoming) -> Result<Response<Full<Bytes>>> {
         // Take the original request, insert "Recipient": <RecipientInfo> into the body json,
         // re-sign the request and send it off.
         debug!("Handling attesting action");
@@ -296,11 +295,11 @@ impl KmsProxyHandler {
         })
     }
 
-    async fn handle_response(&self, resp: Response<Body>) -> Result<Response<Body>> {
+    async fn handle_response(&self, resp: Response<Full<Bytes>>) -> Result<Response<Full<Bytes>>> {
         let (mut head, body) = resp.into_parts();
         head.headers.remove(hyper::header::CONTENT_LENGTH);
 
-        let body = hyper::body::to_bytes(body).await?;
+        let body = body.collect().await?.to_bytes();
 
         if head.status != StatusCode::OK {
             trace!("Response body: {:?}", std::str::from_utf8(&body));
@@ -328,7 +327,7 @@ impl KmsProxyHandler {
         }
     }
 
-    async fn handle_forward(&self, req_in: KmsRequestIncoming) -> Result<Response<Body>> {
+    async fn handle_forward(&self, req_in: KmsRequestIncoming) -> Result<Response<Full<Bytes>>> {
         let credential = req_in.credential_scope()?;
         credential.validate()?;
 
@@ -339,11 +338,16 @@ impl KmsProxyHandler {
         self.send(req_out, &region).await
     }
 
-    async fn send(&self, req: KmsRequestOutgoing, region: &str) -> Result<Response<Body>> {
-        let signed = req.sign(&self.config.credentials, region)?;
+    async fn send(&self, req: KmsRequestOutgoing, region: &str) -> Result<Response<Full<Bytes>>> {
+        let signed = req.sign(self.config.credentials.clone(), region)?;
 
         debug!("Sending Request: {:?}", signed);
-        Ok(self.config.client.request(signed).await?)
+        let resp = self.config.client.request(signed).await?;
+
+        let (head, body) = resp.into_parts();
+        let body = body.collect().await?;
+
+        Ok(Response::from_parts(head, Full::new(body.to_bytes())))
     }
 
     fn decrypt_cms(&self, cms: &[u8]) -> Result<Vec<u8>> {
@@ -354,7 +358,7 @@ impl KmsProxyHandler {
 
 #[async_trait]
 impl HttpHandler for KmsProxyHandler {
-    async fn handle(&self, req: Request<Body>) -> Result<Response<Body>> {
+    async fn handle(&self, req: Request<Full<Bytes>>) -> Result<Response<Full<Bytes>>> {
         debug!("Request: {:?}", req);
 
         let req_in = KmsRequestIncoming::recv(req).await?;
@@ -375,41 +379,44 @@ impl HttpHandler for KmsProxyHandler {
 pub trait HttpClient {
     async fn request(
         &self,
-        req: Request<Body>,
-    ) -> std::result::Result<Response<Body>, hyper::Error>;
+        req: Request<Full<Bytes>>,
+    ) -> Result<Response<Full<Bytes>>>;
 }
 
 #[async_trait]
-impl<C> HttpClient for hyper::client::Client<C>
+impl<C> HttpClient for hyper_util::client::legacy::Client<C, Full<Bytes>>
 where
-    C: hyper::client::connect::Connect + Clone + Send + Sync + 'static,
+    C: hyper_util::client::legacy::connect::Connect + Clone + Send + Sync + 'static,
 {
     async fn request(
         &self,
-        req: Request<Body>,
-    ) -> std::result::Result<Response<Body>, hyper::Error> {
-        hyper::client::Client::request(self, req).await
+        req: Request<Full<Bytes>>,
+    ) -> Result<Response<Full<Bytes>>> {
+        let (head, body) = hyper_util::client::legacy::Client::request(self, req).await?.into_parts();
+        let body = body.collect().await?;
+
+        Ok(Response::from_parts(head, Full::new(body.to_bytes())))
     }
 }
 
-fn body_from_slice(bytes: &[u8]) -> Body {
-    Body::from(Bytes::copy_from_slice(bytes))
+fn body_from_slice(bytes: &[u8]) -> Full<Bytes> {
+    Full::new(Bytes::copy_from_slice(bytes))
 }
 
-fn json_body(json_val: JsonValue) -> Body {
+fn json_body(json_val: JsonValue) -> Full<Bytes> {
     let body = json::stringify(json_val);
     body_from_slice(&body.into_bytes())
 }
 
-fn bytes_response(head: http::response::Parts, body: &[u8]) -> Response<Body> {
+fn bytes_response(head: hyper::http::response::Parts, body: &[u8]) -> Response<Full<Bytes>> {
     Response::from_parts(head, body_from_slice(body))
 }
 
-fn json_response(head: http::response::Parts, json_val: JsonValue) -> Response<Body> {
+fn json_response(head: hyper::http::response::Parts, json_val: JsonValue) -> Response<Full<Bytes>> {
     Response::from_parts(head, json_body(json_val))
 }
 
-fn amz_credential_query(uri: &Uri) -> Option<String> {
+fn amz_credential_query(uri: &hyper::Uri) -> Option<String> {
     let q = uri.path_and_query()?.query()?;
 
     for (k, v) in form_urlencoded::parse(q.as_bytes()) {
@@ -452,8 +459,8 @@ mod tests {
     impl HttpClient for Mock {
         async fn request(
             &self,
-            req: Request<Body>,
-        ) -> std::result::Result<Response<Body>, hyper::Error> {
+            req: Request<Full<Bytes>>,
+        ) -> Result<Response<Full<Bytes>>> {
             let action = req.headers().get(&X_AMZ_TARGET).unwrap().to_str().unwrap();
 
             let authz = req
@@ -478,16 +485,18 @@ mod tests {
     impl Mock {
         async fn list_keys(
             &self,
-            _req: Request<Body>,
-        ) -> std::result::Result<Response<Body>, hyper::Error> {
+            _req: Request<Full<Bytes>>,
+        ) -> Result<Response<Full<Bytes>>> {
             Ok(kms_response(KEYS.clone()))
         }
 
         async fn decrypt(
             &self,
-            req: Request<Body>,
-        ) -> std::result::Result<Response<Body>, hyper::Error> {
-            let body = body_as_json(req.into_body()).await.unwrap();
+            req: Request<Full<Bytes>>,
+        ) -> Result<Response<Full<Bytes>>> {
+            let (_, body) = req.into_parts();
+            let body = body.collect().await?.to_bytes();
+            let body = body_as_json(body).await.unwrap();
 
             // make sure the attestation document has been attached
             let att_doc = body["Recipient"]["AttestationDocument"].as_str().unwrap();
@@ -509,7 +518,7 @@ mod tests {
         }
     }
 
-    fn kms_request(action: &str, body: JsonValue) -> Request<Body> {
+    fn kms_request(action: &str, body: JsonValue) -> Request<Full<Bytes>> {
         let body_bytes = Bytes::copy_from_slice(json::stringify(body).as_bytes());
 
         Request::builder()
@@ -521,20 +530,19 @@ mod tests {
                 hyper::header::AUTHORIZATION,
                 "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/kms/aws4_request, ",
             )
-            .body(Body::from(body_bytes))
+            .body(Full::new(body_bytes))
             .unwrap()
     }
 
-    fn kms_response(body: JsonValue) -> Response<Body> {
+    fn kms_response(body: JsonValue) -> Response<Full<Bytes>> {
         Response::builder()
             .status(hyper::StatusCode::OK)
             .body(json_body(body))
             .unwrap()
     }
 
-    async fn body_as_json(body: Body) -> Result<JsonValue> {
-        let bytes = hyper::body::to_bytes(body).await?;
-        Ok(json::parse(std::str::from_utf8(&bytes)?)?)
+    async fn body_as_json(body: Bytes) -> Result<JsonValue> {
+        Ok(json::parse(std::str::from_utf8(&body)?)?)
     }
 
     fn new_test_handler() -> KmsProxyHandler {
@@ -557,7 +565,7 @@ mod tests {
         let req1 = Request::builder()
             .uri("http://kms.us-east-1.amazonaws.com")
             .header(
-                http::header::AUTHORIZATION,
+                hyper::header::AUTHORIZATION,
                 "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/kms/aws4_request, ",
             )
             .body(())
@@ -589,6 +597,7 @@ mod tests {
         let resp = handler.handle(req).await.unwrap();
 
         let (head, body) = resp.into_parts();
+        let body = body.collect().await.unwrap().to_bytes();
 
         assert!(head.status == hyper::StatusCode::OK);
 
@@ -610,14 +619,14 @@ mod tests {
         let resp = handler.handle(req).await.unwrap();
 
         let (head, body) = resp.into_parts();
+        let body = body.collect().await.unwrap().to_bytes();
 
         if head.status == hyper::StatusCode::OK {
             let body = body_as_json(body).await.unwrap();
             assert!(body["Plaintext"].as_str().unwrap() == base64::encode("Hello, World"));
             assert!(body["KeyId"].as_str().unwrap() == KEY_ID);
         } else {
-            let bytes = hyper::body::to_bytes(body).await.unwrap();
-            let msg = std::str::from_utf8(&bytes).unwrap();
+            let msg = std::str::from_utf8(&body).unwrap();
             assert!("DUMMY" == msg);
         }
     }

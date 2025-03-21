@@ -1,41 +1,84 @@
-use anyhow::{anyhow, Result};
+use std::sync::Arc;
 
+use anyhow::{anyhow, Result};
 use http::Uri;
-use hyper::client::HttpConnector;
-use hyper_proxy::{Intercept, Proxy, ProxyConnector};
+use hyper::body::Bytes;
+use http_body_util::BodyExt;
 
 use aws_config::imds;
 use aws_config::imds::credentials::ImdsCredentialsProvider;
 use aws_config::imds::region::ImdsRegionProvider;
 use aws_config::provider_config::ProviderConfig;
-use aws_credential_types::provider::SharedCredentialsProvider;
-use aws_smithy_client::{bounds::SmithyConnector, erase::DynConnector, hyper_ext};
-use aws_smithy_http::result::ConnectorError;
-use aws_types::sdk_config::SdkConfig;
+use aws_types::sdk_config::{SdkConfig, SharedHttpClient, SharedCredentialsProvider};
+
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+use aws_smithy_runtime_api::http::Request;
+use aws_smithy_runtime_api::client::http::{HttpClient, HttpConnectorSettings, SharedHttpConnector, HttpConnector, HttpConnectorFuture};
+use aws_smithy_runtime_api::client::result::ConnectorError;
+use aws_smithy_types::body::SdkBody;
+
+use crate::http_client::HttpProxyClient;
 
 const IMDS_URL: &str = "http://169.254.169.254:80/";
 
-fn new_proxy_connector(
-    proxy_uri: Uri,
-) -> Result<impl SmithyConnector<Error = ConnectorError> + Send> {
-    let mut proxy = Proxy::new(Intercept::All, proxy_uri);
-    proxy.force_connect();
+#[derive(Debug, Clone)]
+struct ProxiedHttpClient(Arc<HttpProxyClient<SdkBody>>);
 
-    let connector = HttpConnector::new();
-    let proxy_connector = ProxyConnector::from_proxy(connector, proxy)?;
-    Ok(hyper_ext::Adapter::builder().build(proxy_connector))
+impl ProxiedHttpClient {
+    fn new(proxy_uri: Uri) -> Self {
+        Self(Arc::new(crate::http_client::new_http_proxy_client(proxy_uri)))
+    }
+}
+
+impl HttpClient for ProxiedHttpClient {
+    fn http_connector(
+        &self,
+        _settings: &HttpConnectorSettings,
+        _components: &RuntimeComponents,
+    ) -> SharedHttpConnector {
+        SharedHttpConnector::new(self.clone())
+    }
+}
+
+impl HttpConnector for ProxiedHttpClient {
+    fn call(&self, request: Request) -> HttpConnectorFuture {
+        let client = self.0.clone();
+        let result = async move {
+            let request = request.try_into_http1x().unwrap();
+            let response = client.request(request).await.unwrap();
+            let (head, body) = response.into_parts();
+            body.collect().await
+                .map_err(|err| ConnectorError::user(err.into()))
+                .and_then(|body| into_aws_response(head, body.to_bytes()))
+        };
+
+        HttpConnectorFuture::new(result)
+    }
+}
+
+fn into_aws_response(head: hyper::http::response::Parts, body: Bytes)
+    -> Result<aws_smithy_runtime_api::client::orchestrator::HttpResponse, ConnectorError>
+{
+    let resp = http::Response::from_parts(head, body.into());
+    aws_smithy_runtime_api::client::orchestrator::HttpResponse::try_from(resp)
+        .map_err(|err| ConnectorError::user(err.into()))
+}
+
+fn new_proxied_client(proxy_uri: Uri) -> Result<SharedHttpClient> {
+    let client = ProxiedHttpClient::new(proxy_uri);
+    Ok(SharedHttpClient::new(client))
 }
 
 pub async fn imds_client_with_proxy(proxy_uri: Uri) -> Result<imds::Client> {
-    let connector = new_proxy_connector(proxy_uri)?;
+    let http_client = new_proxied_client(proxy_uri)?;
 
-    let config = ProviderConfig::without_region().with_http_connector(DynConnector::new(connector));
+    let config = ProviderConfig::without_region().with_http_client(http_client);
 
     let client = imds::Client::builder()
         .configure(&config)
-        .endpoint(http::Uri::from_static(IMDS_URL))
-        .build()
-        .await?;
+        .endpoint(IMDS_URL)
+        .map_err( anyhow::Error::from_boxed)?
+        .build();
 
     Ok(client)
 }

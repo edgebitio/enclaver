@@ -6,7 +6,7 @@ use crate::manifest::{load_manifest, Manifest};
 use crate::nitro_cli::{EIFInfo, KnownIssue};
 use anyhow::{anyhow, Result};
 use bollard::container::{Config, LogOutput, LogsOptions, WaitContainerOptions};
-use bollard::models::{ContainerConfig, HostConfig, Mount, MountTypeEnum};
+use bollard::models::{ImageConfig, HostConfig, Mount, MountTypeEnum};
 use bollard::Docker;
 use futures_util::stream::{StreamExt, TryStreamExt};
 use log::{debug, info, warn};
@@ -137,14 +137,14 @@ impl EnclaveArtifactBuilder {
         // whole thing to the odyn invocation.
         // TODO(russell_h): Figure out what happens when a source image specifies env variables.
         let mut cmd = match img_config {
-            Some(ContainerConfig {
+            Some(ImageConfig {
                 cmd: Some(ref cmd), ..
             }) => cmd.clone(),
             _ => vec![],
         };
 
         let mut entrypoint = match img_config {
-            Some(ContainerConfig {
+            Some(ImageConfig {
                 entrypoint: Some(ref entrypoint),
                 ..
             }) => entrypoint.clone(),

@@ -14,11 +14,11 @@ pub struct ApiService {
 }
 
 impl ApiService {
-    pub fn start(config: &Configuration, nsm: Arc<Nsm>) -> Result<Self> {
+    pub async fn start(config: &Configuration, nsm: Arc<Nsm>) -> Result<Self> {
         let task = if let Some(port) = config.api_port() {
             info!("Starting API on port {port}");
 
-            let srv = HttpServer::bind(port)?;
+            let srv = HttpServer::bind(port).await?;
             let handler = ApiHandler::new(Box::new(NsmAttestationProvider::new(nsm)));
 
             Some(tokio::task::spawn(async move {

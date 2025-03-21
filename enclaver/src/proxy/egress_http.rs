@@ -5,12 +5,16 @@ use crate::utils;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::{Stream, StreamExt};
-use http::uri::PathAndQuery;
-use hyper::client::conn::Builder;
+use http_body_util::combinators::BoxBody;
+use hyper::{Method, Request, Response, StatusCode};
+use hyper::body::{Body, Bytes, Incoming};
+use hyper::http::uri::PathAndQuery;
 use hyper::header::HeaderValue;
-use hyper::server::conn::Http;
+use hyper::server::conn::http1 as http1_server;
+use hyper::client::conn::http1 as http1_client;
 use hyper::service::service_fn;
-use hyper::{Body, Method, Request, Response};
+use hyper_util::rt::TokioIo;
+use http_body_util::Full;
 use log::{debug, error};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -116,10 +120,12 @@ impl EnclaveHttpProxy {
             async move { proxy(egress_port, req, &egress_policy).await }
         });
 
-        if let Err(err) = Http::new()
-            .http1_preserve_header_case(true)
-            .http1_title_case_headers(true)
-            .serve_connection(tcp, svc)
+        let io = TokioIo::new(tcp);
+
+        if let Err(err) = http1_server::Builder::new()
+            .preserve_header_case(true)
+            .title_case_headers(true)
+            .serve_connection(io, svc)
             .with_upgrades()
             .await
         {
@@ -186,27 +192,39 @@ impl HostHttpProxy {
 
 async fn proxy(
     egress_port: u32,
-    req: Request<Body>,
+    req: Request<Incoming>,
     egress_policy: &EgressPolicy,
-) -> Result<Response<Body>, hyper::Error> {
+) -> anyhow::Result<Response<BoxBody<Bytes, anyhow::Error>>> {
     if Method::CONNECT == req.method() {
-        Ok(handle_connect(egress_port, req, egress_policy).await)
+        let resp = handle_connect(egress_port, req, egress_policy).await;
+        Ok(with_boxed_body(resp))
     } else {
         match handle_request(egress_port, req, egress_policy).await {
             Ok(resp) => Ok(resp),
-            Err(err) => Ok(err_resp(
-                http::StatusCode::SERVICE_UNAVAILABLE,
-                err.to_string(),
-            )),
+            Err(err) => {
+                let resp = err_resp(StatusCode::SERVICE_UNAVAILABLE, err.to_string());
+                Ok(with_boxed_body(resp))
+            }
         }
     }
 }
 
+fn with_boxed_body<B>(resp: Response<B>) -> Response<BoxBody<Bytes, anyhow::Error>>
+where
+    B: Body<Data = Bytes> + Send + Sync + 'static, <B as hyper::body::Body>::Error: std::error::Error + Send + Sync
+{
+    use http_body_util::BodyExt;
+
+    let (head, body) = resp.into_parts();
+    let body = body.map_err(anyhow::Error::new).boxed();
+    Response::from_parts(head, body)
+}
+
 async fn handle_connect(
     egress_port: u32,
-    req: Request<Body>,
+    req: Request<Incoming>,
     egress_policy: &EgressPolicy,
-) -> Response<Body> {
+) -> Response<Full<Bytes>> {
     match req.uri().authority() {
         Some(authority) => {
             let port = match authority.port() {
@@ -229,14 +247,15 @@ async fn handle_connect(
             let mut remote = match remote_connect(egress_port, authority.host(), port).await {
                 Ok(remote) => remote,
                 Err(err) => {
-                    return err_resp(http::StatusCode::SERVICE_UNAVAILABLE, err.to_string())
+                    return err_resp(StatusCode::SERVICE_UNAVAILABLE, err.to_string())
                 }
             };
 
             tokio::task::spawn(async move {
                 match hyper::upgrade::on(req).await {
-                    Ok(mut upgraded) => {
-                        _ = tokio::io::copy_bidirectional(&mut upgraded, &mut remote).await;
+                    Ok(upgraded) => {
+                        let mut io = TokioIo::new(upgraded);
+                        _ = tokio::io::copy_bidirectional(&mut io, &mut remote).await;
                     }
                     Err(err) => {
                         error!("Upgrade failed: {err}");
@@ -244,7 +263,7 @@ async fn handle_connect(
                 }
             });
 
-            Response::new(Body::empty())
+            Response::new(Full::new(Bytes::new()))
         }
         None => {
             let err_msg = format!("CONNECT host is not a socket addr: {:?}", req.uri());
@@ -256,22 +275,23 @@ async fn handle_connect(
 
 async fn handle_request(
     egress_port: u32,
-    mut req: Request<Body>,
+    mut req: Request<Incoming>,
     egress_policy: &EgressPolicy,
-) -> anyhow::Result<Response<Body>> {
+) -> anyhow::Result<Response<BoxBody<Bytes, anyhow::Error>>> {
     let host = match req.uri().host() {
         Some(host) => host,
-        None => return Ok(bad_request("URI is missing a host".to_string())),
+        None => return Ok(with_boxed_body(bad_request("URI is missing a host".to_string()))),
     };
     let port = req.uri().port_u16().unwrap_or(80);
 
     // Check the policy
     if !egress_policy.is_host_allowed(host) {
-        return Ok(blocked());
+        return Ok(with_boxed_body(blocked()));
     }
 
     // TODO: pool connections
     let stream = remote_connect(egress_port, host, port).await?;
+    let io = TokioIo::new(stream);
 
     // Set the Host: header to match the URL
     let host_hdr = match req.uri().port() {
@@ -296,12 +316,12 @@ async fn handle_request(
         }
     };
 
-    *req.uri_mut() = http::Uri::builder().path_and_query(pq).build()?;
+    *req.uri_mut() = hyper::http::Uri::builder().path_and_query(pq).build()?;
 
-    let (mut sender, conn) = Builder::new()
-        .http1_preserve_header_case(true)
-        .http1_title_case_headers(true)
-        .handshake(stream)
+    let (mut sender, conn) = http1_client::Builder::new()
+        .preserve_header_case(true)
+        .title_case_headers(true)
+        .handshake(io)
         .await?;
 
     // Spawning detached here is not ideal but the right thing to do
@@ -310,22 +330,22 @@ async fn handle_request(
         _ = conn.await;
     });
 
-    Ok(sender.send_request(req).await?)
+    Ok(with_boxed_body(sender.send_request(req).await?))
 }
 
-fn err_resp(status: http::StatusCode, msg: String) -> Response<Body> {
-    let mut resp = Response::new(Body::from(msg));
+fn err_resp(status: StatusCode, msg: String) -> Response<Full<Bytes>> {
+    let mut resp = Response::new(Full::new(Bytes::from(msg)));
     *resp.status_mut() = status;
     resp
 }
 
-fn bad_request(msg: String) -> Response<Body> {
-    err_resp(http::StatusCode::BAD_REQUEST, msg)
+fn bad_request(msg: String) -> Response<Full<Bytes>> {
+    err_resp(StatusCode::BAD_REQUEST, msg)
 }
 
-fn blocked() -> Response<Body> {
+fn blocked() -> Response<Full<Bytes>> {
     err_resp(
-        http::StatusCode::UNAUTHORIZED,
+        StatusCode::UNAUTHORIZED,
         "blocked by egress security policy".to_string(),
     )
 }
@@ -370,57 +390,65 @@ async fn remote_connect(egress_port: u32, host: &str, port: u16) -> anyhow::Resu
 mod tests {
     use assert2::assert;
     use http::{uri::PathAndQuery, Method, Version};
-    use hyper::server::conn::AddrIncoming;
-    use hyper::{Body, Request, Response, Server};
+    use hyper::{Request, Response};
+    use hyper::body::{Bytes, Incoming};
+    use hyper::server::conn::http1 as http1_server;
+    use hyper::service::service_fn;
+    use hyper_util::rt::TokioIo;
+    use http_body_util::{Full, BodyExt};
     use rand::RngCore;
     use std::convert::Infallible;
-    use std::future::Future;
     use std::net::{Ipv4Addr, SocketAddr};
     use std::sync::Arc;
     use tls_listener::TlsListener;
+    use tokio::net::TcpListener;
     use tokio::task::JoinHandle;
 
-    async fn echo(req: Request<Body>) -> Result<Response<Body>, Infallible> {
+    async fn echo(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
         assert!(req.method() == Method::POST);
         assert!(req.version() == Version::HTTP_11);
         assert!(req.uri().authority() == None);
         assert!(req.uri().path_and_query() == Some(&PathAndQuery::from_static("/echo")));
 
-        let full_body = hyper::body::to_bytes(req.into_body()).await.unwrap();
-        Ok(Response::new(full_body.into()))
+        let body = req.into_body().collect().await.unwrap();
+        Ok(Response::new(Full::new(body.to_bytes())))
     }
 
-    fn echo_server(port: u16) -> impl Future<Output = Result<(), hyper::Error>> {
+    async fn echo_server(port: u16) -> anyhow::Result<()> {
         let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
 
-        // A `Service` is needed for every connection, so this
-        // creates one from our `hello_world` function.
-        let make_svc = hyper::service::make_service_fn(|_conn| async {
-            // service_fn converts our function into a `Service`
-            Ok::<_, Infallible>(hyper::service::service_fn(echo))
-        });
+        let listener = TcpListener::bind(addr).await?;
+        let (stream, _) = listener.accept().await?;
 
-        Server::bind(&addr).serve(make_svc)
+        let io = TokioIo::new(stream);
+
+        http1_server::Builder::new()
+            .serve_connection(io, service_fn(echo))
+            .await?;
+
+        Ok(())
     }
 
-    fn tls_echo_server(port: u16) -> impl Future<Output = Result<(), hyper::Error>> {
+    async fn tls_echo_server(port: u16) -> anyhow::Result<()> {
         let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
-
-        // A `Service` is needed for every connection, so this
-        // creates one from our `hello_world` function.
-        let make_svc = hyper::service::make_service_fn(|_conn| async {
-            // service_fn converts our function into a `Service`
-            Ok::<_, Infallible>(hyper::service::service_fn(echo))
-        });
 
         let server_config = crate::tls::test_server_config().unwrap();
+        let listener = TcpListener::bind(&addr).await.unwrap();
         let acceptor: tokio_rustls::TlsAcceptor = server_config.into();
-        let incoming = TlsListener::new(acceptor, AddrIncoming::bind(&addr).unwrap());
+        let mut incoming = TlsListener::new(acceptor, listener);
 
-        Server::builder(incoming).serve(make_svc)
+        let (stream, _) = incoming.accept().await?;
+
+        let io = TokioIo::new(stream);
+
+        http1_server::Builder::new()
+            .serve_connection(io, service_fn(echo))
+            .await?;
+
+        Ok(())
     }
 
-    fn start_echo_server(port: u16, use_tls: bool) -> JoinHandle<Result<(), hyper::Error>> {
+    fn start_echo_server(port: u16, use_tls: bool) -> JoinHandle<anyhow::Result<()>> {
         if !use_tls {
             tokio::task::spawn(echo_server(port))
         } else {
@@ -447,7 +475,7 @@ mod tests {
         base_port: u16,
         host_proxy_task: JoinHandle<()>,
         enclave_proxy_task: JoinHandle<()>,
-        echo_task: JoinHandle<Result<(), hyper::Error>>,
+        echo_task: JoinHandle<anyhow::Result<()>>,
     }
 
     impl HttpProxyFixture {
@@ -492,7 +520,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_http_proxy() {
-        let fixture = HttpProxyFixture::start(3000, false).await;
+        let fixture = HttpProxyFixture::start(13000, false).await;
 
         let client = reqwest::Client::builder()
             .proxy(reqwest::Proxy::http(fixture.proxy_uri().to_string()).unwrap())
@@ -531,7 +559,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_https_proxy() {
-        let fixture = HttpProxyFixture::start(4000, true).await;
+        let fixture = HttpProxyFixture::start(14000, true).await;
 
         let client = reqwest::Client::builder()
             .proxy(reqwest::Proxy::http(fixture.proxy_uri().to_string()).unwrap())

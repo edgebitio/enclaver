@@ -1,8 +1,9 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use http::{Method, Request, Response};
-use hyper::header;
-use hyper::{Body, StatusCode};
+use hyper::header::CONTENT_TYPE;
+use hyper::{Request, Response, StatusCode, Method};
+use hyper::body::Bytes;
+use http_body_util::{Full, BodyExt};
 use pkcs8::{DecodePublicKey, SubjectPublicKeyInfo};
 use serde::Deserialize;
 
@@ -20,12 +21,27 @@ impl ApiHandler {
         Self { attester }
     }
 
+    async fn handle_request(
+        &self,
+        head: &hyper::http::request::Parts,
+        body: Bytes,
+    ) -> Result<Response<Full<Bytes>>> {
+        match head.uri.path() {
+            "/v1/attestation" => match head.method {
+                Method::POST => self.handle_attestation(head, body).await,
+
+                _ => Ok(http_util::method_not_allowed()),
+            },
+            _ => Ok(http_util::not_found()),
+        }
+    }
+
     async fn handle_attestation(
         &self,
-        _head: &http::request::Parts,
-        body: &[u8],
-    ) -> Result<Response<Body>> {
-        let attestation_req: AttestationRequest = match serde_json::from_slice(body) {
+        _head: &hyper::http::request::Parts,
+        body: Bytes,
+    ) -> Result<Response<Full<Bytes>>> {
+        let attestation_req: AttestationRequest = match serde_json::from_slice(&body) {
             Ok(req) => req,
             Err(err) => return Ok(http_util::bad_request(err.to_string())),
         };
@@ -39,25 +55,18 @@ impl ApiHandler {
 
         Ok(Response::builder()
             .status(StatusCode::OK)
-            .header(header::CONTENT_TYPE, MIME_APPLICATION_CBOR)
-            .body(Body::from(att_doc))?)
+            .header(CONTENT_TYPE, MIME_APPLICATION_CBOR)
+            .body(Full::new(Bytes::from(att_doc)))?)
     }
 }
 
 #[async_trait]
 impl HttpHandler for ApiHandler {
-    async fn handle(&self, req: Request<Body>) -> Result<Response<Body>> {
+    async fn handle(&self, req: Request<Full<Bytes>>) -> Result<Response<Full<Bytes>>> {
         let (head, body) = req.into_parts();
-        let body = hyper::body::to_bytes(body).await?;
+        let body = body.collect().await?.to_bytes();
 
-        match head.uri.path() {
-            "/v1/attestation" => match head.method {
-                Method::POST => self.handle_attestation(&head, &body).await,
-
-                _ => Ok(http_util::method_not_allowed()),
-            },
-            _ => Ok(http_util::not_found()),
-        }
+        self.handle_request(&head, body).await
     }
 }
 
@@ -119,10 +128,12 @@ async fn test_attestation_handler() {
     let req = Request::builder()
         .method("POST")
         .uri("/v1/attestation")
-        .body(Body::from(json::stringify(body)))
+        .body(Bytes::from(json::stringify(body)))
         .unwrap();
 
-    let resp = handler.handle(req).await.unwrap();
+    let (head, body) = req.into_parts();
+
+    let resp = handler.handle_request(&head, body).await.unwrap();
     assert!(resp.status() == StatusCode::OK);
 
     let body = json::object!(
@@ -133,9 +144,11 @@ async fn test_attestation_handler() {
     let req = Request::builder()
         .method("POST")
         .uri("/v1/attestation")
-        .body(Body::from(json::stringify(body)))
+        .body(Bytes::from(json::stringify(body)))
         .unwrap();
 
-    let resp = handler.handle(req).await.unwrap();
+    let (head, body) = req.into_parts();
+
+    let resp = handler.handle_request(&head, body).await.unwrap();
     assert!(resp.status() == StatusCode::OK);
 }
